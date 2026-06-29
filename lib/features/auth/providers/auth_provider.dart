@@ -95,6 +95,10 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
     String? gender,
     DateTime? dateOfBirth,
     double? weight,
+    // Pharmacist fields
+    String? pharmacyName,
+    String? pharmacyAddress,
+    String? pharmacistLicenseNumber,
   }) async {
     state = const AsyncValue.loading();
     try {
@@ -121,6 +125,10 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
         if (hospitalName != null) 'hospital_clinic_name': hospitalName,
         if (specialization != null) 'specialization': specialization,
         if (medicalRegNumber != null) 'medical_registration_number': medicalRegNumber,
+        // Insert pharmacist specific fields if present
+        if (pharmacyName != null) 'pharmacy_name': pharmacyName,
+        if (pharmacyAddress != null) 'pharmacy_address': pharmacyAddress,
+        if (pharmacistLicenseNumber != null) 'license_number': pharmacistLicenseNumber,
       });
 
       // Pass patient data to role record creation
@@ -128,6 +136,9 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
         role,
         dateOfBirth: dateOfBirth,
         weight: weight,
+        pharmacyName: pharmacyName,
+        pharmacyAddress: pharmacyAddress,
+        pharmacistLicenseNumber: pharmacistLicenseNumber,
       );
 
       await _storage.setUserId(response.user!.id);
@@ -241,6 +252,9 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       String role, {
         DateTime? dateOfBirth,
         double? weight,
+        String? pharmacyName,
+        String? pharmacyAddress,
+        String? pharmacistLicenseNumber,
       }) async {
     switch (role) {
       case 'patient':
@@ -255,7 +269,12 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
         await _supabase.client.from('doctors').upsert({'user_id': _supabase.currentUserId});
         break;
       case 'pharmacist':
-        await _supabase.client.from('pharmacists').upsert({'user_id': _supabase.currentUserId});
+        await _supabase.client.from('pharmacists').upsert({
+          'user_id': _supabase.currentUserId,
+          'pharmacy_name': pharmacyName,
+          'pharmacy_address': pharmacyAddress,
+          'license_number': pharmacistLicenseNumber,
+        });
         break;
       case 'first_responder':
         await _supabase.client.from('first_responders').upsert({'user_id': _supabase.currentUserId});

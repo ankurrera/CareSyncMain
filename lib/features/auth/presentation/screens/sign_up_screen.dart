@@ -35,6 +35,11 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final _specializationController = TextEditingController();
   final _medRegController = TextEditingController();
 
+  // Pharmacist Specific Controllers
+  final _pharmacyNameController = TextEditingController();
+  final _pharmacyAddressController = TextEditingController();
+  final _pharmacistLicenseController = TextEditingController();
+
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
@@ -52,6 +57,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     _hospitalController.dispose();
     _specializationController.dispose();
     _medRegController.dispose();
+    _pharmacyNameController.dispose();
+    _pharmacyAddressController.dispose();
+    _pharmacistLicenseController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -126,6 +134,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         hospitalName: widget.role == 'doctor' ? _hospitalController.text.trim() : null,
         specialization: widget.role == 'doctor' ? _specializationController.text.trim() : null,
         medicalRegNumber: widget.role == 'doctor' ? _medRegController.text.trim() : null,
+        // Pass pharmacist fields if role is pharmacist
+        pharmacyName: widget.role == 'pharmacist' ? _pharmacyNameController.text.trim() : null,
+        pharmacyAddress: widget.role == 'pharmacist' ? _pharmacyAddressController.text.trim() : null,
+        pharmacistLicenseNumber: widget.role == 'pharmacist' ? _pharmacistLicenseController.text.trim() : null,
         // Pass patient fields if role is patient
         gender: widget.role == 'patient' ? _selectedGender : null,
         dateOfBirth: widget.role == 'patient' ? _selectedDateOfBirth : null,
@@ -397,6 +409,46 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     label: 'Medical Registration No. (Optional)',
                     hint: 'Registration ID',
                     prefixIcon: Icons.badge_outlined,
+                  ),
+                  const Divider(height: 32),
+                ],
+
+                // PHARMACIST SPECIFIC FIELDS
+                if (widget.role == 'pharmacist') ...[
+                  const Divider(height: 32),
+                  const Text(
+                    'Pharmacy Details',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  AuthTextField(
+                    controller: _pharmacyNameController,
+                    label: 'Pharmacy Name',
+                    hint: 'e.g. CareSync Pharmacy, Walgreens',
+                    prefixIcon: Icons.local_pharmacy_outlined,
+                    textCapitalization: TextCapitalization.words,
+                    validator: (value) => value!.isEmpty ? 'Required for pharmacists' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  AuthTextField(
+                    controller: _pharmacyAddressController,
+                    label: 'Pharmacy Address',
+                    hint: 'Where is the pharmacy located?',
+                    prefixIcon: Icons.location_on_outlined,
+                    textCapitalization: TextCapitalization.words,
+                    validator: (value) => value!.isEmpty ? 'Required for pharmacists' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  AuthTextField(
+                    controller: _pharmacistLicenseController,
+                    label: 'Pharmacist License Number',
+                    hint: 'Enter your license ID',
+                    prefixIcon: Icons.badge_outlined,
+                    validator: (value) => value!.isEmpty ? 'Required for pharmacists' : null,
                   ),
                   const Divider(height: 32),
                 ],

@@ -15,6 +15,11 @@ class UserProfile {
   final String? specialization;
   final String? medicalRegNumber;
 
+  // Pharmacist Specific Fields
+  final String? licenseNumber;
+  final String? pharmacyName;
+  final String? pharmacyAddress;
+
   const UserProfile({
     required this.id,
     required this.email,
@@ -28,6 +33,9 @@ class UserProfile {
     this.hospitalName,
     this.specialization,
     this.medicalRegNumber,
+    this.licenseNumber,
+    this.pharmacyName,
+    this.pharmacyAddress,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -46,6 +54,9 @@ class UserProfile {
       hospitalName: json['hospital_clinic_name'] as String?,
       specialization: json['specialization'] as String?,
       medicalRegNumber: json['medical_registration_number'] as String?,
+      licenseNumber: json['license_number'] as String?,
+      pharmacyName: json['pharmacy_name'] as String?,
+      pharmacyAddress: json['pharmacy_address'] as String?,
     );
   }
 
@@ -63,6 +74,9 @@ class UserProfile {
       'hospital_clinic_name': hospitalName,
       'specialization': specialization,
       'medical_registration_number': medicalRegNumber,
+      'license_number': licenseNumber,
+      'pharmacy_name': pharmacyName,
+      'pharmacy_address': pharmacyAddress,
     };
   }
 
@@ -99,6 +113,9 @@ class UserProfile {
     String? hospitalName,
     String? specialization,
     String? medicalRegNumber,
+    String? licenseNumber,
+    String? pharmacyName,
+    String? pharmacyAddress,
   }) {
     return UserProfile(
       id: id ?? this.id,
@@ -113,6 +130,9 @@ class UserProfile {
       hospitalName: hospitalName ?? this.hospitalName,
       specialization: specialization ?? this.specialization,
       medicalRegNumber: medicalRegNumber ?? this.medicalRegNumber,
+      licenseNumber: licenseNumber ?? this.licenseNumber,
+      pharmacyName: pharmacyName ?? this.pharmacyName,
+      pharmacyAddress: pharmacyAddress ?? this.pharmacyAddress,
     );
   }
 }

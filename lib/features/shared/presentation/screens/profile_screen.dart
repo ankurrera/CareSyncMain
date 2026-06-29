@@ -84,6 +84,8 @@ class ProfileScreen extends ConsumerWidget {
                                   // Show Edit Profile for Doctor or general settings
                                   if (profile.isDoctor) {
                                     _showEditDoctorProfile(context, ref, profile);
+                                  } else if (profile.isPharmacist) {
+                                    _showEditPharmacistProfile(context, ref, profile);
                                   } else {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                         const SnackBar(content: Text('Profile editing coming soon')));
@@ -124,6 +126,12 @@ class ProfileScreen extends ConsumerWidget {
                         if (profile.isDoctor) ...[
                           const SizedBox(height: 24),
                           _buildDoctorDetailsCard(context, profile),
+                        ],
+
+                        // PHARMACIST DETAILS CARD
+                        if (profile.isPharmacist) ...[
+                          const SizedBox(height: 24),
+                          _buildPharmacistDetailsCard(context, profile),
                         ],
 
                         const SizedBox(height: 32),
@@ -639,6 +647,148 @@ class ProfileScreen extends ConsumerWidget {
         ),
         if (!isDestructive) Divider(height: 1, indent: 70, color: AppColors.border.withValues(alpha: 0.3)),
       ],
+    );
+  }
+
+  Widget _buildPharmacistDetailsCard(BuildContext context, UserProfile profile) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadow.withValues(alpha: 0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+        border: Border.all(color: AppColors.pharmacist.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.pharmacist.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.local_pharmacy_rounded, color: AppColors.pharmacist, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Pharmacy Details',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildInfoRow('Pharmacy Name', profile.pharmacyName ?? 'Not set', isEditable: true),
+          const Divider(height: 24),
+          _buildInfoRow('Pharmacy Address', profile.pharmacyAddress ?? 'Not set', isEditable: true),
+          if (profile.licenseNumber != null) ...[
+            const Divider(height: 24),
+            _buildInfoRow('License Number', profile.licenseNumber!, isEditable: false),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _showEditPharmacistProfile(BuildContext context, WidgetRef ref, UserProfile profile) {
+    final nameController = TextEditingController(text: profile.pharmacyName);
+    final addressController = TextEditingController(text: profile.pharmacyAddress);
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Edit Pharmacy Details'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Pharmacy Name',
+                      hintText: 'Enter pharmacy name',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: addressController,
+                    decoration: const InputDecoration(
+                      labelText: 'Pharmacy Address',
+                      hintText: 'Enter pharmacy address',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Read-only License
+                  TextFormField(
+                    initialValue: profile.licenseNumber,
+                    readOnly: true,
+                    decoration: const InputDecoration(
+                      labelText: 'License Number (Fixed)',
+                      prefixIcon: Icon(Icons.lock_outline, size: 18),
+                      border: OutlineInputBorder(),
+                      filled: true,
+                      fillColor: Color(0xFFF5F5F5),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: isLoading ? null : () async {
+                    if (nameController.text.trim().isEmpty || addressController.text.trim().isEmpty) return;
+
+                    setState(() => isLoading = true);
+                    try {
+                      await SupabaseService.instance.upsertProfile({
+                        'pharmacy_name': nameController.text.trim(),
+                        'pharmacy_address': addressController.text.trim(),
+                        'role': 'pharmacist',
+                      });
+
+                      // Force refresh profile
+                      ref.invalidate(currentProfileProvider);
+
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Pharmacy details updated successfully')),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        setState(() => isLoading = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                        );
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.pharmacist),
+                  child: isLoading
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('Save Changes'),
+                ),
+              ],
+            );
+          }
+      ),
     );
   }
 }

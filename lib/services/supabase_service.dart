@@ -56,15 +56,82 @@ class SupabaseService {
         .select()
         .eq('id', currentUserId!)
         .maybeSingle();
+    
+    if (response == null) return null;
+
+    final role = response['role'] as String?;
+    if (role == 'doctor') {
+      final docResponse = await client
+          .from('doctors')
+          .select('license_number, specialization, hospital_affiliation')
+          .eq('user_id', currentUserId!)
+          .maybeSingle();
+      if (docResponse != null) {
+        response['medical_registration_number'] = docResponse['license_number'];
+        response['specialization'] = docResponse['specialization'];
+        response['hospital_clinic_name'] = docResponse['hospital_affiliation'];
+      }
+    } else if (role == 'pharmacist') {
+      final pharmResponse = await client
+          .from('pharmacists')
+          .select('license_number, pharmacy_name, pharmacy_address')
+          .eq('user_id', currentUserId!)
+          .maybeSingle();
+      if (pharmResponse != null) {
+        response['license_number'] = pharmResponse['license_number'];
+        response['pharmacy_name'] = pharmResponse['pharmacy_name'];
+        response['pharmacy_address'] = pharmResponse['pharmacy_address'];
+      }
+    }
+
     return response;
   }
 
   Future<void> upsertProfile(Map<String, dynamic> data) async {
-    await client.from('profiles').upsert({
+    final profileKeys = ['email', 'phone', 'full_name', 'avatar_url', 'role', 'gender'];
+    final profileData = <String, dynamic>{
       'id': currentUserId,
-      ...data,
       'updated_at': DateTime.now().toIso8601String(),
-    });
+    };
+    for (final key in profileKeys) {
+      if (data.containsKey(key)) {
+        profileData[key] = data[key];
+      }
+    }
+
+    await client.from('profiles').upsert(profileData);
+
+    final role = data['role'] ?? (await client.from('profiles').select('role').eq('id', currentUserId!).single())['role'] as String?;
+
+    if (role == 'doctor') {
+      final doctorData = <String, dynamic>{'user_id': currentUserId};
+      if (data.containsKey('hospital_clinic_name')) {
+        doctorData['hospital_affiliation'] = data['hospital_clinic_name'];
+      }
+      if (data.containsKey('specialization')) {
+        doctorData['specialization'] = data['specialization'];
+      }
+      if (data.containsKey('medical_registration_number')) {
+        doctorData['license_number'] = data['medical_registration_number'];
+      }
+      if (doctorData.length > 1) {
+        await client.from('doctors').upsert(doctorData);
+      }
+    } else if (role == 'pharmacist') {
+      final pharmacistData = <String, dynamic>{'user_id': currentUserId};
+      if (data.containsKey('license_number')) {
+        pharmacistData['license_number'] = data['license_number'];
+      }
+      if (data.containsKey('pharmacy_name')) {
+        pharmacistData['pharmacy_name'] = data['pharmacy_name'];
+      }
+      if (data.containsKey('pharmacy_address')) {
+        pharmacistData['pharmacy_address'] = data['pharmacy_address'];
+      }
+      if (pharmacistData.length > 1) {
+        await client.from('pharmacists').upsert(pharmacistData);
+      }
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -271,6 +338,7 @@ class SupabaseService {
     required String prescriptionId,
     required String patientId,
     String? notes,
+    List<String>? itemsDispensed,
   }) async {
     await client.from('dispensing_records').insert({
       'prescription_id': prescriptionId,
@@ -278,6 +346,7 @@ class SupabaseService {
       'patient_id': patientId,
       'dispensed_at': DateTime.now().toIso8601String(),
       'notes': notes,
+      if (itemsDispensed != null) 'items_dispensed': itemsDispensed,
     });
   }
 
