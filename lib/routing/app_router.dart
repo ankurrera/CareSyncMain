@@ -23,6 +23,7 @@ import '../features/doctor/presentation/screens/new_prescription_screen.dart';
 import '../features/pharmacist/presentation/screens/pharmacist_dashboard_screen.dart';
 import '../features/pharmacist/presentation/screens/dispensing_history_screen.dart';
 import '../features/pharmacist/presentation/screens/dispense_screen.dart';
+import '../features/pharmacist/presentation/screens/pharmacist_search_screen.dart';
 import '../features/first_responder/presentation/screens/first_responder_dashboard_screen.dart';
 import '../features/first_responder/presentation/screens/qr_scanner_screen.dart';
 import '../features/first_responder/presentation/screens/emergency_data_screen.dart';
@@ -265,12 +266,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.pharmacistDispense,
         name: 'pharmacistDispense',
-        builder: (context, state) => const DispenseScreen(),
+        builder: (context, state) {
+          final qrCodeId = state.extra as String?;
+          return DispenseScreen(initialQrCodeId: qrCodeId);
+        },
       ),
       GoRoute(
         path: RouteNames.pharmacistHistory,
         name: 'pharmacistHistory',
         builder: (context, state) => const DispensingHistoryScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.pharmacistSearch,
+        name: 'pharmacistSearch',
+        builder: (context, state) => const PharmacistSearchScreen(),
       ),
 
       // First Responder Routes

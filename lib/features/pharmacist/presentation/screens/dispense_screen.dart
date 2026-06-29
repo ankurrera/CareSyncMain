@@ -6,9 +6,11 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../services/supabase_service.dart';
+import '../../../../services/biometric_service.dart';
 
 class DispenseScreen extends ConsumerStatefulWidget {
-  const DispenseScreen({super.key});
+  final String? initialQrCodeId;
+  const DispenseScreen({super.key, this.initialQrCodeId});
 
   @override
   ConsumerState<DispenseScreen> createState() => _DispenseScreenState();
@@ -17,10 +19,22 @@ class DispenseScreen extends ConsumerStatefulWidget {
 class _DispenseScreenState extends ConsumerState<DispenseScreen> {
   Map<String, dynamic>? _patient;
   List<Map<String, dynamic>> _prescriptions = [];
+  Map<String, bool> _selectedItems = {};
   bool _isLoading = false;
   bool _isScanning = true;
 
   final MobileScannerController _scannerController = MobileScannerController();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialQrCodeId != null) {
+      _isScanning = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadPatientPrescriptions(widget.initialQrCodeId!);
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -67,9 +81,22 @@ class _DispenseScreenState extends ConsumerState<DispenseScreen> {
           .eq('status', 'active')
           .order('created_at', ascending: false);
 
+      final newSelectedItems = <String, bool>{};
+      for (final rx in prescriptions) {
+        final items = rx['prescription_items'] as List? ?? [];
+        for (final item in items) {
+          final itemId = item['id'] as String;
+          final isDispensed = item['is_dispensed'] as bool? ?? false;
+          if (!isDispensed) {
+            newSelectedItems[itemId] = true;
+          }
+        }
+      }
+
       setState(() {
         _patient = patient;
         _prescriptions = List<Map<String, dynamic>>.from(prescriptions);
+        _selectedItems = newSelectedItems;
       });
     } catch (e) {
       if (mounted) {
@@ -98,16 +125,53 @@ class _DispenseScreenState extends ConsumerState<DispenseScreen> {
       final uri = Uri.parse(value);
       final qrCodeId = uri.pathSegments.last;
       _loadPatientPrescriptions(qrCodeId);
+    } else {
+      // Fallback: support scanning just the plain QR ID itself
+      _loadPatientPrescriptions(value);
     }
   }
 
   Future<void> _dispensePrescription(Map<String, dynamic> prescription) async {
+    final items = prescription['prescription_items'] as List? ?? [];
+    final rxItemIdList = items.map((i) => i['id'] as String).toList();
+    
+    // Get checked items for this prescription
+    final selectedItemIds = rxItemIdList.where((id) => _selectedItems[id] == true).toList();
+    
+    if (selectedItemIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select at least one medication to dispense'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
+    final notesController = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Confirm Dispensing'),
-        content: Text(
-          'Dispense all medications for prescription:\n${prescription['diagnosis']}?',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Dispense ${selectedItemIds.length} selected medication(s) for prescription:\n"${prescription['diagnosis'] ?? 'No diagnosis'}"?',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: notesController,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Dispense Notes (Optional)',
+                hintText: 'e.g., Generic brand substituted, counseling provided...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -116,6 +180,7 @@ class _DispenseScreenState extends ConsumerState<DispenseScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.pharmacist),
             child: const Text('Dispense'),
           ),
         ],
@@ -124,6 +189,63 @@ class _DispenseScreenState extends ConsumerState<DispenseScreen> {
 
     if (confirmed != true) return;
 
+    // Biometric Verification for Pharmacist
+    try {
+      final isBioAvailable = await BiometricService.instance.isBiometricAvailable();
+      if (isBioAvailable) {
+        final authenticated = await BiometricService.instance.authenticate(
+          reason: 'Scan your biometric to authorize this medication dispensation',
+          biometricOnly: false, // fallback to device PIN/passcode
+        );
+        if (!authenticated) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Biometric authentication failed. Dispensation aborted.'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+          return;
+        }
+      } else {
+        if (!mounted) return;
+        // Fallback dialog when biometrics are not configured or available (e.g. emulator)
+        final passcodeConfirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Biometric Offline'),
+            content: const Text(
+              'Biometrics are not set up or supported on this device. '
+              'Do you want to authorize this dispensation using your session credentials?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Abort'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.pharmacist),
+                child: const Text('Authorize'),
+              ),
+            ],
+          ),
+        );
+        if (passcodeConfirmed != true) return;
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Verification error: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -131,27 +253,39 @@ class _DispenseScreenState extends ConsumerState<DispenseScreen> {
       await SupabaseService.instance.recordDispensing(
         prescriptionId: prescription['id'] as String,
         patientId: _patient!['id'] as String,
+        notes: notesController.text.trim(),
+        itemsDispensed: selectedItemIds,
       );
 
       // Mark prescription items as dispensed
-      final items = prescription['prescription_items'] as List? ?? [];
-      for (final item in items) {
+      for (final itemId in selectedItemIds) {
         await SupabaseService.instance.client
             .from('prescription_items')
             .update({'is_dispensed': true})
-            .eq('id', item['id']);
+            .eq('id', itemId);
       }
 
-      // Update prescription status
-      await SupabaseService.instance.client
-          .from('prescriptions')
-          .update({'status': 'completed'})
-          .eq('id', prescription['id']);
+      // Check if all items in this prescription are now dispensed
+      final allItems = prescription['prescription_items'] as List? ?? [];
+      final undispensedItems = allItems.where((item) {
+        final itemId = item['id'] as String;
+        final isNowDispensed = selectedItemIds.contains(itemId);
+        final wasAlreadyDispensed = item['is_dispensed'] as bool? ?? false;
+        return !isNowDispensed && !wasAlreadyDispensed;
+      });
+
+      if (undispensedItems.isEmpty) {
+        // Update prescription status to completed
+        await SupabaseService.instance.client
+            .from('prescriptions')
+            .update({'status': 'completed'})
+            .eq('id', prescription['id']);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Prescription dispensed successfully'),
+            content: Text('Medications dispensed successfully'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -182,6 +316,7 @@ class _DispenseScreenState extends ConsumerState<DispenseScreen> {
     setState(() {
       _patient = null;
       _prescriptions = [];
+      _selectedItems = {};
       _isScanning = true;
     });
   }
@@ -424,47 +559,66 @@ class _DispenseScreenState extends ConsumerState<DispenseScreen> {
                             ],
                           ),
                           if (items.isNotEmpty) ...[
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 12),
                             const Divider(height: 1),
                             const SizedBox(height: 12),
                             ...items.map((item) {
+                              final itemId = item['id'] as String;
                               final isDispensed = item['is_dispensed'] as bool? ?? false;
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      isDispensed
-                                          ? Icons.check_circle_rounded
-                                          : Icons.medication_rounded,
-                                      size: 20,
-                                      color: isDispensed
-                                          ? AppColors.success
-                                          : AppColors.pharmacist,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        '${item['medicine_name']} - ${item['dosage']}',
-                                        style: TextStyle(
-                                          decoration: isDispensed
-                                              ? TextDecoration.lineThrough
-                                              : null,
+                              
+                              if (isDispensed) {
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 6),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.check_circle_rounded,
+                                        size: 20,
+                                        color: AppColors.success,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          '${item['medicine_name']} - ${item['dosage']}',
+                                          style: const TextStyle(
+                                            decoration: TextDecoration.lineThrough,
+                                            color: Colors.grey,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    Text(
-                                      item['frequency'] as String? ?? '',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface
-                                            .withValues(alpha: 0.5),
+                                      Text(
+                                        'Dispensed',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade500,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
+                                );
+                              }
+                              
+                              return CheckboxListTile(
+                                value: _selectedItems[itemId] ?? false,
+                                activeColor: AppColors.pharmacist,
+                                title: Text(
+                                  '${item['medicine_name']} - ${item['dosage']}',
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
+                                subtitle: Text(
+                                  '${item['frequency']} for ${item['duration'] ?? "N/A"}',
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
+                                onChanged: (val) {
+                                  setState(() {
+                                    _selectedItems[itemId] = val ?? false;
+                                  });
+                                },
                               );
                             }),
                           ],
@@ -486,7 +640,7 @@ class _DispenseScreenState extends ConsumerState<DispenseScreen> {
                             ? null
                             : () => _dispensePrescription(rx),
                         icon: const Icon(Icons.check_rounded),
-                        label: const Text('Dispense All'),
+                        label: const Text('Dispense Selected'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.pharmacist,
                         ),
@@ -501,4 +655,3 @@ class _DispenseScreenState extends ConsumerState<DispenseScreen> {
     );
   }
 }
-
