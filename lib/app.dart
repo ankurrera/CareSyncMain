@@ -39,13 +39,18 @@ class _CareSyncState extends ConsumerState<CareSync> {
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
       routerConfig: router,
-      // Wrap the app to insert the Global Biometric Lock
       builder: (context, child) {
-        return Stack(
-          children: [
-            if (child != null) child,
-            const _GlobalBiometricLock(),
-          ],
+        final mediaQueryData = MediaQuery.of(context);
+        return MediaQuery(
+          data: mediaQueryData.copyWith(
+            textScaler: TextScaler.noScaling,
+          ),
+          child: Stack(
+            children: [
+              if (child != null) child,
+              const _GlobalBiometricLock(),
+            ],
+          ),
         );
       },
     );

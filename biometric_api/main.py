@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 from typing import Dict, Any, List
 from fastapi import FastAPI, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -34,6 +35,16 @@ app = FastAPI(
     description="Production-grade biometric face processing microservice with ArcFace, RetinaFace, OpenCV and pgvector.",
     version="2.0.0"
 )
+
+def l2_normalize(vector: List[float]) -> List[float]:
+    """
+    Normalizes a vector to unit length (L2 norm = 1.0).
+    """
+    arr = np.array(vector)
+    norm = np.linalg.norm(arr)
+    if norm == 0:
+        return vector
+    return (arr / norm).tolist()
 
 # ============================================================================
 # SUPABASE STORAGE HELPER — works for public, signed, or any URL format
@@ -72,7 +83,25 @@ def download_supabase_file(storage_url: str, dest_suffix: str = ".jpg") -> str:
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=dest_suffix) as tmp:
         tmp.write(file_bytes)
-        return tmp.name
+        temp_path = tmp.name
+
+    # Resize image to a maximum dimension of 640 pixels to speed up RetinaFace detection on CPU
+    try:
+        img = cv2.imread(temp_path)
+        if img is not None:
+            h, w = img.shape[:2]
+            max_dim = 640
+            if max(h, w) > max_dim:
+                scale = max_dim / max(h, w)
+                new_w = int(w * scale)
+                new_h = int(h * scale)
+                resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                cv2.imwrite(temp_path, resized)
+                logger.info(f"Resized downloaded image from {w}x{h} to {new_w}x{new_h} to speed up CPU face detection")
+    except Exception as re:
+        logger.warning(f"Failed to resize image to optimize CPU processing: {re}")
+
+    return temp_path
 
 
 
@@ -105,10 +134,10 @@ def evaluate_image_quality(img_path: str) -> Dict[str, Any]:
     h, w, c = img.shape
     
     # 1. Resolution Check
-    if h < 480 or w < 480:
+    if h < 320 or w < 320:
         raise HTTPException(
             status_code=400, 
-            detail=f"Image resolution too low ({w}x{h}). Minimum required is 480x480 pixels."
+            detail=f"Image resolution too low ({w}x{h}). Minimum required is 320x320 pixels."
         )
 
     # Convert to grayscale for calculations
@@ -137,10 +166,11 @@ def evaluate_image_quality(img_path: str) -> Dict[str, Any]:
 
     # 5. Face Detection, Alignment, and Quantity checks
     try:
-        # MediaPipe is a highly optimized, lightweight CPU-friendly detector
+        # RetinaFace is highly accurate and does not require opencv.dnn dependencies
         faces = DeepFace.extract_faces(
             img_path=img_path, 
-            detector_backend="mediapipe", 
+            detector_backend="retinaface", 
+            align=True,
             enforce_detection=True
         )
     except ValueError as ve:
@@ -179,7 +209,8 @@ def evaluate_image_quality(img_path: str) -> Dict[str, Any]:
         "quality_score": float(quality_score),
         "sharpness": float(laplacian_var),
         "brightness": float(mean_brightness),
-        "face_confidence": float(face_conf)
+        "face_confidence": float(face_conf),
+        "cropped_face": face["face"]
     }
 
 def enhance_image(img_path: str) -> str:
@@ -239,21 +270,24 @@ async def enroll(payload: EnrollRequest):
         
         # 1. Fetch image from Supabase Storage via service-role client
         # Works with any URL format (public /object/public/ or signed /object/sign/)
-        temp_img_path = download_supabase_file(payload.selfieUrl, dest_suffix=".jpg")
+        temp_img_path = await run_in_threadpool(download_supabase_file, payload.selfieUrl, ".jpg")
 
         # 2. Quality Evaluation
         quality_metrics = evaluate_image_quality(temp_img_path)
+
+        # Save cropped face back to temp_img_path (overwriting full original image to save CPU)
+        cropped_rgb = (quality_metrics["cropped_face"] * 255).astype(np.uint8)
+        cropped_bgr = cv2.cvtColor(cropped_rgb, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(temp_img_path, cropped_bgr)
+        quality_metrics.pop("cropped_face", None)
         logger.info(f"Quality validation passed: {quality_metrics}")
 
-        # 3. Automatic Contrast/Light Enhancement
-        enhanced_path = enhance_image(temp_img_path)
-
-        # 4. Generate ArcFace embedding
+        # 3. Generate ArcFace embedding (skip second detector pass & bypass color-shifting enhancement)
         embeddings = DeepFace.represent(
-            img_path=enhanced_path,
+            img_path=temp_img_path,
             model_name="ArcFace",
-            detector_backend="mediapipe",
-            enforce_detection=True
+            detector_backend="skip",
+            enforce_detection=False
         )
 
         if not embeddings or len(embeddings) == 0:
@@ -262,10 +296,10 @@ async def enroll(payload: EnrollRequest):
                 detail="Failed to generate biometric signature from the photo."
             )
 
-        embedding_vector = embeddings[0]["embedding"]
+        embedding_vector = l2_normalize(embeddings[0]["embedding"])
 
         # 5. Fetch patient record ID from the patients table using user_id
-        patient_query = supabase.from_("patients").select("id").eq("user_id", payload.userId).maybeSingle().execute()
+        patient_query = supabase.from_("patients").select("id").eq("user_id", payload.userId).maybe_single().execute()
         
         if not patient_query.data:
             # Patient row doesn't exist yet, insert a basic row to generate the primary key ID
@@ -323,8 +357,8 @@ async def verify_id(payload: VerifyIDRequest):
     temp_id_path = None
     try:
         # Download selfie & ID via service-role client — works for public or signed URLs
-        temp_selfie_path = download_supabase_file(payload.selfieUrl, dest_suffix=".jpg")
-        temp_id_path = download_supabase_file(payload.idDocumentUrl, dest_suffix=".jpg")
+        temp_selfie_path = await run_in_threadpool(download_supabase_file, payload.selfieUrl, ".jpg")
+        temp_id_path = await run_in_threadpool(download_supabase_file, payload.idDocumentUrl, ".jpg")
 
 
         # Perform verification
@@ -332,8 +366,8 @@ async def verify_id(payload: VerifyIDRequest):
             img1_path=temp_selfie_path,
             img2_path=temp_id_path,
             model_name="ArcFace",
-            detector_backend="mediapipe",
-            enforce_detection=True
+            detector_backend="retinaface",
+            enforce_detection=False
         )
         
         similarity = 1.0 - float(result["distance"])
@@ -371,7 +405,10 @@ async def identify(payload: IdentifyRequest):
         # 1. Download image bytes from Supabase private storage
         download_start = time.time()
         try:
-            file_bytes = supabase.storage.from_("emergency-scans").download(payload.scanPath)
+            file_bytes = await run_in_threadpool(
+                supabase.storage.from_("emergency-scans").download, 
+                payload.scanPath
+            )
         except Exception as se:
             logger.error(f"Failed to retrieve scan file from Supabase storage: {se}")
             raise HTTPException(
@@ -385,24 +422,42 @@ async def identify(payload: IdentifyRequest):
             temp_file.write(file_bytes)
             temp_img_path = temp_file.name
 
+        # Downscale scan image to max 640px to speed up face detection on CPU
+        try:
+            img = cv2.imread(temp_img_path)
+            if img is not None:
+                h, w = img.shape[:2]
+                max_dim = 640
+                if max(h, w) > max_dim:
+                    scale = max_dim / max(h, w)
+                    new_w = int(w * scale)
+                    new_h = int(h * scale)
+                    resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                    cv2.imwrite(temp_img_path, resized)
+                    logger.info(f"Resized scan image from {w}x{h} to {new_w}x{new_h} to speed up CPU face detection")
+        except Exception as re:
+            logger.warning(f"Failed to resize scan image to optimize CPU processing: {re}")
+
         # 3. Quality Evaluation
         quality_start = time.time()
         quality_metrics = evaluate_image_quality(temp_img_path)
-        logger.info(f"Quality evaluation passed: {quality_metrics}")
         quality_latency = time.time() - quality_start
 
-        # 4. Image Contrast / Light Enhancement
-        enhancement_start = time.time()
-        enhanced_path = enhance_image(temp_img_path)
-        enhancement_latency = time.time() - enhancement_start
+        # Save cropped face back to temp_img_path (overwriting full original image to save CPU)
+        cropped_rgb = (quality_metrics["cropped_face"] * 255).astype(np.uint8)
+        cropped_bgr = cv2.cvtColor(cropped_rgb, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(temp_img_path, cropped_bgr)
+        quality_metrics.pop("cropped_face", None)
+        logger.info(f"Quality evaluation passed: {quality_metrics}")
 
-        # 5. Extract ArcFace embedding
+        # 4. Extract ArcFace embedding (skip second detector pass and skip color-shifting enhancement)
+        enhancement_latency = 0.0
         inference_start = time.time()
         embeddings = DeepFace.represent(
-            img_path=enhanced_path,
+            img_path=temp_img_path,
             model_name="ArcFace",
-            detector_backend="mediapipe",
-            enforce_detection=True
+            detector_backend="skip",
+            enforce_detection=False
         )
 
         if not embeddings or len(embeddings) == 0:
@@ -411,15 +466,17 @@ async def identify(payload: IdentifyRequest):
                 detail="Failed to generate face signature from scan."
             )
 
-        embedding_vector = embeddings[0]["embedding"]
+        embedding_vector = l2_normalize(embeddings[0]["embedding"])
         inference_latency = time.time() - inference_start
 
         # 6. Database pgvector Match
         db_start = time.time()
-        # Cosine distance limit of 0.35 equates to >= 65% similarity
+        # Cosine distance limit of 0.40 equates to >= 60% similarity.
+        # Widened from 0.35 to reduce false negatives: successful matches land at 0.30-0.336 distance,
+        # but minor angle/lighting variation was pushing borderline-correct scans just above 0.35.
         rpc_res = supabase.rpc("match_patient_by_face_multi", {
             "query_embedding": embedding_vector,
-            "max_distance": 0.35,
+            "max_distance": 0.40,
             "match_limit": 10
         }).execute()
         db_latency = time.time() - db_start
