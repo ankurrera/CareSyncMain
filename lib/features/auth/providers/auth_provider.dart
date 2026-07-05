@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../services/biometric_service.dart';
 import '../../../services/secure_storage_service.dart';
@@ -260,7 +261,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       case 'patient':
       // Add patient specific medical data here
         await _supabase.upsertPatientData({
-          'qr_code_id': DateTime.now().millisecondsSinceEpoch.toString(),
+          'qr_code_id': const Uuid().v4(),
           if (dateOfBirth != null) 'date_of_birth': dateOfBirth.toIso8601String(),
           if (weight != null) 'weight': weight,
         });
@@ -275,9 +276,6 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
           'pharmacy_address': pharmacyAddress,
           'license_number': pharmacistLicenseNumber,
         });
-        break;
-      case 'first_responder':
-        await _supabase.client.from('first_responders').upsert({'user_id': _supabase.currentUserId});
         break;
     }
   }

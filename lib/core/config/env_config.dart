@@ -15,6 +15,11 @@ abstract class EnvConfig {
 
   /// Base URL for emergency QR codes
   static String get emergencyBaseUrl => '$supabaseUrl/functions/v1/emergency';
+
+  /// Custom Biometric API URL (local python server or deployed endpoint)
+  static String get biometricApiUrl => 
+      dotenv.env['BIOMETRIC_API_URL'] ?? 'http://localhost:8000';
+
   
   /// Helper to throw meaningful error for missing env vars
   static String _throwMissingEnv(String key) {

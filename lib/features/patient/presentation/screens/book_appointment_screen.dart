@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../shared/models/user_profile.dart';
 import '../../providers/appointment_provider.dart';
@@ -22,28 +24,42 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
     final doctorsAsync = ref.watch(availableDoctorsProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.softBackground,
+      backgroundColor: const Color(0xFFFAFAFA),
       appBar: AppBar(
-        title: const Text('Book Appointment'),
-        backgroundColor: Colors.transparent,
+        title: Text(
+          'Book Appointment',
+          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 18, color: const Color(0xFF121212)),
+        ),
+        backgroundColor: Colors.white,
         elevation: 0,
-        foregroundColor: AppColors.textMain,
+        centerTitle: true,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF121212)),
+          onPressed: () => Navigator.pop(context),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1.0),
+          child: Container(color: const Color(0xFFE2E8F0), height: 1.0),
+        ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        physics: const ClampingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Select Doctor',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF121212)),
             ),
             const SizedBox(height: 16),
             doctorsAsync.when(
               data: (doctors) => SizedBox(
-                height: 120,
+                height: 124,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
+                  clipBehavior: Clip.none,
                   itemCount: doctors.length,
                   itemBuilder: (context, index) {
                     final doctor = doctors[index];
@@ -51,31 +67,45 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
                     return GestureDetector(
                       onTap: () => setState(() => _selectedDoctor = doctor),
                       child: Container(
-                        width: 100,
+                        width: 104,
                         margin: const EdgeInsets.only(right: 12),
                         decoration: BoxDecoration(
-                          color: isSelected ? AppColors.softPrimary : Colors.white,
+                          color: isSelected ? const Color(0xFFFFF4F0) : Colors.white,
                           borderRadius: BorderRadius.circular(20),
-                          border: isSelected ? null : Border.all(color: Colors.grey.shade200),
+                          border: Border.all(
+                            color: isSelected ? const Color(0xFFFF5200) : const Color(0xFFE2E8F0),
+                            width: isSelected ? 1.5 : 1.0,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.015),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             CircleAvatar(
-                              radius: 24,
-                              backgroundColor: isSelected ? Colors.white.withValues(alpha: 0.2) : AppColors.softPrimary.withValues(alpha: 0.1),
+                              radius: 22,
+                              backgroundColor: isSelected ? const Color(0xFFFF5200) : const Color(0xFFF1F5F9),
                               child: Text(
-                                doctor.fullName[0],
-                                style: TextStyle(color: isSelected ? Colors.white : AppColors.softPrimary),
+                                doctor.fullName.isNotEmpty ? doctor.fullName[0].toUpperCase() : 'D',
+                                style: GoogleFonts.plusJakartaSans(
+                                  color: isSelected ? Colors.white : const Color(0xFF64748B),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 10),
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
                               child: Text(
                                 doctor.fullName.split(' ').last,
-                                style: TextStyle(
-                                  color: isSelected ? Colors.white : AppColors.textMain,
+                                style: GoogleFonts.plusJakartaSans(
+                                  color: const Color(0xFF121212),
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12,
                                 ),
@@ -89,42 +119,46 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
                   },
                 ),
               ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, _) => Text('Error loading doctors: $err'),
+              loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFFFF5200))),
+              error: (err, _) => Text('Error loading doctors: $err', style: GoogleFonts.plusJakartaSans()),
             ),
 
             if (_selectedDoctor != null) ...[
-              const SizedBox(height: 32),
-              const Text(
+              const SizedBox(height: 28),
+              Text(
                 'Select Date',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF121212)),
               ),
               const SizedBox(height: 16),
               _buildDatePicker(),
               
-              const SizedBox(height: 32),
-              const Text(
+              const SizedBox(height: 28),
+              Text(
                 'Available Slots',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF121212)),
               ),
               const SizedBox(height: 16),
               _buildTimeSlots(),
 
-              const SizedBox(height: 48),
+              const SizedBox(height: 40),
               SizedBox(
                 width: double.infinity,
-                height: 56,
+                height: 52,
                 child: ElevatedButton(
                   onPressed: _selectedSlot != null ? _confirmBooking : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.softPrimary,
+                    backgroundColor: const Color(0xFF121212),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     elevation: 0,
                   ),
-                  child: const Text('Confirm Booking', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    'Confirm Booking', 
+                    style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
                 ),
               ),
+              const SizedBox(height: 40),
             ],
           ],
         ),
@@ -138,24 +172,34 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.shadowSoft.withValues(alpha: 0.3),
+            color: Colors.black.withValues(alpha: 0.015),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: CalendarDatePicker(
-        initialDate: _selectedDate,
-        firstDate: DateTime.now(),
-        lastDate: DateTime.now().add(const Duration(days: 30)),
-        onDateChanged: (date) {
-          setState(() {
-            _selectedDate = date;
-            _selectedSlot = null;
-          });
-        },
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: Color(0xFFFF5200),
+            onPrimary: Colors.white,
+            onSurface: Color(0xFF121212),
+          ),
+        ),
+        child: CalendarDatePicker(
+          initialDate: _selectedDate,
+          firstDate: DateTime.now(),
+          lastDate: DateTime.now().add(const Duration(days: 30)),
+          onDateChanged: (date) {
+            setState(() {
+              _selectedDate = date;
+              _selectedSlot = null;
+            });
+          },
+        ),
       ),
     );
   }
@@ -167,15 +211,21 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
 
     return availabilityAsync.when(
       data: (availabilities) {
-        // Map Flutter weekday (1-7, Mon-Sun) to Supabase (0-6, Sun-Sat)
         final supabaseDay = _selectedDate.weekday % 7;
         final dayAvailability = availabilities.where((a) => a.dayOfWeek == supabaseDay).toList();
 
         if (dayAvailability.isEmpty) {
-          return const Center(child: Text('No availability on this day', style: TextStyle(color: Colors.grey)));
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Text(
+                'No availability on this day', 
+                style: GoogleFonts.plusJakartaSans(color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500, fontSize: 13),
+              ),
+            ),
+          );
         }
 
-        // Generate slots
         final slots = <String>[];
         for (final avail in dayAvailability) {
           final start = DateFormat('HH:mm:ss').parse(avail.startTime);
@@ -191,32 +241,35 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
         }
 
         return Wrap(
-          spacing: 12,
-          runSpacing: 12,
+          spacing: 10,
+          runSpacing: 10,
           children: slots.map((slot) {
             final isSelected = _selectedSlot == slot;
             return GestureDetector(
               onTap: () => setState(() => _selectedSlot = slot),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 decoration: BoxDecoration(
-                  color: isSelected ? AppColors.softPrimary : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: isSelected ? null : Border.all(color: Colors.grey.shade200),
+                  color: isSelected ? const Color(0xFFFF5200) : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isSelected ? const Color(0xFFFF5200) : const Color(0xFFE2E8F0),
+                    width: 1.0,
+                  ),
                   boxShadow: [
-                    if (isSelected)
-                      BoxShadow(
-                        color: AppColors.softPrimary.withValues(alpha: 0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.01),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
                   ],
                 ),
                 child: Text(
                   slot,
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : AppColors.textMain,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  style: GoogleFonts.plusJakartaSans(
+                    color: isSelected ? Colors.white : const Color(0xFF121212),
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                    fontSize: 13,
                   ),
                 ),
               ),
@@ -224,19 +277,18 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
           }).toList(),
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Text('Error loading availability: $err'),
+      loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFFFF5200))),
+      error: (err, _) => Text('Error loading availability: $err', style: GoogleFonts.plusJakartaSans()),
     );
   }
 
   Future<void> _confirmBooking() async {
     if (_selectedDoctor == null || _selectedSlot == null) return;
 
-    // Show loading dialog
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
+      builder: (context) => const Center(child: CircularProgressIndicator(color: Color(0xFFFF5200))),
     );
 
     try {
@@ -264,26 +316,34 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
       if (mounted) {
         Navigator.pop(context); // Pop loading dialog
         
-        // Show success dialog
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: const Row(
+            title: Row(
               children: [
-                Icon(Icons.check_circle, color: Colors.green),
-                SizedBox(width: 8),
-                Text('Booking Confirmed'),
+                const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 24),
+                const SizedBox(width: 10),
+                Text(
+                  'Booking Confirmed',
+                  style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 16, color: const Color(0xFF121212)),
+                ),
               ],
             ),
-            content: Text('Your appointment with ${_selectedDoctor!.fullName} is scheduled for ${DateFormat('MMM d, hh:mm a').format(startTime)}.'),
+            content: Text(
+              'Your appointment with ${_selectedDoctor!.fullName} is scheduled for ${DateFormat('MMM d, hh:mm a').format(startTime)}.',
+              style: GoogleFonts.plusJakartaSans(fontSize: 13, color: const Color(0xFF64748B), height: 1.4),
+            ),
             actions: [
               TextButton(
                 onPressed: () {
                   Navigator.pop(context); // Pop success dialog
                   Navigator.pop(context); // Back to home
                 },
-                child: const Text('Great!'),
+                child: Text(
+                  'Great!',
+                  style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, color: const Color(0xFFFF5200)),
+                ),
               ),
             ],
           ),
@@ -294,8 +354,8 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
         Navigator.pop(context); // Pop loading dialog
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Booking failed: $e'),
-            backgroundColor: Colors.redAccent,
+            content: Text('Booking failed: $e', style: GoogleFonts.plusJakartaSans()),
+            backgroundColor: const Color(0xFFEF4444),
             behavior: SnackBarBehavior.floating,
           ),
         );

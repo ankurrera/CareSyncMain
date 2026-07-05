@@ -37,6 +37,26 @@ FutureProvider<List<Prescription>>((ref) async {
   return data.map((json) => Prescription.fromJson(json)).toList();
 });
 
+/// Computed Provider for active prescriptions only
+final activePrescriptionsProvider = Provider<AsyncValue<List<Prescription>>>((ref) {
+  final prescriptionsAsync = ref.watch(patientPrescriptionsProvider);
+  return prescriptionsAsync.whenData(
+    (list) => list.where((p) => p.isActive).toList(),
+  );
+});
+
+/// Computed Provider for today's active medication items (medication checklist)
+final todayMedicationsProvider = Provider<AsyncValue<List<PrescriptionItem>>>((ref) {
+  final activeAsync = ref.watch(activePrescriptionsProvider);
+  return activeAsync.whenData((prescriptions) {
+    final List<PrescriptionItem> items = [];
+    for (final p in prescriptions) {
+      items.addAll(p.items);
+    }
+    return items;
+  });
+});
+
 /// Provider for medical conditions - KYC verification required
 final medicalConditionsProvider =
 FutureProvider<List<MedicalCondition>>((ref) async {

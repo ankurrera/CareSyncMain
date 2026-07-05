@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -9,158 +11,207 @@ import '../../../../routing/route_names.dart';
 import '../../../../services/kyc_service.dart';
 import '../../models/patient_data.dart';
 import '../../providers/patient_provider.dart';
+import 'prescriptions_screen.dart'; // To reuse PrescriptionCard
 
-class MedicalHistoryScreen extends ConsumerWidget {
+class MedicalHistoryScreen extends ConsumerStatefulWidget {
   const MedicalHistoryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MedicalHistoryScreen> createState() =>
+      _MedicalHistoryScreenState();
+}
+
+class _MedicalHistoryScreenState extends ConsumerState<MedicalHistoryScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final conditionsAsync = ref.watch(medicalConditionsProvider);
+    final prescriptionsAsync = ref.watch(patientPrescriptionsProvider);
 
     return Scaffold(
+      backgroundColor: const Color(0xFFFAFAFA),
       appBar: AppBar(
-        title: const Text('Medical History'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () => _showAddConditionDialog(context, ref),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: Text(
+          'Medical Records',
+          style: GoogleFonts.plusJakartaSans(
+            color: const Color(0xFF121212),
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
           ),
-        ],
-      ),
-      body: conditionsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) {
-          // Check if error is due to KYC requirement using typed exception
-          if (error is KYCRequiredException) {
-            return Center(
-              child: Padding(
-                padding: AppSpacing.screenPadding,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.verified_user_outlined,
-                      size: 80,
-                      color: AppColors.warning.withValues(alpha: 0.5),
-                    ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'KYC Verification Required',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'You need to verify your identity before accessing medical records',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      onPressed: () => context.push(RouteNames.kycVerification),
-                      icon: const Icon(Icons.badge_rounded),
-                      label: const Text('Verify Identity'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-          
-          return Center(
-            child: Padding(
-              padding: AppSpacing.screenPadding,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 64,
-                    color: AppColors.error.withValues(alpha: 0.5),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Error loading medical history',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: () => ref.invalidate(medicalConditionsProvider),
-                    child: const Text('Retry'),
+        ),
+        centerTitle: true,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9), // Slate 100
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              dividerColor: Colors.transparent,
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicator: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
+              labelColor: const Color(0xFF121212),
+              unselectedLabelColor: const Color(0xFF64748B),
+              labelStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13),
+              unselectedLabelStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600, fontSize: 13),
+              tabs: const [
+                Tab(text: 'Prescriptions'),
+                Tab(text: 'Medical History'),
+              ],
             ),
-          );
-        },
-        data: (conditions) {
-          if (conditions.isEmpty) {
-            return _buildEmptyState(context, ref);
-          }
-          return ListView.builder(
-            padding: AppSpacing.screenPadding,
-            itemCount: conditions.length,
-            itemBuilder: (context, index) {
-              final condition = conditions[index];
-              return _buildConditionCard(context, condition, ref);
-            },
-          );
-        },
+          ),
+        ),
       ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // ── Tab 1: Prescriptions ─────────────────────────────────────────
+          prescriptionsAsync.when(
+            loading: () => const Center(
+              child: CircularProgressIndicator(color: Color(0xFFFF5200)),
+            ),
+            error: (error, _) => _buildErrorState('prescriptions'),
+            data: (prescriptions) {
+              if (prescriptions.isEmpty) {
+                return _buildEmptyPrescriptionsState(context);
+              }
+              return RefreshIndicator(
+                onRefresh: () async =>
+                    ref.invalidate(patientPrescriptionsProvider),
+                child: ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: prescriptions.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) => PrescriptionCard(
+                      prescription: prescriptions[index]),
+                ),
+              );
+            },
+          ),
+
+          // ── Tab 2: Medical History ───────────────────────────────────────
+          conditionsAsync.when(
+            loading: () => const Center(
+              child: CircularProgressIndicator(color: Color(0xFFFF5200)),
+            ),
+            error: (error, _) {
+              if (error is KYCRequiredException) {
+                return _buildKycRequiredState(context);
+              }
+              return _buildErrorState('conditions');
+            },
+            data: (conditions) {
+              if (conditions.isEmpty) {
+                return _buildEmptyConditionsState(context);
+              }
+              return RefreshIndicator(
+                onRefresh: () async =>
+                    ref.invalidate(medicalConditionsProvider),
+                child: ListView.builder(
+                  padding: AppSpacing.screenPadding,
+                  itemCount: conditions.length,
+                  itemBuilder: (context, index) {
+                    final condition = conditions[index];
+                    return _buildConditionCard(context, condition);
+                  },
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      floatingActionButton: _tabController.index == 0
+          ? FloatingActionButton.extended(
+              heroTag: 'add_prescription_btn',
+              onPressed: () =>
+                  context.push(RouteNames.patientAddPrescription),
+              backgroundColor: const Color(0xFF121212),
+              foregroundColor: Colors.white,
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              icon: const Icon(Iconsax.add, size: 20),
+              label: Text('Add Rx', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
+            )
+          : FloatingActionButton.extended(
+              heroTag: 'add_condition_btn',
+              onPressed: () => _showAddConditionDialog(context),
+              backgroundColor: const Color(0xFF121212),
+              foregroundColor: Colors.white,
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              icon: const Icon(Iconsax.add, size: 20),
+              label: Text('Add Condition', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
+            ),
     );
   }
 
-  Widget _buildEmptyState(BuildContext context, WidgetRef ref) {
+  Widget _buildEmptyPrescriptionsState(BuildContext context) {
     return Center(
       child: Padding(
-        padding: AppSpacing.screenPadding,
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.medical_information_outlined,
-              size: 80,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Icon(Iconsax.document_text,
+                  size: 40, color: Color(0xFF94A3B8)),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             Text(
-              'No Medical Conditions',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+              'No Prescriptions',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF121212),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
-              'Add your allergies, chronic conditions, and other medical information for emergency access',
+              'Add prescriptions to easily track your medications.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => _showAddConditionDialog(context, ref),
-              icon: const Icon(Icons.add),
-              label: const Text('Add Condition'),
+              style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 13),
             ),
           ],
         ),
@@ -168,32 +219,166 @@ class MedicalHistoryScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildConditionCard(BuildContext context, MedicalCondition condition, WidgetRef ref) {
+  Widget _buildEmptyConditionsState(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Icon(Iconsax.activity,
+                  size: 40, color: Color(0xFF94A3B8)),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'No Chronic Conditions',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF121212),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Log chronic conditions, illnesses or allergies for your emergency pass.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKycRequiredState(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: AppSpacing.screenPadding,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Iconsax.shield_security,
+              size: 72,
+              color: Color(0xFFFF5200),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'KYC Verification Required',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF121212),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'You need to verify your identity to view or manage medical records.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 14,
+                color: const Color(0xFF64748B),
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => context.push(RouteNames.kycVerification),
+              icon: const Icon(Iconsax.verify, size: 18),
+              label: const Text('Verify Identity'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF121212),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String type) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Iconsax.close_circle, size: 44, color: Color(0xFFEF4444)),
+          const SizedBox(height: 16),
+          Text(
+            'Failed to load $type data',
+            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () {
+              if (type == 'prescriptions') {
+                ref.invalidate(patientPrescriptionsProvider);
+              } else {
+                ref.invalidate(medicalConditionsProvider);
+              }
+            },
+            child: Text(
+              'Retry',
+              style: GoogleFonts.plusJakartaSans(
+                color: const Color(0xFFFF5200),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConditionCard(BuildContext context, MedicalCondition condition) {
     final type = condition.conditionType;
     final severity = condition.severity;
     final isPublic = condition.isPublic;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _getTypeColor(type).withValues(alpha: 0.1),
+                    color: _getTypeColor(type).withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _getTypeColor(type).withValues(alpha: 0.2),
+                    ),
                   ),
                   child: Text(
                     _formatType(type),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
                       color: _getTypeColor(type),
                     ),
                   ),
@@ -201,51 +386,67 @@ class MedicalHistoryScreen extends ConsumerWidget {
                 const SizedBox(width: 8),
                 if (severity != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _getSeverityColor(severity).withValues(alpha: 0.1),
+                      color: _getSeverityColor(severity).withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: _getSeverityColor(severity).withValues(alpha: 0.2),
+                      ),
                     ),
                     child: Text(
                       severity.toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
                         color: _getSeverityColor(severity),
                       ),
                     ),
                   ),
                 const Spacer(),
                 Icon(
-                  isPublic ? Icons.public : Icons.lock,
+                  isPublic ? Iconsax.eye : Iconsax.eye_slash,
                   size: 18,
-                  color: isPublic ? AppColors.success : AppColors.warning,
+                  color: isPublic
+                      ? const Color(0xFF10B981)
+                      : const Color(0xFF64748B),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Text(
               condition.description,
-              style: const TextStyle(
+              style: GoogleFonts.plusJakartaSans(
                 fontSize: 16,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF121212),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
+            const Divider(height: 1, color: Color(0xFFE2E8F0)),
+            const SizedBox(height: 10),
             Row(
               children: [
+                Icon(
+                  isPublic ? Iconsax.global : Iconsax.security_user,
+                  size: 14,
+                  color: const Color(0xFF64748B),
+                ),
+                const SizedBox(width: 6),
                 Text(
-                  isPublic ? 'Visible to first responders' : 'Private',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                  isPublic ? 'Visible on emergency pass' : 'Private (locked)',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    color: const Color(0xFF64748B),
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
                 const Spacer(),
                 IconButton(
-                  icon: const Icon(Icons.delete_outline, size: 20),
-                  color: AppColors.error,
-                  onPressed: () => _deleteCondition(context, ref, condition.id),
+                  icon: const Icon(Iconsax.trash, size: 18),
+                  color: const Color(0xFFEF4444),
+                  onPressed: () => _deleteCondition(context, condition.id),
                 ),
               ],
             ),
@@ -258,13 +459,13 @@ class MedicalHistoryScreen extends ConsumerWidget {
   Color _getTypeColor(String type) {
     switch (type) {
       case 'allergy':
-        return AppColors.error;
+        return const Color(0xFFEF4444);
       case 'chronic':
-        return AppColors.warning;
+        return Colors.orange;
       case 'medication':
-        return AppColors.pharmacist;
+        return const Color(0xFF3B82F6);
       default:
-        return AppColors.info;
+        return const Color(0xFF64748B);
     }
   }
 
@@ -284,207 +485,233 @@ class MedicalHistoryScreen extends ConsumerWidget {
   Color _getSeverityColor(String severity) {
     switch (severity) {
       case 'critical':
-        return AppColors.error;
       case 'severe':
-        return Colors.deepOrange;
+        return const Color(0xFFEF4444);
       case 'moderate':
-        return AppColors.warning;
+        return Colors.orange;
       default:
-        return AppColors.success;
+        return const Color(0xFF10B981);
     }
   }
 
-  Future<void> _showAddConditionDialog(BuildContext context, WidgetRef ref) async {
-    final descriptionController = TextEditingController();
-    String selectedType = 'allergy';
-    String selectedSeverity = 'moderate';
-    bool isPublic = true;
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-            left: 20,
-            right: 20,
-            top: 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Add Medical Condition',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 20),
-              DropdownButtonFormField<String>(
-                value: selectedType,
-                decoration: const InputDecoration(
-                  labelText: 'Type',
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'allergy', child: Text('Allergy')),
-                  DropdownMenuItem(value: 'chronic', child: Text('Chronic Condition')),
-                  DropdownMenuItem(value: 'medication', child: Text('Current Medication')),
-                  DropdownMenuItem(value: 'other', child: Text('Other')),
-                ],
-                onChanged: (value) => setState(() => selectedType = value!),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: descriptionController,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  hintText: 'e.g., Penicillin allergy, Diabetes Type 2',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: selectedSeverity,
-                decoration: const InputDecoration(
-                  labelText: 'Severity',
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'mild', child: Text('Mild')),
-                  DropdownMenuItem(value: 'moderate', child: Text('Moderate')),
-                  DropdownMenuItem(value: 'severe', child: Text('Severe')),
-                  DropdownMenuItem(value: 'critical', child: Text('Critical')),
-                ],
-                onChanged: (value) => setState(() => selectedSeverity = value!),
-              ),
-              const SizedBox(height: 16),
-              SwitchListTile(
-                title: const Text('Visible to First Responders'),
-                subtitle: const Text('Show in emergency QR code'),
-                value: isPublic,
-                onChanged: (value) => setState(() => isPublic = value),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    if (descriptionController.text.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Please enter a description')),
-                      );
-                      return;
-                    }
-                    await _addCondition(
-                      context,
-                      ref,
-                      selectedType,
-                      descriptionController.text,
-                      selectedSeverity,
-                      isPublic,
-                    );
-                    if (context.mounted) Navigator.pop(context);
-                  },
-                  child: const Text('Add Condition'),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _addCondition(
-    BuildContext context,
-    WidgetRef ref,
-    String type,
-    String description,
-    String severity,
-    bool isPublic,
-  ) async {
-    try {
-      // Get patient data from providers
-      final patientData = await ref.read(patientDataProvider.future);
-      if (patientData == null) {
-        throw Exception('Patient profile not found');
-      }
-      
-      await Supabase.instance.client.from('medical_conditions').insert({
-        'patient_id': patientData.id,
-          'condition_type': type,
-          'description': description,
-          'severity': severity,
-          'is_public': isPublic,
-        });
-      
-      ref.invalidate(medicalConditionsProvider);
-      
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Condition added successfully')),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _deleteCondition(BuildContext context, WidgetRef ref, String id) async {
-    final confirm = await showDialog<bool>(
+  Future<void> _deleteCondition(BuildContext context, String id) async {
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Condition'),
-        content: const Text('Are you sure you want to delete this condition?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Delete Record',
+          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Are you sure you want to remove this medical record?',
+          style: GoogleFonts.plusJakartaSans(),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text('Cancel', style: GoogleFonts.plusJakartaSans()),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Delete'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: Text('Delete', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
 
-    if (confirm != true) return;
+    if (confirmed == true) {
+      try {
+        await Supabase.instance.client
+            .from('medical_conditions')
+            .delete()
+            .eq('id', id);
 
-    try {
-      await Supabase.instance.client
-          .from('medical_conditions')
-          .delete()
-          .eq('id', id);
-      
-      ref.invalidate(medicalConditionsProvider);
-      
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Condition deleted')),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ref.invalidate(medicalConditionsProvider);
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Record deleted successfully')),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error deleting record: $e')),
+          );
+        }
       }
     }
   }
-}
 
+  Future<void> _showAddConditionDialog(BuildContext context) async {
+    final descriptionController = TextEditingController();
+    String selectedType = 'allergy';
+    String selectedSeverity = 'moderate';
+    bool isPublic = true;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            'Add Medical Record',
+            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Record Type',
+                  style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  value: selectedType,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'allergy', child: Text('Allergy')),
+                    DropdownMenuItem(
+                        value: 'chronic', child: Text('Chronic Condition')),
+                    DropdownMenuItem(value: 'other', child: Text('Other')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) setState(() => selectedType = val);
+                  },
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Severity',
+                  style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  value: selectedSeverity,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'low', child: Text('Low')),
+                    DropdownMenuItem(value: 'moderate', child: Text('Moderate')),
+                    DropdownMenuItem(value: 'severe', child: Text('Severe')),
+                    DropdownMenuItem(value: 'critical', child: Text('Critical')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) setState(() => selectedSeverity = val);
+                  },
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Description',
+                  style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: descriptionController,
+                  decoration: InputDecoration(
+                    hintText: 'e.g. Penicillin allergy, Type 2 Diabetes',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.all(12),
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Checkbox(
+                      value: isPublic,
+                      activeColor: const Color(0xFFFF5200),
+                      onChanged: (val) {
+                        if (val != null) setState(() => isPublic = val);
+                      },
+                    ),
+                    Expanded(
+                      child: Text(
+                        'Show on Emergency Pass',
+                        style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel', style: GoogleFonts.plusJakartaSans()),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (descriptionController.text.trim().isEmpty) return;
+
+                try {
+                  final userId = Supabase.instance.client.auth.currentUser?.id;
+                  if (userId == null) return;
+
+                  final patient = await Supabase.instance.client
+                      .from('patients')
+                      .select('id')
+                      .eq('user_id', userId)
+                      .single();
+
+                  final patientId = patient['id'] as String;
+
+                  await Supabase.instance.client
+                      .from('medical_conditions')
+                      .insert({
+                    'patient_id': patientId,
+                    'condition_type': selectedType,
+                    'severity': selectedSeverity,
+                    'description': descriptionController.text.trim(),
+                    'is_public': isPublic,
+                  });
+
+                  ref.invalidate(medicalConditionsProvider);
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Record added successfully')),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error adding record: $e')),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF121212),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: Text('Save', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

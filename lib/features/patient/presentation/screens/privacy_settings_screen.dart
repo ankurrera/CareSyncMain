@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -76,54 +78,76 @@ class PrivacySettingsScreen extends ConsumerWidget {
     final publicConditions = ref.watch(publicConditionsCountProvider);
 
     return Scaffold(
+      backgroundColor: const Color(0xFFFAFAFA),
       appBar: AppBar(
-        title: const Text('Privacy Settings'),
+        title: Text(
+          'Privacy Settings',
+          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 18, color: const Color(0xFF121212)),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF121212)),
+          onPressed: () => Navigator.pop(context),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1.0),
+          child: Container(color: const Color(0xFFE2E8F0), height: 1.0),
+        ),
       ),
       body: patientSettings.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFFFF5200))),
         error: (error, _) => Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.error_outline,
-                size: 64,
-                color: AppColors.error.withValues(alpha: 0.5),
+              const Icon(
+                Iconsax.warning_2,
+                size: 40,
+                color: Color(0xFFEF4444),
               ),
               const SizedBox(height: 16),
-              Text('Error: $error'),
+              Text('Error: $error', style: GoogleFonts.plusJakartaSans()),
               TextButton(
                 onPressed: () => ref.refresh(patientSettingsProvider),
-                child: const Text('Retry'),
+                child: Text('Retry', style: GoogleFonts.plusJakartaSans(color: const Color(0xFFFF5200), fontWeight: FontWeight.bold)),
               ),
             ],
           ),
         ),
         data: (patient) {
+          final condCount = publicConditions.valueOrNull?.toString() ?? '0';
+          final rxCount = publicPrescriptions.valueOrNull?.toString() ?? '0';
+
           return SingleChildScrollView(
-            padding: AppSpacing.screenPadding,
+            physics: const ClampingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Info Card
+                // Info Banner
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppColors.info.withValues(alpha: 0.1),
+                    color: const Color(0xFFF1F5F9),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.info.withValues(alpha: 0.3)),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.info_outline, color: AppColors.info),
+                      const Icon(Iconsax.info_circle, color: Color(0xFF64748B), size: 18),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           'Control what information is visible when your emergency QR code is scanned by first responders.',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: const Color(0xFF64748B),
+                            height: 1.4,
                           ),
                         ),
                       ),
@@ -132,108 +156,105 @@ class PrivacySettingsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 24),
 
-                // Emergency Data Summary
-                const Text(
+                // Emergency Data Summary Split-Card
+                Text(
                   'Emergency Data Summary',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF121212),
                   ),
                 ),
-                const SizedBox(height: 16),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildSummaryCard(
-                        context,
-                        icon: Icons.medical_information,
-                        label: 'Public Conditions',
-                        value: publicConditions.valueOrNull?.toString() ?? '-',
-                        color: AppColors.patient,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildSummaryCard(
-                        context,
-                        icon: Icons.description,
-                        label: 'Public Prescriptions',
-                        value: publicPrescriptions.valueOrNull?.toString() ?? '-',
-                        color: AppColors.doctor,
-                      ),
-                    ),
-                  ],
-                ),
+                const SizedBox(height: 12),
+                _buildSummarySection(context, condCount, rxCount),
                 const SizedBox(height: 24),
 
-                // Profile Information
-                const Text(
+                // Profile Information Group Container
+                Text(
                   'Profile Information',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF121212),
                   ),
                 ),
-                const SizedBox(height: 16),
-
-                _buildSettingTile(
-                  context,
-                  icon: Icons.person_outline,
-                  title: 'Full Name',
-                  subtitle: 'Always visible to first responders',
-                  isPublic: true,
-                  locked: true,
-                ),
-                _buildSettingTile(
-                  context,
-                  icon: Icons.bloodtype_outlined,
-                  title: 'Blood Type',
-                  subtitle: patient?['blood_type'] ?? 'Not set',
-                  isPublic: true,
-                  locked: true,
-                  onEdit: () => _showBloodTypeDialog(context, ref, patient?['blood_type']),
-                ),
-                _buildSettingTile(
-                  context,
-                  icon: Icons.emergency_outlined,
-                  title: 'Emergency Contact',
-                  subtitle: patient?['emergency_contact'] != null 
-                      ? 'Set' 
-                      : 'Not set',
-                  isPublic: true,
-                  locked: true,
-                  onEdit: () => _showEmergencyContactDialog(context, ref, patient?['emergency_contact']),
+                const SizedBox(height: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildSettingRow(
+                        context,
+                        icon: Iconsax.user,
+                        title: 'Full Name',
+                        subtitle: 'Always visible to first responders',
+                        isPublic: true,
+                        locked: true,
+                      ),
+                      const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                      _buildSettingRow(
+                        context,
+                        icon: Iconsax.drop,
+                        title: 'Blood Type',
+                        subtitle: patient?['blood_type'] ?? 'Not set',
+                        isPublic: true,
+                        locked: true,
+                        onEdit: () => _showBloodTypeDialog(context, ref, patient?['blood_type']),
+                      ),
+                      const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                      _buildSettingRow(
+                        context,
+                        icon: Iconsax.radar5,
+                        title: 'Emergency Contact',
+                        subtitle: patient?['emergency_contact'] != null 
+                            ? 'Contact registered' 
+                            : 'Not set',
+                        isPublic: true,
+                        locked: true,
+                        onEdit: () => _showEmergencyContactDialog(context, ref, patient?['emergency_contact']),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 24),
 
-                // Quick Actions
-                const Text(
+                // Quick Actions Group Container
+                Text(
                   'Quick Actions',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF121212),
                   ),
                 ),
-                const SizedBox(height: 16),
-
-                Card(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                const SizedBox(height: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
                   child: Column(
                     children: [
                       ListTile(
-                        leading: const Icon(Icons.visibility_off, color: AppColors.warning),
-                        title: const Text('Make All Conditions Private'),
-                        subtitle: const Text('Hide all medical conditions from QR'),
-                        trailing: const Icon(Icons.chevron_right),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        leading: const Icon(Iconsax.eye_slash, color: Color(0xFFFF5200), size: 20),
+                        title: Text('Make All Conditions Private', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14)),
+                        subtitle: Text('Hide all medical conditions from QR', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                        trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8), size: 18),
                         onTap: () => _makeAllConditionsPrivate(context, ref),
                       ),
-                      const Divider(height: 1),
+                      const Divider(height: 1, color: Color(0xFFF1F5F9)),
                       ListTile(
-                        leading: const Icon(Icons.visibility, color: AppColors.success),
-                        title: const Text('Make All Conditions Public'),
-                        subtitle: const Text('Show all medical conditions in QR'),
-                        trailing: const Icon(Icons.chevron_right),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        leading: const Icon(Iconsax.eye, color: Color(0xFF10B981), size: 20),
+                        title: Text('Make All Conditions Public', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14)),
+                        subtitle: Text('Show all medical conditions in QR', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                        trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8), size: 18),
                         onTap: () => _makeAllConditionsPublic(context, ref),
                       ),
                     ],
@@ -241,31 +262,32 @@ class PrivacySettingsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 24),
 
-                // Danger Zone
-                const Text(
+                // Danger Zone Container
+                Text(
                   'Danger Zone',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.error,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFFEF4444),
                   ),
                 ),
-                const SizedBox(height: 16),
-
-                Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(color: AppColors.error.withValues(alpha: 0.3)),
+                const SizedBox(height: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFFCA5A5)),
                   ),
                   child: ListTile(
-                    leading: Icon(Icons.qr_code, color: AppColors.error),
-                    title: const Text('Regenerate QR Code'),
-                    subtitle: const Text('Old QR codes will stop working'),
-                    trailing: const Icon(Icons.chevron_right),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    leading: const Icon(Iconsax.barcode, color: Color(0xFFEF4444), size: 20),
+                    title: Text('Regenerate QR Code', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14, color: const Color(0xFF121212))),
+                    subtitle: Text('Old QR codes will stop working', style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                    trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8), size: 18),
                     onTap: () => _regenerateQrCode(context, ref),
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 40),
               ],
             ),
           );
@@ -274,37 +296,58 @@ class PrivacySettingsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSummaryCard(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
+  Widget _buildSummarySection(BuildContext context, String conditions, String prescriptions) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+      child: Row(
         children: [
-          Icon(icon, size: 32, color: color),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: color,
+          Expanded(
+            child: Column(
+              children: [
+                Text(
+                  conditions,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFFFF5200),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'PUBLIC CONDITIONS',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF64748B),
+                    letterSpacing: 0.6,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+          Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
+          Expanded(
+            child: Column(
+              children: [
+                Text(
+                  prescriptions,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFFFF5200),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'PUBLIC PRESCRIPTIONS',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF64748B),
+                    letterSpacing: 0.6,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -312,7 +355,7 @@ class PrivacySettingsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSettingTile(
+  Widget _buildSettingRow(
     BuildContext context, {
     required IconData icon,
     required String title,
@@ -321,49 +364,55 @@ class PrivacySettingsScreen extends ConsumerWidget {
     bool locked = false,
     VoidCallback? onEdit,
   }) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        leading: Icon(icon, color: AppColors.primary),
-        title: Text(title),
-        subtitle: Text(subtitle),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (onEdit != null)
-              IconButton(
-                icon: const Icon(Icons.edit_outlined, size: 20),
-                onPressed: onEdit,
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: Icon(icon, color: const Color(0xFFFF5200), size: 20),
+      title: Text(title, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14, color: const Color(0xFF121212))),
+      subtitle: Text(subtitle, style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (onEdit != null)
+            IconButton(
+              icon: const Icon(Iconsax.edit_2, size: 16, color: Color(0xFFFF5200)),
+              style: IconButton.styleFrom(
+                backgroundColor: const Color(0xFFFF5200).withOpacity(0.08),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.all(6),
               ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: (isPublic ? AppColors.success : AppColors.warning).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    locked ? Icons.lock : (isPublic ? Icons.public : Icons.lock),
-                    size: 14,
-                    color: isPublic ? AppColors.success : AppColors.warning,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    isPublic ? 'Public' : 'Private',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: isPublic ? AppColors.success : AppColors.warning,
-                    ),
-                  ),
-                ],
+              onPressed: onEdit,
+            ),
+          if (onEdit != null) const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: (isPublic ? const Color(0xFF10B981) : const Color(0xFFFF5200)).withOpacity(0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: (isPublic ? const Color(0xFF10B981) : const Color(0xFFFF5200)).withOpacity(0.15),
               ),
             ),
-          ],
-        ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  locked ? Iconsax.lock_1 : (isPublic ? Iconsax.eye : Iconsax.eye_slash),
+                  size: 11,
+                  color: isPublic ? const Color(0xFF10B981) : const Color(0xFFFF5200),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  isPublic ? 'Public' : 'Private',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: isPublic ? const Color(0xFF10B981) : const Color(0xFFFF5200),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -375,14 +424,17 @@ class PrivacySettingsScreen extends ConsumerWidget {
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Select Blood Type'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Select Blood Type', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 16)),
         content: Wrap(
           spacing: 8,
           runSpacing: 8,
           children: bloodTypes.map((type) {
             return ChoiceChip(
-              label: Text(type),
+              label: Text(type, style: GoogleFonts.plusJakartaSans(fontSize: 12)),
               selected: selectedType == type,
+              selectedColor: const Color(0xFFFF5200).withOpacity(0.1),
+              checkmarkColor: const Color(0xFFFF5200),
               onSelected: (selected) {
                 selectedType = selected ? type : null;
                 Navigator.pop(context, selectedType);
@@ -393,7 +445,7 @@ class PrivacySettingsScreen extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text('Cancel', style: GoogleFonts.plusJakartaSans(color: const Color(0xFFFF5200), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -412,33 +464,37 @@ class PrivacySettingsScreen extends ConsumerWidget {
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Emergency Contact'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Emergency Contact', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Name',
-                border: OutlineInputBorder(),
+                labelStyle: GoogleFonts.plusJakartaSans(fontSize: 12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: phoneController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Phone',
-                border: OutlineInputBorder(),
+                labelStyle: GoogleFonts.plusJakartaSans(fontSize: 12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               keyboardType: TextInputType.phone,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: relationshipController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Relationship',
+                labelStyle: GoogleFonts.plusJakartaSans(fontSize: 12),
                 hintText: 'e.g., Spouse, Parent',
-                border: OutlineInputBorder(),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
           ],
@@ -446,19 +502,24 @@ class PrivacySettingsScreen extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text('Cancel', style: GoogleFonts.plusJakartaSans(color: const Color(0xFFFF5200), fontWeight: FontWeight.bold)),
           ),
           ElevatedButton(
             onPressed: () async {
               final contact = {
-                'name': nameController.text,
-                'phone': phoneController.text,
-                'relationship': relationshipController.text,
+                'name': nameController.text.trim(),
+                'phone': phoneController.text.trim(),
+                'relationship': relationshipController.text.trim(),
               };
               await _updatePatientField(context, ref, 'emergency_contact', contact);
               if (context.mounted) Navigator.pop(context);
             },
-            child: const Text('Save'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF121212),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text('Save', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -483,13 +544,13 @@ class PrivacySettingsScreen extends ConsumerWidget {
       
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Updated successfully')),
+          const SnackBar(content: Text('Updated successfully'), behavior: SnackBarBehavior.floating),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFEF4444), behavior: SnackBarBehavior.floating),
         );
       }
     }
@@ -499,16 +560,18 @@ class PrivacySettingsScreen extends ConsumerWidget {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Make All Private'),
-        content: const Text('This will hide all your medical conditions from first responders scanning your QR code.'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Make All Private', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Text('This will hide all your medical conditions from first responders scanning your QR code.', style: GoogleFonts.plusJakartaSans(fontSize: 13, color: const Color(0xFF64748B))),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text('Cancel', style: GoogleFonts.plusJakartaSans(color: const Color(0xFFFF5200), fontWeight: FontWeight.bold)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Confirm'),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF121212), foregroundColor: Colors.white),
+            child: Text('Confirm', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -539,13 +602,13 @@ class PrivacySettingsScreen extends ConsumerWidget {
       
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('All conditions are now private')),
+          const SnackBar(content: Text('All conditions are now private'), behavior: SnackBarBehavior.floating),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFEF4444), behavior: SnackBarBehavior.floating),
         );
       }
     }
@@ -555,16 +618,18 @@ class PrivacySettingsScreen extends ConsumerWidget {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Make All Public'),
-        content: const Text('This will make all your medical conditions visible to first responders scanning your QR code.'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Make All Public', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Text('This will make all your medical conditions visible to first responders scanning your QR code.', style: GoogleFonts.plusJakartaSans(fontSize: 13, color: const Color(0xFF64748B))),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text('Cancel', style: GoogleFonts.plusJakartaSans(color: const Color(0xFFFF5200), fontWeight: FontWeight.bold)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Confirm'),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF121212), foregroundColor: Colors.white),
+            child: Text('Confirm', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -595,13 +660,13 @@ class PrivacySettingsScreen extends ConsumerWidget {
       
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('All conditions are now public')),
+          const SnackBar(content: Text('All conditions are now public'), behavior: SnackBarBehavior.floating),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFEF4444), behavior: SnackBarBehavior.floating),
         );
       }
     }
@@ -611,21 +676,23 @@ class PrivacySettingsScreen extends ConsumerWidget {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Regenerate QR Code'),
-        content: const Text(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Regenerate QR Code', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 16, color: const Color(0xFFEF4444))),
+        content: Text(
           'This will create a new QR code and invalidate your old one. '
           'Any printed cards or stickers with the old QR code will stop working. '
           'Are you sure?',
+          style: GoogleFonts.plusJakartaSans(fontSize: 13, color: const Color(0xFF64748B), height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text('Cancel', style: GoogleFonts.plusJakartaSans(color: const Color(0xFFFF5200), fontWeight: FontWeight.bold)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Regenerate'),
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFFEF4444)),
+            child: Text('Regenerate', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -639,7 +706,6 @@ class PrivacySettingsScreen extends ConsumerWidget {
       
       if (userId == null) return;
       
-      // Generate new UUID for QR code
       final newQrCodeId = DateTime.now().millisecondsSinceEpoch.toString();
       
       await supabase
@@ -651,16 +717,15 @@ class PrivacySettingsScreen extends ConsumerWidget {
       
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('QR code regenerated successfully')),
+          const SnackBar(content: Text('QR code regenerated successfully'), behavior: SnackBarBehavior.floating),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFEF4444), behavior: SnackBarBehavior.floating),
         );
       }
     }
   }
 }
-

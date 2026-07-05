@@ -71,8 +71,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         return AppColors.doctor;
       case 'pharmacist':
         return AppColors.pharmacist;
-      case 'first_responder':
-        return AppColors.firstResponder;
       default:
         return AppColors.patient;
     }
@@ -84,8 +82,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         return 'Doctor';
       case 'pharmacist':
         return 'Pharmacist';
-      case 'first_responder':
-        return 'First Responder';
       default:
         return 'Patient';
     }

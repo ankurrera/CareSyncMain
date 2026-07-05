@@ -1,54 +1,51 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/adaptive_card_container.dart';
+import '../../../../core/widgets/loading_skeleton.dart';
 import '../../providers/patient_provider.dart';
+import '../../models/prescription.dart';
 
-class DailyMedicationSchedule extends ConsumerWidget {
+class DailyMedicationSchedule extends ConsumerStatefulWidget {
   const DailyMedicationSchedule({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final prescriptionsAsync = ref.watch(patientPrescriptionsProvider);
+  ConsumerState<DailyMedicationSchedule> createState() => _DailyMedicationScheduleState();
+}
 
-    return prescriptionsAsync.when(
-      data: (prescriptions) {
-        // Flatten items from all prescriptions for today
-        var allItems = prescriptions
-            .expand((p) => p.items)
-            .take(3) // Match mockup (3 items)
-            .toList();
+class _DailyMedicationScheduleState extends ConsumerState<DailyMedicationSchedule> {
+  final Set<String> _checkedItems = {};
 
-        // If empty, use mockup data as requested "for now"
-        if (allItems.isEmpty) {
-          return _buildMockupSchedule(context);
+  @override
+  Widget build(BuildContext context) {
+    final todayMedsAsync = ref.watch(todayMedicationsProvider);
+
+    return todayMedsAsync.when(
+      data: (items) {
+        if (items.isEmpty) {
+          return _buildEmptyState();
         }
 
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.borderSoft),
-          ),
-          padding: const EdgeInsets.all(16),
+        // Limit to top 3 items to prevent layout bloat on Dashboard
+        final displayItems = items.take(3).toList();
+
+        return AdaptiveCardContainer(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
-            children: List.generate(allItems.length, (index) {
-              final item = allItems[index];
-              // Mocking status based on index as per reference
-              final status = index == 0 ? 'Morning' : (index == 1 ? 'Taken' : 'Evening');
-              final bulletColor = index == 0 ? Colors.indigo : (index == 1 ? Colors.green : Colors.blue);
-              
+            children: List.generate(displayItems.length, (index) {
+              final item = displayItems[index];
+              final isChecked = _checkedItems.contains(item.id);
+
               return Column(
                 children: [
-                  _MedicationRow(
-                    name: item.medicineName,
-                    dosage: item.dosage,
-                    status: status,
-                    bulletColor: bulletColor,
-                  ),
-                  if (index < allItems.length - 1)
+                  _buildMedicationRow(item, isChecked),
+                  if (index < displayItems.length - 1)
                     const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12.0),
-                      child: Divider(height: 1, color: AppColors.borderSoft),
+                      padding: EdgeInsets.symmetric(vertical: 10.0),
+                      child: Divider(height: 1, color: Color(0xFFE2E8F0)),
                     ),
                 ],
               );
@@ -56,157 +53,131 @@ class DailyMedicationSchedule extends ConsumerWidget {
           ),
         );
       },
-      loading: () => const Center(child: Padding(
-        padding: EdgeInsets.all(20.0),
-        child: CircularProgressIndicator(),
-      )),
-      error: (err, _) => const SizedBox.shrink(),
+      loading: () => const AdaptiveCardContainer(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          children: [
+            LoadingSkeleton(height: 20, width: double.infinity),
+            SizedBox(height: 12),
+            LoadingSkeleton(height: 20, width: double.infinity),
+            SizedBox(height: 12),
+            LoadingSkeleton(height: 20, width: double.infinity),
+          ],
+        ),
+      ),
+      error: (err, _) => _buildEmptyState(),
     );
   }
 
-  Widget _buildMockupSchedule(BuildContext context) {
-    final mockups = [
-      {'name': 'Aspirin', 'dosage': '100mg', 'status': 'Morning', 'color': Colors.indigo},
-      {'name': 'Lisinopril', 'dosage': '10mg', 'status': 'Taken', 'color': Colors.green},
-      {'name': 'Metformin', 'dosage': '500mg', 'status': 'Evening', 'color': Colors.blue},
-    ];
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.borderSoft),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: List.generate(mockups.length, (index) {
-          final m = mockups[index];
-          return Column(
-            children: [
-              _MedicationRow(
-                name: m['name'] as String,
-                dosage: m['dosage'] as String,
-                status: m['status'] as String,
-                bulletColor: m['color'] as Color,
+  Widget _buildMedicationRow(PrescriptionItem item, bool isChecked) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        children: [
+          // Premium Interactive Checkbox with Haptics
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                if (isChecked) {
+                  _checkedItems.remove(item.id);
+                } else {
+                  _checkedItems.add(item.id);
+                  HapticFeedback.lightImpact(); // Tactile feedback
+                }
+              });
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isChecked ? const Color(0xFF10B981) : Colors.white,
+                border: Border.all(
+                  color: isChecked ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                  width: 1.5,
+                ),
               ),
-              if (index < mockups.length - 1)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12.0),
-                  child: Divider(height: 1, color: AppColors.borderSoft),
-                ),
-            ],
-          );
-        }),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.borderSoft),
-      ),
-      child: const Center(
-        child: Text(
-          'No medications scheduled.',
-          style: TextStyle(color: AppColors.textSub, fontWeight: FontWeight.w500),
-        ),
-      ),
-    );
-  }
-}
-
-class _MedicationRow extends StatelessWidget {
-  final String name;
-  final String dosage;
-  final String status;
-  final Color bulletColor;
-
-  const _MedicationRow({
-    required this.name,
-    required this.dosage,
-    required this.status,
-    required this.bulletColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    Color bg;
-    Color text;
-    Widget? icon;
-
-    switch (status) {
-      case 'Taken':
-        bg = AppColors.statusTakenBg;
-        text = AppColors.statusTakenText;
-        icon = const Icon(Icons.check, size: 12, color: AppColors.statusTakenText);
-        break;
-      case 'Morning':
-        bg = AppColors.statusMorningBg;
-        text = AppColors.statusMorningText;
-        break;
-      case 'Evening':
-      default:
-        bg = AppColors.statusEveningBg;
-        text = AppColors.statusEveningText;
-        break;
-    }
-
-    return Row(
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: bulletColor,
-            shape: BoxShape.circle,
+              child: isChecked
+                  ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+                  : null,
+            ),
           ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: RichText(
-            text: TextSpan(
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextSpan(
-                  text: '$name ',
-                  style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.textMain, fontSize: 14),
+                Text(
+                  item.medicineName,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: isChecked ? const Color(0xFF94A3B8) : const Color(0xFF121212),
+                    decoration: isChecked ? TextDecoration.lineThrough : null,
+                  ),
                 ),
-                TextSpan(
-                  text: dosage,
-                  style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textSub, fontSize: 13),
+                const SizedBox(height: 2),
+                Text(
+                  '${item.dosage} • ${item.frequency}',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: const Color(0xFF64748B),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
           ),
-        ),
-        const Text(
-          '1 tablet   ',
-          style: TextStyle(color: AppColors.textLight, fontSize: 11, fontWeight: FontWeight.w600),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (icon != null) ...[
-                icon,
-                const SizedBox(width: 4),
-              ],
-              Text(
-                status,
-                style: TextStyle(color: text, fontWeight: FontWeight.w800, fontSize: 11),
+          // Dispensed status badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: isChecked
+                  ? const Color(0xFFD1FAE5)
+                  : const Color(0xFFFFF4F0),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              isChecked ? 'Taken' : 'Due',
+              style: GoogleFonts.plusJakartaSans(
+                color: isChecked ? const Color(0xFF065F46) : const Color(0xFFFF5200),
+                fontWeight: FontWeight.bold,
+                fontSize: 10,
               ),
-            ],
+            ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Iconsax.document_text, color: Color(0xFF94A3B8), size: 28),
+            const SizedBox(height: 8),
+            Text(
+              'No medications scheduled today.',
+              style: GoogleFonts.plusJakartaSans(
+                color: const Color(0xFF64748B),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

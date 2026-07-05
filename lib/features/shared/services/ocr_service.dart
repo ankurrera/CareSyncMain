@@ -3,7 +3,6 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:pdfx/pdfx.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
-import 'package:image/image.dart' as image;
 
 /// Intermediate model for parsed medication data within OCR service
 class ParsedMedication {
@@ -59,6 +58,12 @@ class OcrService {
 
   Future<void> dispose() async {
     await _textRecognizer.close();
+  }
+
+  Future<String> extractPlainText(File imageFile) async {
+    final inputImage = InputImage.fromFile(imageFile);
+    final RecognizedText recognizedText = await _textRecognizer.processImage(inputImage);
+    return recognizedText.text;
   }
 
   Future<PrescriptionData> processPrescriptionImage(File imageFile) async {

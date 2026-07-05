@@ -38,9 +38,9 @@ abstract class RouteNames {
   static const String pharmacistHistory = '/pharmacist/history';
   static const String pharmacistSearch = '/pharmacist/search';
 
-  // First Responder
-  static const String firstResponderDashboard = '/first-responder';
-  static const String firstResponderScan = '/first-responder/scan';
-  static const String firstResponderEmergencyView = '/first-responder/emergency';
+  // Patient Emergency
+  static const String patientEmergency = '/patient/emergency';
+  static const String patientEmergencyScan = '/patient/emergency/scan';
+  static const String patientEmergencyView = '/patient/emergency/view';
 }
 

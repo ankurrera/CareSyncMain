@@ -143,9 +143,6 @@ class _BiometricEnrollmentScreenState
       case 'pharmacist':
         context.go(RouteNames.pharmacistDashboard);
         break;
-      case 'first_responder':
-        context.go(RouteNames.firstResponderDashboard);
-        break;
       case 'patient':
       default:
         context.go(RouteNames.patientDashboard);

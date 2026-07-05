@@ -2,7 +2,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'azure_face_service.dart';
+import 'custom_biometric_service.dart';
+import '../features/shared/services/ocr_service.dart';
 
 /// Service for handling KYC (Know Your Customer) verification
 class KYCService {
@@ -89,11 +90,14 @@ class KYCService {
   // ─────────────────────────────────────────────────────────────────────────
 
   /// Submit KYC verification data
+  /// Submit KYC verification data with automated OCR and Biometric verification gates.
   Future<void> submitKYC({
     required String fullName,
     required DateTime dateOfBirth,
     required String idDocumentUrl,
     required String selfieUrl,
+    File? idDocumentFile,
+    File? selfieFile,
     List<String>? additionalDocuments,
   }) async {
     try {
@@ -102,6 +106,102 @@ class KYCService {
         throw KYCException('User not authenticated');
       }
 
+      // --- OPTION A: AUTOMATED OCR VERIFICATION GATE ---
+      if (idDocumentFile != null) {
+        debugPrint('[KYC-GATE] Step 1: Performing OCR on Government ID document...');
+        final ocrText = await OcrService().extractPlainText(idDocumentFile);
+        debugPrint('[KYC-GATE] Extracted text from ID:\n$ocrText');
+
+        // Fuzzy match Name: Check if at least one name part (length > 2) is present in the document
+        final fullNameLower = fullName.toLowerCase();
+        final nameParts = fullNameLower.split(RegExp(r'\s+')).where((part) => part.length > 2).toList();
+        
+        bool nameMatches = false;
+        for (var part in nameParts) {
+          if (ocrText.toLowerCase().contains(part)) {
+            nameMatches = true;
+            break;
+          }
+        }
+
+        // Fuzzy match Birth Year: check if the document contains the year of birth
+        final birthYear = dateOfBirth.year.toString();
+        final dobMatches = ocrText.contains(birthYear);
+
+        if (!nameMatches || !dobMatches) {
+          debugPrint('[KYC-GATE] OCR mismatch: nameMatches=$nameMatches, dobMatches=$dobMatches');
+          
+          // Persist the attempt in Supabase as rejected
+          await _supabase.from('kyc_verifications').upsert({
+            'user_id': userId,
+            'full_name': fullName,
+            'date_of_birth': dateOfBirth.toIso8601String().split('T')[0],
+            'id_document_url': idDocumentUrl,
+            'selfie_url': selfieUrl,
+            'additional_documents': additionalDocuments,
+            'kyc_status': 'rejected',
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+          
+          throw KYCException(
+            'Government ID Verification Failed: The name or birth year on the ID document does not match the entered profile details. Please make sure the photo is clear and matches the input.'
+          );
+        }
+        debugPrint('[KYC-GATE] OCR Validation passed successfully.');
+      }
+
+      // --- OPTION A: BIOMETRIC 1:1 FACE MATCHING GATE ---
+      if (idDocumentUrl.isNotEmpty && selfieUrl.isNotEmpty) {
+        debugPrint('[KYC-GATE] Step 2: Executing 1:1 Biometric Face Match between Selfie and Government ID...');
+        bool faceMatches = false;
+        try {
+          faceMatches = await CustomBiometricService.instance.verifyIDFace(
+            selfieUrl: selfieUrl,
+            idDocumentUrl: idDocumentUrl,
+          );
+        } catch (faceErr) {
+          debugPrint('[KYC-GATE] Biometric check threw error: $faceErr');
+          
+          // Persist the failure
+          await _supabase.from('kyc_verifications').upsert({
+            'user_id': userId,
+            'full_name': fullName,
+            'date_of_birth': dateOfBirth.toIso8601String().split('T')[0],
+            'id_document_url': idDocumentUrl,
+            'selfie_url': selfieUrl,
+            'additional_documents': additionalDocuments,
+            'kyc_status': 'rejected',
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+          
+          throw KYCException('Facial Biometric Matching Failed: $faceErr');
+        }
+
+        if (!faceMatches) {
+          debugPrint('[KYC-GATE] Face similarity check failed (mismatch).');
+          
+          await _supabase.from('kyc_verifications').upsert({
+            'user_id': userId,
+            'full_name': fullName,
+            'date_of_birth': dateOfBirth.toIso8601String().split('T')[0],
+            'id_document_url': idDocumentUrl,
+            'selfie_url': selfieUrl,
+            'additional_documents': additionalDocuments,
+            'kyc_status': 'rejected',
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+
+          throw KYCException(
+            'Facial Verification Failed: The face visible on the Government ID card does not match the live captured selfie. Please check lighting and verify the ID belongs to you.'
+          );
+        }
+        debugPrint('[KYC-GATE] Biometric Face Matching passed successfully.');
+      }
+
+      // If all gates passed, verify the KYC status directly!
       final data = {
         'user_id': userId,
         'full_name': fullName,
@@ -109,7 +209,7 @@ class KYCService {
         'id_document_url': idDocumentUrl,
         'selfie_url': selfieUrl,
         'additional_documents': additionalDocuments,
-        'kyc_status': 'pending',
+        'kyc_status': 'verified',
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       };
@@ -131,17 +231,19 @@ class KYCService {
         debugPrint('[KYC] Error ensuring patient record exists: $dbErr');
       }
 
-      // Enroll the patient's face with Azure Face API using their selfie
+      // Enroll the patient's face with Custom Biometric API using their selfie
       try {
-        await AzureFaceService.instance.enrollPatient(
+        await CustomBiometricService.instance.enrollPatient(
           userId: userId,
           selfieUrl: selfieUrl,
         );
       } catch (faceError) {
-        debugPrint('[KYC] Azure Face Enrollment failed (non-blocking): $faceError');
+        debugPrint('[KYC] Biometric Face Enrollment failed (non-blocking): $faceError');
       }
     } on PostgrestException catch (e) {
       throw KYCException('Failed to submit KYC: ${e.message}');
+    } on KYCException {
+      rethrow;
     } catch (e) {
       throw KYCException('Failed to submit KYC: $e');
     }
@@ -229,6 +331,24 @@ class KYCService {
       throw KYCException('Failed to update KYC documents: ${e.message}');
     } catch (e) {
       throw KYCException('Failed to update KYC documents: $e');
+    }
+  }
+
+  /// Enroll a specific pose of the user's face to Custom Biometric API
+  Future<void> enrollFacePose({
+    required String userId,
+    required String selfieUrl,
+    required String poseLabel,
+  }) async {
+    try {
+      await CustomBiometricService.instance.enrollPatient(
+        userId: userId,
+        selfieUrl: selfieUrl,
+        poseLabel: poseLabel,
+      );
+    } catch (e) {
+      debugPrint('[KYC] Failed to enroll face pose $poseLabel: $e');
+      rethrow;
     }
   }
 }

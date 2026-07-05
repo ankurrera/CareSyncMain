@@ -24,9 +24,9 @@ import '../features/pharmacist/presentation/screens/pharmacist_dashboard_screen.
 import '../features/pharmacist/presentation/screens/dispensing_history_screen.dart';
 import '../features/pharmacist/presentation/screens/dispense_screen.dart';
 import '../features/pharmacist/presentation/screens/pharmacist_search_screen.dart';
-import '../features/first_responder/presentation/screens/first_responder_dashboard_screen.dart';
-import '../features/first_responder/presentation/screens/qr_scanner_screen.dart';
-import '../features/first_responder/presentation/screens/emergency_data_screen.dart';
+import '../features/emergency/presentation/screens/patient_emergency_screen.dart';
+import '../features/emergency/presentation/screens/qr_scanner_screen.dart';
+import '../features/emergency/presentation/screens/emergency_data_screen.dart';
 import '../features/patient/presentation/screens/vitals_history_screen.dart';
 import '../features/patient/presentation/screens/book_appointment_screen.dart';
 import '../features/shared/presentation/screens/chat_list_screen.dart';
@@ -282,20 +282,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const PharmacistSearchScreen(),
       ),
 
-      // First Responder Routes
+      // Patient Emergency Routes
       GoRoute(
-        path: RouteNames.firstResponderDashboard,
-        name: 'firstResponderDashboard',
-        builder: (context, state) => const FirstResponderDashboardScreen(),
+        path: RouteNames.patientEmergency,
+        name: 'patientEmergency',
+        builder: (context, state) => const PatientEmergencyScreen(),
       ),
       GoRoute(
-        path: RouteNames.firstResponderScan,
-        name: 'firstResponderScan',
+        path: RouteNames.patientEmergencyScan,
+        name: 'patientEmergencyScan',
         builder: (context, state) => const QrScannerScreen(),
       ),
       GoRoute(
-        path: '${RouteNames.firstResponderEmergencyView}/:qrCodeId',
-        name: 'firstResponderEmergencyView',
+        path: '${RouteNames.patientEmergencyView}/:qrCodeId',
+        name: 'patientEmergencyView',
         builder: (context, state) {
           final qrCodeId = state.pathParameters['qrCodeId']!;
           return EmergencyDataScreen(qrCodeId: qrCodeId);
@@ -317,8 +317,6 @@ String _getDashboardRoute(Ref ref) {
       return RouteNames.doctorDashboard;
     case 'pharmacist':
       return RouteNames.pharmacistDashboard;
-    case 'first_responder':
-      return RouteNames.firstResponderDashboard;
     case 'patient':
     default:
       return RouteNames.patientDashboard;
@@ -338,8 +336,6 @@ String? _rolePrefix(String role) {
       return '/doctor';
     case 'pharmacist':
       return '/pharmacist';
-    case 'first_responder':
-      return '/first-responder';
     case 'patient':
       return '/patient';
     default:

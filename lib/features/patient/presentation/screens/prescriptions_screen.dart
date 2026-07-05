@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -17,25 +19,27 @@ class PrescriptionsScreen extends ConsumerWidget {
     final prescriptions = ref.watch(patientPrescriptionsProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC), // Slate-50, very clean
+      backgroundColor: const Color(0xFFFAFAFA),
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Prescriptions',
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 18, color: const Color(0xFF121212)),
         ),
         centerTitle: true,
         backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF1E293B), // Slate-800
         elevation: 0,
-        scrolledUnderElevation: 2,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF121212)),
+          onPressed: () => context.pop(),
+        ),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(color: const Color(0xFFE2E8F0), height: 1),
+          preferredSize: const Size.fromHeight(1.0),
+          child: Container(color: const Color(0xFFE2E8F0), height: 1.0),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_circle_outline_rounded),
-            color: AppColors.primary,
+            icon: const Icon(Iconsax.add_circle, size: 22, color: Color(0xFFFF5200)),
             onPressed: () => context.push(RouteNames.patientAddPrescription),
           ),
         ],
@@ -46,58 +50,64 @@ class PrescriptionsScreen extends ConsumerWidget {
 
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(patientPrescriptionsProvider),
+            color: const Color(0xFFFF5200),
             child: ListView.separated(
-              padding: const EdgeInsets.all(16),
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               itemCount: list.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) => _PrescriptionCard(prescription: list[index]),
+              separatorBuilder: (_, __) => const SizedBox(height: 16),
+              itemBuilder: (context, index) => PrescriptionCard(prescription: list[index]),
             ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFFFF5200))),
         error: (e, _) => _buildErrorState(ref),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push(RouteNames.patientAddPrescription),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add New'),
-        backgroundColor: AppColors.primary,
+        icon: const Icon(Iconsax.add, color: Colors.white, size: 20),
+        label: Text('Add New', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13)),
+        backgroundColor: const Color(0xFF121212),
         foregroundColor: Colors.white,
-        elevation: 3,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 2,
       ),
     );
   }
 
   Widget _buildEmptyState(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Icon(Iconsax.document_text, size: 40, color: Color(0xFF94A3B8)),
             ),
-            child: Icon(Icons.description_outlined, size: 48, color: Colors.grey.shade400),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No Prescriptions',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Colors.blueGrey.shade800,
+            const SizedBox(height: 18),
+            Text(
+              'No Prescriptions',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF121212),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Add your first prescription to track\nyour medications and history.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.blueGrey.shade400),
-          ),
-        ],
+            const SizedBox(height: 6),
+            Text(
+              'Add your first prescription to track your medications and medical history.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 13, height: 1.4, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -107,12 +117,13 @@ class PrescriptionsScreen extends ConsumerWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline_rounded, size: 40, color: AppColors.error),
-          const SizedBox(height: 16),
-          const Text('Failed to load data'),
+          const Icon(Iconsax.warning_2, size: 36, color: Color(0xFFEF4444)),
+          const SizedBox(height: 14),
+          Text('Failed to load data', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600, color: const Color(0xFF121212))),
+          const SizedBox(height: 4),
           TextButton(
             onPressed: () => ref.invalidate(patientPrescriptionsProvider),
-            child: const Text('Retry'),
+            child: Text('Retry', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, color: const Color(0xFFFF5200))),
           ),
         ],
       ),
@@ -120,56 +131,54 @@ class PrescriptionsScreen extends ConsumerWidget {
   }
 }
 
-class _PrescriptionCard extends StatelessWidget {
+class PrescriptionCard extends StatelessWidget {
   final Prescription prescription;
 
-  const _PrescriptionCard({required this.prescription});
+  const PrescriptionCard({required this.prescription});
 
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('MMM d, yyyy');
     final status = prescription.computedStatus;
-    
-    // Doctor Name Logic
     final doctorName = prescription.displayDoctorName;
-    final doctorInitial = doctorName.isNotEmpty ? doctorName[0] : 'D';
+    final doctorInitial = doctorName.isNotEmpty ? doctorName[0].toUpperCase() : 'D';
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: AppColors.borderSoft),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.015),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: InkWell(
         onTap: () => _showDetails(context),
         borderRadius: BorderRadius.circular(20),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. Header: Doctor Info + Status
+                  // 1. Header: Doctor Info + Status Badge
                   Row(
                     children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: AppColors.softPrimary.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            doctorInitial,
-                            style: const TextStyle(
-                              color: AppColors.softPrimary,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: const Color(0xFFF1F5F9),
+                        child: Text(
+                          doctorInitial,
+                          style: GoogleFonts.plusJakartaSans(
+                            color: const Color(0xFF64748B),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
                           ),
                         ),
                       ),
@@ -180,17 +189,19 @@ class _PrescriptionCard extends StatelessWidget {
                           children: [
                             Text(
                               doctorName,
-                              style: const TextStyle(
-                                fontSize: 16,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 14,
                                 fontWeight: FontWeight.bold,
-                                color: AppColors.textMain,
+                                color: const Color(0xFF121212),
                               ),
                             ),
+                            const SizedBox(height: 2),
                             Text(
                               dateFormat.format(prescription.prescriptionDate ?? prescription.createdAt),
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: AppColors.textSub,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xFF64748B),
                               ),
                             ),
                           ],
@@ -204,30 +215,31 @@ class _PrescriptionCard extends StatelessWidget {
                   // 2. Diagnosis Box
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
-                      color: AppColors.softBlue, // Pastel Blue for diagnosis
-                      borderRadius: BorderRadius.circular(12),
+                      color: const Color(0xFFFAFAFA),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'DIAGNOSIS',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.blue.shade700.withValues(alpha: 0.7),
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF94A3B8),
                             letterSpacing: 0.5,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           prescription.displayDiagnosis,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textMain,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF121212),
                           ),
                         ),
                       ],
@@ -239,10 +251,10 @@ class _PrescriptionCard extends StatelessWidget {
                     const SizedBox(height: 16),
                     Text(
                       'Prescribed Medications',
-                      style: TextStyle(
-                        fontSize: 12,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textSub,
+                        color: const Color(0xFF64748B),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -253,16 +265,16 @@ class _PrescriptionCard extends StatelessWidget {
                         return Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: AppColors.surfaceVariant,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: AppColors.borderSoft),
+                            color: const Color(0xFFFAFAFA),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
                           ),
                           child: Text(
                             '${item.medicineName} ${item.dosage}',
-                            style: const TextStyle(
-                              fontSize: 12,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 11,
                               fontWeight: FontWeight.w500,
-                              color: AppColors.textMain,
+                              color: const Color(0xFF64748B),
                             ),
                           ),
                         );
@@ -273,7 +285,7 @@ class _PrescriptionCard extends StatelessWidget {
                         padding: const EdgeInsets.only(top: 8),
                         child: Text(
                           '+ ${prescription.items.length - 3} more',
-                          style: const TextStyle(fontSize: 12, color: AppColors.softPrimary),
+                          style: GoogleFonts.plusJakartaSans(fontSize: 12, color: const Color(0xFFFF5200), fontWeight: FontWeight.bold),
                         ),
                       ),
                   ],
@@ -281,39 +293,39 @@ class _PrescriptionCard extends StatelessWidget {
               ),
             ),
             
-            // 4. Footer (Action)
+            // 4. Footer Row
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
               decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: AppColors.borderSoft)),
+                border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.attachment_rounded, size: 16, color: AppColors.textSub),
-                      const SizedBox(width: 4),
+                      const Icon(Iconsax.document_text, size: 14, color: Color(0xFF94A3B8)),
+                      const SizedBox(width: 6),
                       Text(
                         prescription.items.length.toString(),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12, color: const Color(0xFF121212)),
                       ),
                       const SizedBox(width: 4),
-                       Text('Items', style: TextStyle(color: AppColors.textSub, fontSize: 13)),
+                      Text('items', style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.w500)),
                     ],
                   ),
                   Row(
                     children: [
                       Text(
                         'View Details',
-                        style: TextStyle(
-                          color: AppColors.softPrimary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
+                        style: GoogleFonts.plusJakartaSans(
+                          color: const Color(0xFFFF5200),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Icon(Icons.arrow_forward_rounded, size: 16, color: AppColors.softPrimary),
+                      const Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFFFF5200)),
                     ],
                   ),
                 ],
@@ -344,24 +356,24 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     Color color;
     switch (status) {
-      case PrescriptionStatus.active: color = AppColors.success; break;
-      case PrescriptionStatus.expired: color = AppColors.error; break;
-      case PrescriptionStatus.upcoming: color = Colors.orange; break;
-      case PrescriptionStatus.completed: color = Colors.blueGrey; break;
-      case PrescriptionStatus.cancelled: color = Colors.grey; break;
+      case PrescriptionStatus.active: color = const Color(0xFF10B981); break;
+      case PrescriptionStatus.expired: color = const Color(0xFFEF4444); break;
+      case PrescriptionStatus.upcoming: color = const Color(0xFFF59E0B); break;
+      case PrescriptionStatus.completed: color = const Color(0xFF64748B); break;
+      case PrescriptionStatus.cancelled: color = const Color(0xFF94A3B8); break;
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
       ),
       child: Text(
         status.displayName.toUpperCase(),
-        style: TextStyle(
-          fontSize: 10,
+        style: GoogleFonts.plusJakartaSans(
+          fontSize: 9,
           fontWeight: FontWeight.bold,
           color: color,
         ),
@@ -378,17 +390,13 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
   Future<void> _launchPdf(BuildContext context, String url) async {
     final uri = Uri.parse(url);
     try {
-      // 1. Try to launch in a non-browser app first (PDF Viewer)
-      // This forces the OS to look for a native app handler instead of a browser
       bool launched = false;
       try {
         launched = await launchUrl(uri, mode: LaunchMode.externalNonBrowserApplication);
       } catch (e) {
-        // Mode might not be supported or no app found, fall through
         launched = false;
       }
 
-      // 2. If no native app is found, fallback to default behavior (Browser)
       if (!launched) {
         if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
           throw 'Could not open PDF';
@@ -397,8 +405,9 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error opening PDF: $e'),
-          backgroundColor: AppColors.error,
+          content: Text('Error opening PDF: $e', style: GoogleFonts.plusJakartaSans()),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
         ));
       }
     }
@@ -409,10 +418,10 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
     final dateFormat = DateFormat('MMMM d, yyyy');
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
+      height: MediaQuery.of(context).size.height * 0.82,
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         children: [
@@ -420,48 +429,46 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
           Center(
             child: Container(
               margin: const EdgeInsets.only(top: 12, bottom: 8),
-              width: 40,
+              width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey.shade300,
+                color: const Color(0xFFE2E8F0),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
 
-          // Header
+          // Header Row
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Details',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                Text(
+                  'Prescription Details',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF121212)),
                 ),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
-                  icon: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.grey.shade100,
-                    ),
-                    child: const Icon(Icons.close_rounded, size: 20),
+                  icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF64748B)),
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFFF1F5F9),
+                    padding: const EdgeInsets.all(6),
                   ),
                 ),
               ],
             ),
           ),
 
-          const Divider(height: 1),
+          const Divider(height: 1, color: Color(0xFFE2E8F0)),
 
-          // Content
+          // Scrollable Body
           Expanded(
             child: ListView(
+              physics: const ClampingScrollPhysics(),
               padding: const EdgeInsets.all(24),
               children: [
-                // 1. Core Information (Doctor & Diagnosis)
+                // 1. core Details
                 _buildSectionLabel('MEDICAL DETAILS'),
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -472,23 +479,23 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
                       _buildInfoRow(
                         'Diagnosis',
                         prescription.displayDiagnosis,
-                        icon: Icons.healing_rounded,
+                        icon: Iconsax.heart,
                         isBold: true,
                       ),
-                      const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1)),
+                      const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1, color: Color(0xFFE2E8F0))),
                       _buildInfoRow(
                         'Doctor',
                         prescription.displayDoctorName,
                         subtitle: prescription.displayClinicName,
-                        icon: Icons.person_rounded,
+                        icon: Iconsax.user,
                       ),
                       if (prescription.doctorDetails?.specialization != null) ...[
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         Padding(
                           padding: const EdgeInsets.only(left: 32),
                           child: Text(
                             prescription.doctorDetails!.specialization!,
-                            style: TextStyle(color: Colors.blueGrey.shade400, fontSize: 13),
+                            style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.w500),
                           ),
                         ),
                       ],
@@ -497,7 +504,7 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
 
-                // 2. Metadata Grid
+                // 2. Validity
                 _buildSectionLabel('VALIDITY'),
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -505,9 +512,9 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
                   child: Row(
                     children: [
                       Expanded(
-                        child: _buildMetaItem('Issued', dateFormat.format(prescription.prescriptionDate ?? prescription.createdAt)),
+                        child: _buildMetaItem('Prescribed On', dateFormat.format(prescription.prescriptionDate ?? prescription.createdAt)),
                       ),
-                      Container(width: 1, height: 40, color: Colors.grey.shade200),
+                      Container(width: 1, height: 32, color: const Color(0xFFE2E8F0)),
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.only(left: 16),
@@ -526,16 +533,21 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
                 // 3. Medications List
                 _buildSectionLabel('MEDICATIONS (${prescription.items.length})'),
                 if (prescription.items.isEmpty)
-                  const Center(child: Text('No medications listed', style: TextStyle(color: Colors.grey)))
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Text('No medications listed', style: GoogleFonts.plusJakartaSans(color: const Color(0xFF94A3B8))),
+                    ),
+                  )
                 else
                   ...prescription.items.asMap().entries.map(
                         (e) => _buildMedicationTile(e.value, e.key + 1),
                   ),
                 const SizedBox(height: 12),
 
-                // 4. Safety & Notes
+                // 4. Notes
                 if (prescription.notes != null || prescription.doctorNotes != null || prescription.patientNotes != null) ...[
-                  _buildSectionLabel('NOTES'),
+                  _buildSectionLabel('ADDITIONAL NOTES'),
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: _cardDecoration,
@@ -554,42 +566,48 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
                   const SizedBox(height: 24),
                 ],
 
-                // 5. Safety Flags (If any true)
+                // 5. Safety Flags
                 if (prescription.safetyFlags != null)
                   _buildSafetyFlags(prescription.safetyFlags!),
 
-                // 6. Manual Upload
+                // 6. Attachments
                 if (prescription.uploadInfo?.hasFile == true) ...[
                   const SizedBox(height: 24),
                   _buildSectionLabel('ATTACHMENTS'),
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.blue.withValues(alpha: 0.1)),
+                      color: const Color(0xFFFF5200).withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFF5200).withValues(alpha: 0.15)),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.attach_file_rounded, color: Colors.blue, size: 20),
+                        const Icon(Iconsax.document_text5, color: Color(0xFFFF5200), size: 18),
                         const SizedBox(width: 8),
-                        Text(prescription.uploadInfo?.fileName ?? 'Attached File', style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.w500)),
+                        Expanded(
+                          child: Text(
+                            prescription.uploadInfo?.fileName ?? 'Attached File', 
+                            style: GoogleFonts.plusJakartaSans(color: const Color(0xFFFF5200), fontWeight: FontWeight.bold, fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 ],
 
-                const SizedBox(height: 40),
+                const SizedBox(height: 20),
               ],
             ),
           ),
 
           // Sticky Bottom Actions
           Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            decoration: const BoxDecoration(
               color: Colors.white,
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5))],
+              border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
             ),
             child: Row(
               children: [
@@ -597,25 +615,26 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
                   child: OutlinedButton(
                     onPressed: prescription.pdfUrl != null ? () => _launchPdf(context, prescription.pdfUrl!) : null,
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      side: BorderSide(color: Colors.grey.shade300),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      side: const BorderSide(color: Color(0xFFE2E8F0)),
+                      foregroundColor: const Color(0xFF121212),
                     ),
-                    child: const Text('Download PDF', style: TextStyle(color: Colors.black87)),
+                    child: Text('Download PDF', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14)),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () { /* Share logic placeholder */ },
+                    onPressed: () { /* Share Copy */ },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: const Color(0xFF121212),
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       elevation: 0,
                     ),
-                    child: const Text('Share Copy'),
+                    child: Text('Share Copy', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14)),
                   ),
                 ),
               ],
@@ -628,7 +647,7 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
 
   BoxDecoration get _cardDecoration => BoxDecoration(
     color: Colors.white,
-    borderRadius: BorderRadius.circular(12),
+    borderRadius: BorderRadius.circular(20),
     border: Border.all(color: const Color(0xFFE2E8F0)),
   );
 
@@ -637,11 +656,11 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8, left: 4),
       child: Text(
         label,
-        style: const TextStyle(
+        style: GoogleFonts.plusJakartaSans(
           fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF94A3B8), // Slate-400
-          letterSpacing: 1.0,
+          fontWeight: FontWeight.bold,
+          color: const Color(0xFF94A3B8),
+          letterSpacing: 0.8,
         ),
       ),
     );
@@ -651,7 +670,7 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 20, color: Colors.grey.shade400),
+        Icon(icon, size: 18, color: const Color(0xFF94A3B8)),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -659,16 +678,16 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
             children: [
               Text(
                 value,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
-                  color: const Color(0xFF1E293B),
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+                  color: const Color(0xFF121212),
                 ),
               ),
               if (subtitle != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
-                  child: Text(subtitle, style: TextStyle(fontSize: 13, color: Colors.blueGrey.shade400)),
+                  child: Text(subtitle, style: GoogleFonts.plusJakartaSans(fontSize: 12, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
                 ),
             ],
           ),
@@ -681,14 +700,14 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-        const SizedBox(height: 2),
+        Text(label, style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500)),
+        const SizedBox(height: 4),
         Text(
           value,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: isAlert ? AppColors.error : const Color(0xFF334155),
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: isAlert ? const Color(0xFFEF4444) : const Color(0xFF121212),
           ),
         ),
       ],
@@ -704,33 +723,35 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 24,
-            height: 24,
+            width: 22,
+            height: 22,
             alignment: Alignment.center,
-            decoration: BoxDecoration(color: Colors.grey.shade100, shape: BoxShape.circle),
-            child: Text('$index', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+            decoration: const BoxDecoration(color: Color(0xFFF1F5F9), shape: BoxShape.circle),
+            child: Text('$index', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF64748B))),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.medicineName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                const SizedBox(height: 4),
-                Text('${item.dosage} • ${item.frequency}', style: const TextStyle(fontSize: 13, color: Color(0xFF475569))),
+                Text(item.medicineName, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14, color: const Color(0xFF121212))),
+                const SizedBox(height: 2),
+                Text('${item.dosage} • ${item.frequency}', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
 
                 if (item.displayInstructions != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Container(
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(10),
+                      width: double.infinity,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(6),
+                        color: const Color(0xFFFAFAFA),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
                       child: Text(
                         item.displayInstructions!,
-                        style: TextStyle(fontSize: 12, color: Colors.blueGrey.shade600, fontStyle: FontStyle.italic),
+                        style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF64748B), fontStyle: FontStyle.italic, fontWeight: FontWeight.w500),
                       ),
                     ),
                   )
@@ -740,7 +761,7 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
           if (item.duration != null)
             Text(
                 '${item.duration} days',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary)
+                style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFFFF5200))
             ),
         ],
       ),
@@ -752,10 +773,10 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: RichText(
         text: TextSpan(
-          style: const TextStyle(fontSize: 13, color: Color(0xFF334155)),
+          style: GoogleFonts.plusJakartaSans(fontSize: 12, color: const Color(0xFF121212), fontWeight: FontWeight.w500, height: 1.4),
           children: [
-            TextSpan(text: '$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
-            TextSpan(text: content),
+            TextSpan(text: '$label: ', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
+            TextSpan(text: content, style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B))),
           ],
         ),
       ),
@@ -774,9 +795,9 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: AppColors.warning.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.warning.withValues(alpha: 0.2)),
+            color: const Color(0xFFFEE2E2),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFFCA5A5)),
           ),
           child: Column(
             children: [
@@ -795,9 +816,12 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          const Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.warning),
+          const Icon(Iconsax.warning_2, size: 14, color: Color(0xFFEF4444)),
           const SizedBox(width: 8),
-          Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF92400E))),
+          Text(
+            text, 
+            style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFFB91C1C)),
+          ),
         ],
       ),
     );

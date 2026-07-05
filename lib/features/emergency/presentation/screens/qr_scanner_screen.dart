@@ -1,10 +1,11 @@
-// lib/features/first_responder/presentation/screens/qr_scanner_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../../core/theme/app_colors.dart';
-import 'emergency_data_screen.dart';
+import '../../../../routing/route_names.dart';
 
 class QrScannerScreen extends ConsumerStatefulWidget {
   const QrScannerScreen({super.key});
@@ -42,7 +43,8 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
       qrCodeId = uri.pathSegments.last;
     } else {
       // Basic UUID validation (8-4-4-4-12 hex chars)
-      final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+      final uuidRegex = RegExp(
+          r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
       if (uuidRegex.hasMatch(value)) {
         qrCodeId = value;
       }
@@ -51,12 +53,9 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
     if (qrCodeId != null) {
       setState(() => _isProcessing = true);
       if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => EmergencyDataScreen(qrCodeId: qrCodeId!),
-          ),
-        ).then((_) {
+        context
+            .push('${RouteNames.patientEmergencyView}/$qrCodeId')
+            .then((_) {
           if (mounted) setState(() => _isProcessing = false);
         });
       }
@@ -74,7 +73,8 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Scan Patient QR'),
+        title: Text('Scan Patient QR',
+            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             onPressed: () => _controller.toggleTorch(),
@@ -112,15 +112,16 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
             child: Column(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Point camera at patient\'s\nCareSync QR code',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white, fontSize: 16),
+                    style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 15),
                   ),
                 ),
                 if (_isProcessing) ...[
@@ -136,7 +137,6 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
   }
 }
 
-// FIXED: Added missing Painter class
 class _ScannerOverlayPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -158,7 +158,8 @@ class _ScannerOverlayPainter extends CustomPainter {
       ..strokeWidth = 4
       ..style = PaintingStyle.stroke;
 
-    canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(20)), bracketPaint);
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(20)), bracketPaint);
   }
 
   @override

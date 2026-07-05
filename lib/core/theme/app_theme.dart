@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
+import 'app_spacing.dart';
 
 class AppTheme {
   AppTheme._();
@@ -22,7 +23,7 @@ class AppTheme {
         error: AppColors.error,
         outline: AppColors.border,
       ),
-      textTheme: GoogleFonts.outfitTextTheme().apply(
+      textTheme: GoogleFonts.plusJakartaSansTextTheme().apply(
         bodyColor: AppColors.textPrimary,
         displayColor: AppColors.textPrimary,
       ),
@@ -32,7 +33,7 @@ class AppTheme {
         backgroundColor: Colors.transparent,
         centerTitle: true,
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
-        titleTextStyle: GoogleFonts.outfit(
+        titleTextStyle: GoogleFonts.plusJakartaSans(
           fontSize: 18,
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary,
@@ -44,8 +45,8 @@ class AppTheme {
         elevation: 0,
         color: AppColors.surfaceLight,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-          side: const BorderSide(color: AppColors.border, width: 0.5),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+          side: const BorderSide(color: AppColors.cardBorder, width: 1.0),
         ),
       ),
 
@@ -54,29 +55,28 @@ class AppTheme {
         fillColor: AppColors.surfaceVariant,
         contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
           borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
           borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
-        hintStyle: GoogleFonts.outfit(color: AppColors.textLight),
+        hintStyle: GoogleFonts.plusJakartaSans(color: AppColors.textLight),
       ),
 
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          elevation: 4,
-          shadowColor: AppColors.primary.withValues(alpha: 0.4),
-          backgroundColor: AppColors.primary,
+          elevation: 0,
+          backgroundColor: AppColors.brandBlack,
           foregroundColor: Colors.white,
           minimumSize: const Size(0, 56),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          textStyle: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusCard)),
+          textStyle: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ),
 
@@ -86,8 +86,8 @@ class AppTheme {
           foregroundColor: AppColors.primary,
           minimumSize: const Size(0, 56),
           side: const BorderSide(color: AppColors.primary, width: 1.5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          textStyle: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusCard)),
+          textStyle: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ),
     );
@@ -107,13 +107,13 @@ class AppTheme {
         surface: Color(0xFF1E293B), // Slate 800
         error: AppColors.error,
       ),
-      textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme),
+      textTheme: GoogleFonts.plusJakartaSansTextTheme(ThemeData.dark().textTheme),
 
       appBarTheme: AppBarTheme(
         elevation: 0,
         backgroundColor: Colors.transparent,
         centerTitle: true,
-        titleTextStyle: GoogleFonts.outfit(
+        titleTextStyle: GoogleFonts.plusJakartaSans(
           fontSize: 18,
           fontWeight: FontWeight.w600,
           color: Colors.white,

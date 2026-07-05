@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/adaptive_card_container.dart';
+import '../../../../core/widgets/loading_skeleton.dart';
 import '../../../patient/providers/appointment_provider.dart';
 
 class AppointmentListWidget extends ConsumerWidget {
@@ -18,36 +21,47 @@ class AppointmentListWidget extends ConsumerWidget {
         }
         return ListView.builder(
           shrinkWrap: true,
+          padding: EdgeInsets.zero,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: appointments.length > 2 ? 2 : appointments.length, // Show max 2 like mockup
+          itemCount: appointments.length > 2 ? 2 : appointments.length,
           itemBuilder: (context, index) {
             final appt = appointments[index];
             return _buildAppointmentTile(context, appt, index);
           },
         );
       },
-      loading: () => const Center(child: Padding(
-        padding: EdgeInsets.all(20.0),
-        child: CircularProgressIndicator(),
-      )),
-      error: (err, _) => Text('Error: $err'),
+      loading: () => const Column(
+        children: [
+          LoadingSkeleton(height: 76, radius: 20),
+          SizedBox(height: 12),
+          LoadingSkeleton(height: 76, radius: 20),
+        ],
+      ),
+      error: (err, _) => Center(child: Text('Error loading appointments: $err', style: GoogleFonts.plusJakartaSans())),
     );
   }
 
   Widget _buildEmptyState(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.borderSoft),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
         children: [
-          Icon(Icons.event_available_rounded, size: 48, color: Colors.grey.shade300),
-          const SizedBox(height: 12),
-          const Text('No scheduled appointments', style: TextStyle(color: Colors.grey)),
+          const Icon(Icons.event_available_rounded, size: 28, color: Color(0xFF94A3B8)),
+          const SizedBox(height: 8),
+          Text(
+            'No scheduled appointments',
+            style: GoogleFonts.plusJakartaSans(
+              color: const Color(0xFF64748B),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );
@@ -56,24 +70,18 @@ class AppointmentListWidget extends ConsumerWidget {
   Widget _buildAppointmentTile(BuildContext context, dynamic appt, int index) {
     final day = DateFormat('dd').format(appt.startTime);
     final month = DateFormat('MMM').format(appt.startTime).toUpperCase();
-    final time = DateFormat('h:mm\na').format(appt.startTime).replaceAll('\n', '\n'); 
     final doctorName = appt.doctor?.fullName ?? 'Dr. Priya Sharma';
     final specialization = appt.doctor?.specialization ?? 'Cardiologist';
     final hospital = appt.doctor?.hospitalName ?? 'AIIMS Delhi'; 
 
-    // Colors from mockup
+    // Colors aligned to visual guidelines
     final isPurple = index % 2 == 0;
-    final boxBg = isPurple ? const Color(0xFFEEF2FF) : const Color(0xFFF0FDF4); // Indigo vs Green bg
-    final accentColor = isPurple ? const Color(0xFF6366F1) : const Color(0xFF22C55E); // Indigo vs Green accent
+    final boxBg = isPurple ? const Color(0xFFEEF2FF) : const Color(0xFFF0FDF4); 
+    final accentColor = isPurple ? const Color(0xFF6366F1) : const Color(0xFF22C55E); 
 
-    return Container(
+    return AdaptiveCardContainer(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.borderSoft),
-      ),
       child: Row(
         children: [
           // Date Box
@@ -81,18 +89,18 @@ class AppointmentListWidget extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               color: boxBg,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   day,
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: accentColor),
+                  style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold, color: accentColor),
                 ),
                 Text(
                   month,
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: accentColor.withValues(alpha: 0.7)),
+                  style: GoogleFonts.plusJakartaSans(fontSize: 10, fontWeight: FontWeight.bold, color: accentColor.withOpacity(0.7)),
                 ),
               ],
             ),
@@ -105,12 +113,12 @@ class AppointmentListWidget extends ConsumerWidget {
               children: [
                 Text(
                   doctorName,
-                  style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.textMain, fontSize: 15),
+                  style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, color: const Color(0xFF121212), fontSize: 14),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '$specialization · $hospital',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSub, fontWeight: FontWeight.w500),
+                  '$specialization • $hospital',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF64748B), fontWeight: FontWeight.w500),
                 ),
               ],
             ),
@@ -118,15 +126,15 @@ class AppointmentListWidget extends ConsumerWidget {
           const SizedBox(width: 8),
           // Time Pill
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: boxBg,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
               DateFormat('h:mm\na').format(appt.startTime).toUpperCase(),
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: accentColor, height: 1.1),
+              style: GoogleFonts.plusJakartaSans(fontSize: 10, fontWeight: FontWeight.bold, color: accentColor, height: 1.1),
             ),
           ),
         ],

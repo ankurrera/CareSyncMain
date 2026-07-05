@@ -26,10 +26,12 @@ abstract class AppColors {
   // ─────────────────────────────────────────────────────────────────────────
   // COMPATIBILITY ALIASES (Mapping Old -> New Theme)
   // ─────────────────────────────────────────────────────────────────────────
-  static const Color primary = softPrimary;              // Was Teal, now Purple
-  static const Color primaryLight = softPrimaryLight;    // Was Teal 300, now Lighter Purple
-  static const Color primaryDark = Color(0xFF7C3AED);    // Violet 600 (Darker than softPrimary)
-  static const Color primarySurface = softPurple;        // Was Teal 50, now Light Purple bg
+  static const Color primary = Color(0xFFFF5200);        // V2 Brilliant Orange
+  static const Color primaryLight = Color(0xFFFFE2D5);    // V2 Light Orange border accent
+  static const Color primaryDark = Color(0xFFE04900);     // V2 Darker Orange
+  static const Color primarySurface = Color(0xFFFFF4F0);  // V2 Soft Orange background surface
+  static const Color brandBlack = Color(0xFF121212);      // V2 Brand Button / Ink Black
+  static const Color cardBorder = Color(0xFFE2E8F0);      // V2 Standard Card Border Color
 
   // ─────────────────────────────────────────────────────────────────────────
   // NEUTRALS & SURFACES

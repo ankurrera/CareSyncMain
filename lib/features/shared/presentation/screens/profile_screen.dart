@@ -2,17 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../routing/route_names.dart';
 import '../../../../services/kyc_service.dart';
 import '../../../../services/supabase_service.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../family/presentation/screens/family_members_screen.dart';
 import '../../../family/providers/family_provider.dart';
-// FIX: Corrected import path below
 import '../../models/user_profile.dart';
-import '../widgets/profile_stats_card.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -29,451 +27,442 @@ class ProfileScreen extends ConsumerWidget {
     final familyMembersAsync = ref.watch(familyMembersProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: Stack(
-        children: [
-          // Background Decoration
-          Positioned(
-            top: -120,
-            right: -100,
-            child: Container(
-              width: 350,
-              height: 350,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
+      backgroundColor: const Color(0xFFFAFAFA), // Parchment surface background
+      body: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: SafeArea(
+          child: profileAsync.when(
+            loading: () => const Center(
+              child: Padding(
+                padding: EdgeInsets.only(top: 100),
+                child: CircularProgressIndicator(color: Color(0xFF121212)),
               ),
             ),
-          ),
-          Positioned.fill(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
-              child: SafeArea(
-                bottom: false,
-                child: profileAsync.when(
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (err, stack) => Center(child: Text('Error loading profile: $err')),
-                  data: (profile) {
-                    if (profile == null) return const Center(child: Text("Profile not found"));
+            error: (err, stack) => Center(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 100),
+                child: Text('Error loading profile: $err', style: GoogleFonts.plusJakartaSans(color: const Color(0xFFEF4444))),
+              ),
+            ),
+            data: (profile) {
+              if (profile == null) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 100),
+                    child: Text("Profile not found", style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B))),
+                  ),
+                );
+              }
 
-                    final isVerified = kycAsync.valueOrNull?.status == KYCStatus.verified;
-                    final kycPercentText = isVerified ? '100' : '60';
+              final isVerified = kycAsync.valueOrNull?.status == KYCStatus.verified;
 
-                    return Column(
-                      children: [
-                        // Family Account Banner
-                        if (isUsingFamilyAccount)
-                          _buildFamilyBanner(context, ref, profile),
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Family Account Banner
+                  if (isUsingFamilyAccount)
+                    _buildFamilyBanner(context, ref, profile),
 
-                        // Header
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const BackButton(color: AppColors.textPrimary),
-                            Text(
-                              'Profile',
-                              style: GoogleFonts.outfit(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                            if (!isUsingFamilyAccount)
-                              IconButton(
-                                onPressed: () {
-                                  // Show Edit Profile for Doctor or general settings
-                                  if (profile.isDoctor) {
-                                    _showEditDoctorProfile(context, ref, profile);
-                                  } else if (profile.isPharmacist) {
-                                    _showEditPharmacistProfile(context, ref, profile);
-                                  } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Profile editing coming soon')));
-                                  }
-                                },
-                                icon: const Icon(Icons.edit_outlined),
-                                tooltip: 'Edit Profile',
-                                color: AppColors.textPrimary,
-                              ),
-                          ],
+                  // Custom App Bar
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF121212), size: 20),
+                        onPressed: () => context.pop(),
+                      ),
+                      Text(
+                        'Account Profile',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF121212),
                         ),
-                        const SizedBox(height: 30),
+                      ),
+                      const SizedBox(width: 40),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
 
-                        // Avatar
+                  // Avatar Center Section
+                  Center(
+                    child: Column(
+                      children: [
                         _buildAvatar(profile, isVerified),
                         const SizedBox(height: 16),
-
-                        // Name & Email
                         Text(
                           profile.fullName,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 24,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
+                            color: const Color(0xFF121212),
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           profile.email,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textSecondary,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13,
+                            color: const Color(0xFF64748B),
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
+                        const SizedBox(height: 12),
+                        _buildVerificationBadge(context, isVerified, isUsingFamilyAccount),
+                        const SizedBox(height: 16),
 
-                        // DOCTOR DETAILS CARD
-                        if (profile.isDoctor) ...[
-                          const SizedBox(height: 24),
-                          _buildDoctorDetailsCard(context, profile),
-                        ],
-
-                        // PHARMACIST DETAILS CARD
-                        if (profile.isPharmacist) ...[
-                          const SizedBox(height: 24),
-                          _buildPharmacistDetailsCard(context, profile),
-                        ],
-
-                        const SizedBox(height: 32),
-
-                        // Identity / KYC Card
-                        if (profile.isPatient)
-                          _buildKycCard(context, isUsingFamilyAccount, isVerified, kycPercentText),
-
-                        const SizedBox(height: 24),
-
-                        // Stats Cards
-                        if (profile.isPatient)
+                        // Inline Mini-Stats Row (Patient only)
+                        if (profile.isPatient && !isUsingFamilyAccount) ...[
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              ProfileStatsCard(
-                                title: 'Active\nDevices',
+                              _buildMiniStatItem(
+                                label: 'Connected Devices',
                                 value: '2',
-                                subtitle: 'Manage access',
-                                icon: Icons.devices_rounded,
-                                accentColor: const Color(0xFF38BDF8),
-                                showOnlineIndicator: true,
-                                onTap: isUsingFamilyAccount
-                                    ? () {}
-                                    : () => context.push(RouteNames.deviceManagement),
+                                icon: Iconsax.mobile,
+                                onTap: () => context.push(RouteNames.deviceManagement),
                               ),
-                              ProfileStatsCard(
-                                title: 'Family\nMembers',
+                              Container(
+                                width: 1,
+                                height: 16,
+                                color: const Color(0xFFE2E8F0),
+                                margin: const EdgeInsets.symmetric(horizontal: 20),
+                              ),
+                              _buildMiniStatItem(
+                                label: 'Dependents',
                                 value: familyMembersAsync.valueOrNull?.length.toString() ?? '0',
-                                subtitle: 'Dependents',
-                                icon: Icons.people_alt_rounded,
-                                accentColor: const Color(0xFFA855F7),
-                                onTap: isUsingFamilyAccount
-                                    ? () {}
-                                    : () => Navigator.push(
+                                icon: Iconsax.people,
+                                onTap: () => Navigator.push(
                                   context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const FamilyMembersScreen(),
-                                  ),
+                                  MaterialPageRoute(builder: (_) => const FamilyMembersScreen()),
                                 ),
                               ),
                             ],
                           ),
-
-                        const SizedBox(height: 32),
-
-                        // Settings List
-                        if (!isUsingFamilyAccount) ...[
-                          // Switch Account Button
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 24.0),
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.all(16),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5)),
-                                ),
-                                icon: const Icon(Icons.swap_horiz_rounded),
-                                label: const Text('Switch Account'),
-                                onPressed: () {
-                                  _showAccountSwitcher(context, ref, familyMembersAsync);
-                                },
-                              ),
-                            ),
-                          ),
-
-                          const Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Settings',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(24),
-                              border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-                            ),
-                            child: Column(
-                              children: [
-                                if (profile.isPatient)
-                                  _buildSettingsTile(
-                                    icon: Icons.people_outline_rounded,
-                                    title: 'Family & Dependents',
-                                    onTap: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => const FamilyMembersScreen()),
-                                    ),
-                                  ),
-                                _buildSettingsTile(
-                                  icon: Icons.fingerprint_rounded,
-                                  title: 'Biometric Login',
-                                  isToggle: true,
-                                  toggleValue: biometricEnabledAsync.valueOrNull ?? false,
-                                  onToggle: (val) async {
-                                    try {
-                                      await ref.read(authNotifierProvider.notifier).toggleBiometric(val);
-                                    } catch (e) {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('Failed to update: ${e.toString()}'),
-                                            backgroundColor: AppColors.error,
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  },
-                                ),
-                                _buildSettingsTile(
-                                  icon: Icons.lock_outline_rounded,
-                                  title: 'Change Password',
-                                  onTap: () {},
-                                ),
-                                _buildSettingsTile(
-                                  icon: Icons.logout_rounded,
-                                  title: 'Sign Out',
-                                  isDestructive: true,
-                                  onTap: () {
-                                    ref.read(authNotifierProvider.notifier).signOut();
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
+                          const SizedBox(height: 28),
                         ],
                       ],
-                    );
-                  },
-                ),
-              ),
-            ),
+                    ),
+                  ),
+
+                  // Professional Info for Doctors
+                  if (profile.isDoctor) ...[
+                    const SizedBox(height: 12),
+                    _buildDoctorDetailsCard(context, ref, profile),
+                    const SizedBox(height: 28),
+                  ],
+
+                  // Professional Info for Pharmacists
+                  if (profile.isPharmacist) ...[
+                    const SizedBox(height: 12),
+                    _buildPharmacistDetailsCard(context, ref, profile),
+                    const SizedBox(height: 28),
+                  ],
+
+                  // Settings / Actions List
+                  if (!isUsingFamilyAccount) ...[
+                    // Switch Account Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          side: const BorderSide(color: Color(0xFFE2E8F0)),
+                          backgroundColor: Colors.white,
+                          elevation: 0,
+                        ),
+                        icon: Icon(Iconsax.arrow_swap, color: const Color(0xFF121212), size: 16),
+                        label: Text(
+                          'Switch Profile View',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: const Color(0xFF121212),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        onPressed: () {
+                          _showAccountSwitcher(context, ref, familyMembersAsync);
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Settings Heading
+                    Text(
+                      'Account Settings',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF121212),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Settings list items container
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        children: [
+                          if (profile.isPatient) ...[
+                            _buildSettingsTile(
+                              icon: Iconsax.people,
+                              title: 'Family & Dependents',
+                              onTap: () => Navigator.push(
+                                context,
+                                  MaterialPageRoute(builder: (_) => const FamilyMembersScreen()),
+                              ),
+                            ),
+                            _buildSettingsTile(
+                              icon: Iconsax.security_safe,
+                              title: 'Privacy & Security Settings',
+                              onTap: () => context.push(RouteNames.patientPrivacy),
+                            ),
+                          ],
+                          _buildSettingsTile(
+                            icon: Iconsax.finger_scan,
+                            title: 'Biometric App Login',
+                            isToggle: true,
+                            toggleValue: biometricEnabledAsync.valueOrNull ?? false,
+                            onToggle: (val) async {
+                              try {
+                                await ref.read(authNotifierProvider.notifier).toggleBiometric(val);
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Failed to update biometric settings: ${e.toString()}'),
+                                      backgroundColor: const Color(0xFFEF4444),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                          _buildSettingsTile(
+                            icon: Iconsax.lock,
+                            title: 'Change Password',
+                            onTap: () {},
+                          ),
+                          _buildSettingsTile(
+                            icon: Iconsax.logout,
+                            title: 'Sign Out',
+                            isDestructive: true,
+                            onTap: () {
+                              ref.read(authNotifierProvider.notifier).signOut();
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
           ),
-        ],
+        ),
       ),
     );
   }
 
   // --- WIDGET BUILDERS ---
 
-  Widget _buildDoctorDetailsCard(BuildContext context, UserProfile profile) {
+  Widget _buildVerificationBadge(BuildContext context, bool isVerified, bool isUsingFamilyAccount) {
+    if (isVerified) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFD1FAE5), // soft emerald bg
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xA110B981), width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.verified, color: Color(0xFF059669), size: 12),
+            const SizedBox(width: 4),
+            Text(
+              'VERIFIED ID',
+              style: GoogleFonts.plusJakartaSans(
+                color: const Color(0xFF059669),
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: isUsingFamilyAccount ? null : () => context.push(RouteNames.kycVerification),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFEF3C7), // soft amber bg
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xA1F59E0B), width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.warning_rounded, color: Color(0xFFD97706), size: 12),
+            const SizedBox(width: 4),
+            Text(
+              'UNVERIFIED (COMPLETE KYC)',
+              style: GoogleFonts.plusJakartaSans(
+                color: const Color(0xFFD97706),
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMiniStatItem({
+    required String label,
+    required String value,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: const Color(0xFFFF5200)),
+              const SizedBox(width: 6),
+              Text(
+                value,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF121212),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 11,
+              color: const Color(0xFF64748B),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDoctorDetailsCard(BuildContext context, WidgetRef ref, UserProfile profile) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.shadow.withValues(alpha: 0.05),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-        border: Border.all(color: AppColors.doctor.withValues(alpha: 0.2)),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.doctor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.medical_services_rounded, color: AppColors.doctor, size: 20),
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                'Professional Details',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-            ],
+          _buildSettingsTile(
+            icon: Iconsax.briefcase,
+            title: 'Specialization: ${profile.specialization ?? 'Not set'}',
           ),
-          const SizedBox(height: 16),
-          _buildInfoRow('Hospital/Clinic', profile.hospitalName ?? 'Not set', isEditable: true),
-          const Divider(height: 24),
-          _buildInfoRow('Specialization', profile.specialization ?? 'Not set', isEditable: false),
-          if (profile.medicalRegNumber != null) ...[
-            const Divider(height: 24),
-            _buildInfoRow('Reg. Number', profile.medicalRegNumber!, isEditable: false),
-          ],
+          _buildSettingsTile(
+            icon: Iconsax.teacher,
+            title: 'Workplace: ${profile.hospitalName ?? 'Not set'}',
+            onTap: () => _showEditDoctorProfile(context, ref, profile),
+          ),
+          if (profile.medicalRegNumber != null)
+            _buildSettingsTile(
+              icon: Iconsax.card,
+              title: 'Reg. Number: ${profile.medicalRegNumber!}',
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value, {bool isEditable = false}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
-              ),
-            ],
+  Widget _buildPharmacistDetailsCard(BuildContext context, WidgetRef ref, UserProfile profile) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        children: [
+          _buildSettingsTile(
+            icon: Iconsax.briefcase,
+            title: 'Pharmacy Name: ${profile.pharmacyName ?? 'Not set'}',
+            onTap: () => _showEditPharmacistProfile(context, ref, profile),
           ),
-        ),
-        if (isEditable)
-          const Icon(Icons.edit_rounded, size: 16, color: Colors.grey),
-        if (!isEditable)
-          const Icon(Icons.lock_rounded, size: 14, color: Colors.grey),
-      ],
-    );
-  }
-
-  void _showEditDoctorProfile(BuildContext context, WidgetRef ref, UserProfile profile) {
-    final hospitalController = TextEditingController(text: profile.hospitalName);
-    bool isLoading = false;
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Edit Professional Profile'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: hospitalController,
-                    decoration: const InputDecoration(
-                      labelText: 'Hospital / Clinic Name',
-                      hintText: 'Enter new workplace name',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // Read-only Specialization
-                  TextFormField(
-                    initialValue: profile.specialization,
-                    readOnly: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Specialization (Fixed)',
-                      prefixIcon: Icon(Icons.lock_outline, size: 18),
-                      border: OutlineInputBorder(),
-                      filled: true,
-                      fillColor: Color(0xFFF5F5F5),
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: isLoading ? null : () async {
-                    if (hospitalController.text.trim().isEmpty) return;
-
-                    setState(() => isLoading = true);
-                    try {
-                      await SupabaseService.instance.upsertProfile({
-                        'hospital_clinic_name': hospitalController.text.trim(),
-                      });
-
-                      // Force refresh profile
-                      ref.invalidate(currentProfileProvider);
-
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Profile updated successfully')),
-                        );
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        setState(() => isLoading = false);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
-                        );
-                      }
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.doctor),
-                  child: isLoading
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('Save Changes'),
-                ),
-              ],
-            );
-          }
+          _buildSettingsTile(
+            icon: Iconsax.location,
+            title: 'Pharmacy Address: ${profile.pharmacyAddress ?? 'Not set'}',
+            onTap: () => _showEditPharmacistProfile(context, ref, profile),
+          ),
+          if (profile.licenseNumber != null)
+            _buildSettingsTile(
+              icon: Iconsax.card,
+              title: 'License Number: ${profile.licenseNumber!}',
+            ),
+        ],
       ),
     );
   }
-
-  // --- Helper Widgets ---
 
   Widget _buildFamilyBanner(BuildContext context, WidgetRef ref, UserProfile profile) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       margin: const EdgeInsets.only(bottom: 24),
       decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: const Color(0xFF121212),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
-          const Icon(Icons.swap_horiz_rounded, color: Colors.white),
+          Icon(Iconsax.arrow_swap, color: Colors.white, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Viewing Family Profile', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                Text(profile.fullName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                Text('Viewing Family Profile', style: GoogleFonts.plusJakartaSans(color: Colors.white70, fontSize: 11)),
+                Text(
+                  profile.fullName,
+                  style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                ),
               ],
             ),
           ),
           TextButton.icon(
             onPressed: () => ref.read(familyControllerProvider.notifier).switchAccount(null),
-            style: TextButton.styleFrom(foregroundColor: Colors.white, backgroundColor: Colors.white.withValues(alpha: 0.2)),
-            icon: const Icon(Icons.close, size: 16),
-            label: const Text('Exit'),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
+              backgroundColor: Colors.white.withValues(alpha: 0.12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            icon: const Icon(Icons.close, size: 14),
+            label: Text('Exit', style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -481,103 +470,34 @@ class ProfileScreen extends ConsumerWidget {
   }
 
   Widget _buildAvatar(UserProfile profile, bool isVerified) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        Container(
-          width: 100,
-          height: 100,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.2),
-                blurRadius: 30,
-                offset: const Offset(0, 10),
-              ),
-            ],
-            image: profile.avatarUrl != null
-                ? DecorationImage(image: NetworkImage(profile.avatarUrl!), fit: BoxFit.cover)
-                : null,
+    return Container(
+      width: 90,
+      height: 90,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
           ),
-          child: profile.avatarUrl == null
-              ? Icon(Icons.person_rounded, size: 48, color: AppColors.textLight)
-              : null,
-        ),
-        if (isVerified)
-          Positioned(
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white, width: 2),
-              ),
-              child: const Text('Verified', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildKycCard(BuildContext context, bool isUsingFamilyAccount, bool isVerified, String kycPercentText) {
-    return AbsorbPointer(
-      absorbing: isUsingFamilyAccount,
-      child: Opacity(
-        opacity: isUsingFamilyAccount ? 0.7 : 1.0,
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.shadow.withValues(alpha: 0.06),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: InkWell(
-            onTap: () => context.push(RouteNames.kycVerification),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Identity Verification', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                    Text('$kycPercentText%', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: LinearProgressIndicator(
-                    value: isVerified ? 1.0 : 0.6,
-                    backgroundColor: AppColors.backgroundLight,
-                    valueColor: const AlwaysStoppedAnimation(AppColors.primary),
-                    minHeight: 8,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  isVerified ? 'Identity is fully verified.' : 'Complete KYC to unlock all features.',
-                  style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                ),
-              ],
-            ),
-          ),
-        ),
+        ],
+        image: profile.avatarUrl != null
+            ? DecorationImage(image: NetworkImage(profile.avatarUrl!), fit: BoxFit.cover)
+            : null,
       ),
+      child: profile.avatarUrl == null
+          ? const Icon(Iconsax.user, size: 36, color: Color(0xFF94A3B8))
+          : null,
     );
   }
 
   void _showAccountSwitcher(BuildContext context, WidgetRef ref, AsyncValue<List<dynamic>> membersAsync) {
     showModalBottomSheet(
       context: context,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) => Container(
         padding: const EdgeInsets.all(24),
@@ -587,30 +507,59 @@ class ProfileScreen extends ConsumerWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.swap_horiz_rounded, color: AppColors.primary),
+                Icon(Iconsax.arrow_swap, color: const Color(0xFFFF5200)),
                 const SizedBox(width: 12),
-                const Text('Switch Account', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                Text(
+                  'Switch Active Profile',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF121212)),
+                ),
               ],
             ),
             const SizedBox(height: 24),
             membersAsync.when(
               data: (members) {
-                if (members.isEmpty) return const Text("No linked family accounts yet.");
+                if (members.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    child: Text(
+                      "No linked family accounts yet.",
+                      style: GoogleFonts.plusJakartaSans(fontSize: 14, color: const Color(0xFF64748B)),
+                    ),
+                  );
+                }
                 return Wrap(
                   spacing: 12,
                   runSpacing: 12,
-                  children: members.map((member) => ActionChip(
-                    avatar: CircleAvatar(child: Text(member.profile.fullName[0].toUpperCase())),
-                    label: Text(member.profile.fullName),
-                    onPressed: () {
-                      ref.read(familyControllerProvider.notifier).switchAccount(member.profile.id);
-                      Navigator.pop(context);
-                    },
-                  )).toList(),
+                  children: [
+                    ActionChip(
+                      backgroundColor: const Color(0xFFFAFAFA),
+                      avatar: const Icon(Iconsax.user, size: 14),
+                      label: Text('Primary Account', style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600)),
+                      onPressed: () {
+                        ref.read(familyControllerProvider.notifier).switchAccount(null);
+                        Navigator.pop(context);
+                      },
+                    ),
+                    ...members.map((member) => ActionChip(
+                      backgroundColor: const Color(0xFFFAFAFA),
+                      avatar: CircleAvatar(
+                        backgroundColor: const Color(0xFFFF5200),
+                        child: Text(
+                          member.profile.fullName[0].toUpperCase(),
+                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      label: Text(member.profile.fullName, style: GoogleFonts.plusJakartaSans(fontSize: 13)),
+                      onPressed: () {
+                        ref.read(familyControllerProvider.notifier).switchAccount(member.profile.id);
+                        Navigator.pop(context);
+                      },
+                    )),
+                  ],
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_,__) => const Text("Error loading accounts"),
+              loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF121212))),
+              error: (_,__) => Text("Error loading linked profiles", style: GoogleFonts.plusJakartaSans(color: const Color(0xFFEF4444))),
             ),
           ],
         ),
@@ -631,70 +580,133 @@ class ProfileScreen extends ConsumerWidget {
       children: [
         ListTile(
           onTap: onTap,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
           leading: Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: isDestructive ? AppColors.error.withValues(alpha: 0.1) : AppColors.backgroundLight,
+              color: isDestructive ? const Color(0xFFFEE2E2) : const Color(0xFFFAFAFA),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 20, color: isDestructive ? AppColors.error : AppColors.textPrimary),
+            child: Icon(
+              icon,
+              size: 18,
+              color: isDestructive ? const Color(0xFFEF4444) : const Color(0xFF121212),
+            ),
           ),
-          title: Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: isDestructive ? AppColors.error : AppColors.textPrimary)),
+          title: Text(
+            title,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isDestructive ? const Color(0xFFEF4444) : const Color(0xFF121212),
+            ),
+          ),
           trailing: isToggle
-              ? Switch.adaptive(value: toggleValue, activeTrackColor: AppColors.primary, onChanged: onToggle)
-              : const Icon(Icons.chevron_right_rounded, color: AppColors.textLight),
+              ? Switch.adaptive(
+                  value: toggleValue,
+                  activeTrackColor: const Color(0xFFFF5200),
+                  onChanged: onToggle,
+                )
+              : (onTap != null
+                  ? const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8), size: 18)
+                  : null),
         ),
-        if (!isDestructive) Divider(height: 1, indent: 70, color: AppColors.border.withValues(alpha: 0.3)),
+        if (!isDestructive)
+          const Divider(height: 1, indent: 60, color: Color(0xFFF1F5F9)),
       ],
     );
   }
 
-  Widget _buildPharmacistDetailsCard(BuildContext context, UserProfile profile) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.shadow.withValues(alpha: 0.05),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-        border: Border.all(color: AppColors.pharmacist.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.pharmacist.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+  void _showEditDoctorProfile(BuildContext context, WidgetRef ref, UserProfile profile) {
+    final hospitalController = TextEditingController(text: profile.hospitalName);
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Text(
+                'Edit Workplace',
+                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: hospitalController,
+                    style: GoogleFonts.plusJakartaSans(fontSize: 14),
+                    decoration: InputDecoration(
+                      labelText: 'Hospital / Clinic Name',
+                      labelStyle: GoogleFonts.plusJakartaSans(fontSize: 13),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    initialValue: profile.specialization,
+                    readOnly: true,
+                    style: GoogleFonts.plusJakartaSans(fontSize: 14),
+                    decoration: InputDecoration(
+                      labelText: 'Specialization (Locked)',
+                      labelStyle: GoogleFonts.plusJakartaSans(fontSize: 13),
+                      prefixIcon: const Icon(Iconsax.lock, size: 16),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      filled: true,
+                      fillColor: const Color(0xFFFAFAFA),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    'Cancel',
+                    style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontWeight: FontWeight.bold),
+                  ),
                 ),
-                child: const Icon(Icons.local_pharmacy_rounded, color: AppColors.pharmacist, size: 20),
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                'Pharmacy Details',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildInfoRow('Pharmacy Name', profile.pharmacyName ?? 'Not set', isEditable: true),
-          const Divider(height: 24),
-          _buildInfoRow('Pharmacy Address', profile.pharmacyAddress ?? 'Not set', isEditable: true),
-          if (profile.licenseNumber != null) ...[
-            const Divider(height: 24),
-            _buildInfoRow('License Number', profile.licenseNumber!, isEditable: false),
-          ],
-        ],
+                ElevatedButton(
+                  onPressed: isLoading ? null : () async {
+                    if (hospitalController.text.trim().isEmpty) return;
+
+                    setState(() => isLoading = true);
+                    try {
+                      await SupabaseService.instance.upsertProfile({
+                        'hospital_clinic_name': hospitalController.text.trim(),
+                      });
+
+                      ref.invalidate(currentProfileProvider);
+
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Workplace profile updated successfully')),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        setState(() => isLoading = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFEF4444)),
+                        );
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF121212),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: isLoading
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : Text('Save Details', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          }
       ),
     );
   }
@@ -709,38 +721,46 @@ class ProfileScreen extends ConsumerWidget {
       builder: (context) => StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text('Edit Pharmacy Details'),
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Text(
+                'Edit Pharmacy Profile',
+                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextFormField(
                     controller: nameController,
-                    decoration: const InputDecoration(
+                    style: GoogleFonts.plusJakartaSans(fontSize: 14),
+                    decoration: InputDecoration(
                       labelText: 'Pharmacy Name',
-                      hintText: 'Enter pharmacy name',
-                      border: OutlineInputBorder(),
+                      labelStyle: GoogleFonts.plusJakartaSans(fontSize: 13),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: addressController,
-                    decoration: const InputDecoration(
+                    style: GoogleFonts.plusJakartaSans(fontSize: 14),
+                    decoration: InputDecoration(
                       labelText: 'Pharmacy Address',
-                      hintText: 'Enter pharmacy address',
-                      border: OutlineInputBorder(),
+                      labelStyle: GoogleFonts.plusJakartaSans(fontSize: 13),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Read-only License
                   TextFormField(
                     initialValue: profile.licenseNumber,
                     readOnly: true,
-                    decoration: const InputDecoration(
-                      labelText: 'License Number (Fixed)',
-                      prefixIcon: Icon(Icons.lock_outline, size: 18),
-                      border: OutlineInputBorder(),
+                    style: GoogleFonts.plusJakartaSans(fontSize: 14),
+                    decoration: InputDecoration(
+                      labelText: 'License Number (Locked)',
+                      labelStyle: GoogleFonts.plusJakartaSans(fontSize: 13),
+                      prefixIcon: const Icon(Iconsax.lock, size: 16),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       filled: true,
-                      fillColor: Color(0xFFF5F5F5),
+                      fillColor: const Color(0xFFFAFAFA),
                     ),
                   ),
                 ],
@@ -748,7 +768,10 @@ class ProfileScreen extends ConsumerWidget {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+                  child: Text(
+                    'Cancel',
+                    style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontWeight: FontWeight.bold),
+                  ),
                 ),
                 ElevatedButton(
                   onPressed: isLoading ? null : () async {
@@ -762,28 +785,31 @@ class ProfileScreen extends ConsumerWidget {
                         'role': 'pharmacist',
                       });
 
-                      // Force refresh profile
                       ref.invalidate(currentProfileProvider);
 
                       if (context.mounted) {
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Pharmacy details updated successfully')),
+                          const SnackBar(content: Text('Pharmacy profile updated successfully')),
                         );
                       }
                     } catch (e) {
                       if (context.mounted) {
                         setState(() => isLoading = false);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+                          SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFEF4444)),
                         );
                       }
                     }
                   },
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.pharmacist),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF121212),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
                   child: isLoading
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('Save Changes'),
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : Text('Save Details', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
                 ),
               ],
             );

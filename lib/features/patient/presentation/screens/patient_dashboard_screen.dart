@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/theme/app_colors.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
+
 import '../../../../routing/route_names.dart';
 import '../../../family/providers/family_provider.dart';
 import '../widgets/family_member_list.dart';
@@ -11,261 +13,550 @@ import '../../../shared/presentation/widgets/appointment_list_widget.dart';
 import '../../providers/patient_provider.dart';
 import '../../../shared/providers/chat_provider.dart';
 
-class PatientDashboardScreen extends ConsumerWidget {
+class PatientDashboardScreen extends ConsumerStatefulWidget {
   const PatientDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final profile = ref.watch(activeContextProfileProvider);
-    // Dynamic counts from providers
-    final prescriptions = ref.watch(patientPrescriptionsProvider).valueOrNull ?? [];
-    final records = ref.watch(medicalConditionsProvider).valueOrNull ?? [];
-    final chats = ref.watch(chatRoomsProvider).valueOrNull ?? [];
-    
-    // Explicit date to match mockup: Monday, 7 Apr 2026
-    const todayDate = 'Monday, 7 Apr 2026';
+  ConsumerState<PatientDashboardScreen> createState() => _PatientDashboardScreenState();
+}
 
-    return Scaffold(
-      backgroundColor: AppColors.softBackground,
-      body: SafeArea(
-        bottom: false,
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen> {
+  bool _hasPrompted = false;
+
+  void _showBiometricSetupPrompt() {
+    if (_hasPrompted) return;
+    _hasPrompted = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(28),
+              topRight: Radius.circular(28),
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ─────────────────────────────────────────────────────────────────
-              // 1. HEADER (High Fidelity)
-              // ─────────────────────────────────────────────────────────────────
+              Center(
+                child: Container(
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
               Row(
                 children: [
-                  GestureDetector(
-                    onTap: () => context.push(RouteNames.profile),
-                    child: CircleAvatar(
-                      radius: 26,
-                      backgroundColor: const Color(0xFF6366F1), 
-                      child: Text(
-                        profile.valueOrNull?.fullName.substring(0, 1).toUpperCase() ?? 'A',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 22,
-                        ),
-                      ),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFFF4F0),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Iconsax.security_safe,
+                      color: Color(0xFFFF5200),
+                      size: 28,
                     ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Hi, ${profile.valueOrNull?.fullName.split(' ').first ?? 'Ankur'}',
-                          style: const TextStyle(
-                            color: AppColors.textMain,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 20,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        const Text(
-                          todayDate,
-                          style: TextStyle(
-                            color: AppColors.textSub,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      'Setup Face ID',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF121212),
+                      ),
                     ),
                   ),
-                  Stack(
-                    children: [
-                      IconButton(
-                        onPressed: () => context.push(RouteNames.notifications),
-                        icon: Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: AppColors.borderSoft),
-                          ),
-                          child: const Icon(Icons.notifications_none_rounded, color: Color(0xFF6366F1)),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Your emergency biometric profile is not set up. Register your face scan so that first responders can instantly identify you and access your emergency ID in case of a critical medical situation.',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  color: const Color(0xFF64748B),
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 28),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFE2E8F0)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: Text(
+                        'Remind Later',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF64748B),
                         ),
                       ),
-                      Positioned(
-                        right: 14,
-                        top: 14,
-                        child: Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        context.push(RouteNames.kycVerification);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF5200),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: Text(
+                        'Enroll Now',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = ref.watch(activeContextProfileProvider);
+    final isKycVerifiedAsyncValue = ref.watch(isKycVerifiedProvider);
+    final isKycVerified = isKycVerifiedAsyncValue.valueOrNull ?? false;
+
+    // Ask for the data modally if user profile loaded and is not verified
+    if (isKycVerifiedAsyncValue.hasValue && !isKycVerified && !_hasPrompted) {
+      _showBiometricSetupPrompt();
+    }
+
+    const todayDate = 'Monday, 7 Apr 2026';
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFFAFAFA),
+      body: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── 1. DARK HERO HEADER CORNER ───────────────────────────────────
+            Container(
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: Color(0xFF121212),
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(32),
+                  bottomRight: Radius.circular(32),
+                ),
+              ),
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header Navigation Row
+                      Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () => context.push(RouteNames.profile),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white.withOpacity(0.15), width: 2),
+                              ),
+                              child: CircleAvatar(
+                                radius: 22,
+                                backgroundColor: const Color(0xFFFF5200),
+                                child: Text(
+                                  profile.valueOrNull?.fullName.isNotEmpty == true
+                                      ? profile.valueOrNull!.fullName.substring(0, 1).toUpperCase()
+                                      : 'A',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Hi, ${profile.valueOrNull?.fullName.split(' ').first ?? 'Ankur'}',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  todayDate,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: const Color(0xFF64748B),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => context.push('/chat-list'),
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.08),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white.withOpacity(0.12)),
+                              ),
+                              child: const Icon(Iconsax.message_2, color: Colors.white, size: 20),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => context.push(RouteNames.notifications),
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.08),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white.withOpacity(0.12)),
+                              ),
+                              child: const Icon(Iconsax.notification, color: Colors.white, size: 20),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Emergency Access Pass Card (V2 glassmorphism styling)
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.06),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white.withOpacity(0.12)),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => context.push(RouteNames.patientQrCode),
+                            borderRadius: BorderRadius.circular(20),
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFF5200).withOpacity(0.12),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(color: const Color(0xFFFF5200).withOpacity(0.3)),
+                                        ),
+                                        child: Text(
+                                          'EMERGENCY PASS',
+                                          style: GoogleFonts.plusJakartaSans(
+                                            color: const Color(0xFFFF5200),
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 0.8,
+                                          ),
+                                        ),
+                                      ),
+                                      const Icon(Iconsax.barcode, color: Colors.white70, size: 20),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'Emergency ID Access',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      Icon(Iconsax.scan, size: 12, color: Colors.white.withOpacity(0.5)),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Tap to generate QR code or scan face',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          color: Colors.white.withOpacity(0.5),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
-              const SizedBox(height: 24),
+            ),
 
-              // ─────────────────────────────────────────────────────────────────
-              // 2. EMERGENCY CARD
-              // ─────────────────────────────────────────────────────────────────
-              _buildHighFidelityEmergencyCard(context),
-              const SizedBox(height: 28),
-              
-              const FamilyMemberList(),
-              
-              // ─────────────────────────────────────────────────────────────────
-              // 3. APPOINTMENTS
-              // ─────────────────────────────────────────────────────────────────
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // ── 2. SCROLLABLE CONTENT BODY ────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Upcoming Appointments',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.textMain, letterSpacing: -0.5),
-                  ),
-                  TextButton(
-                    onPressed: () => context.push('/patient/book-appointment'), 
-                    child: const Text('Book New', style: TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.w700)),
-                  ),
-                ],
-              ),
-              const AppointmentListWidget(),
-              const SizedBox(height: 28),
-              
-              // ─────────────────────────────────────────────────────────────────
-              // 4. MEDICATIONS
-              // ─────────────────────────────────────────────────────────────────
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "Today's Medications",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.textMain, letterSpacing: -0.5),
-                  ),
-                  TextButton(
-                    onPressed: () => context.push(RouteNames.patientPrescriptions), 
-                    child: const Text('View All', style: TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.w700)),
-                  ),
-                ],
-              ),
-              const DailyMedicationSchedule(),
-              const SizedBox(height: 28),
-              
-              // ─────────────────────────────────────────────────────────────────
-              // 5. VITALS
-              // ─────────────────────────────────────────────────────────────────
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "Patient Status",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.textMain, letterSpacing: -0.5),
-                  ),
-                  TextButton(
-                    onPressed: () => context.push('/patient/vitals-history'), 
-                    child: const Text('See All History', style: TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.w700)),
-                  ),
-                ],
-              ),
-              const VitalsSummaryCard(),
-              const SizedBox(height: 28),
+                  // Biometrics caution banner (contextual warning)
+                  if (!isKycVerified) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF4F0),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFFF5200).withOpacity(0.2)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Iconsax.warning_2,
+                            color: Color(0xFFFF5200),
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Facial Scan Missing',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: const Color(0xFF121212),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Set up biometrics now to ensure first responders can identify you during an emergency.',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: const Color(0xFF64748B),
+                                    fontSize: 11,
+                                    height: 1.4,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                InkWell(
+                                  onTap: () => context.push(RouteNames.kycVerification),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'Start Enrollment',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          color: const Color(0xFFFF5200),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      const Icon(
+                                        Iconsax.arrow_right_1,
+                                        color: Color(0xFFFF5200),
+                                        size: 12,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
 
-              // ─────────────────────────────────────────────────────────────────
-              // 6. MANAGE HEALTH
-              // ─────────────────────────────────────────────────────────────────
-              const Text(
-                'Manage Health',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.textMain, letterSpacing: -0.5),
-              ),
-              const SizedBox(height: 16),
+                  // Profiles list (Family Switcher Carousel)
+                  const FamilyMemberList(),
+                  const SizedBox(height: 16),
 
-              GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 2,
-                mainAxisSpacing: 16,
-                crossAxisSpacing: 16,
-                childAspectRatio: 1.1,
-                children: [
-                  _buildActionTile(
-                    context,
-                    title: 'My Rx',
-                    subtitle: '${prescriptions.length} active prescriptions',
-                    icon: Icons.add_box_outlined,
-                    color: Colors.blueAccent,
-                    bgColor: AppColors.softBlue,
-                    onTap: () => context.push(RouteNames.patientPrescriptions),
+                  // Today's Medications Checklist
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        "Today's Medications",
+                        style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF121212)),
+                      ),
+                      TextButton(
+                        onPressed: () => context.push(RouteNames.patientPrescriptions),
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(0, 0),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          'View All',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: const Color(0xFFFF5200),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  _buildActionTile(
-                    context,
-                    title: 'History',
-                    subtitle: '${records.length} past records',
-                    icon: Icons.stacked_line_chart_rounded,
-                    color: Colors.redAccent,
-                    bgColor: AppColors.softPink,
-                    onTap: () => context.push(RouteNames.patientMedicalHistory),
+                  const SizedBox(height: 12),
+                  const DailyMedicationSchedule(),
+                  const SizedBox(height: 24),
+
+                  // Patient Status (Vitals Grid)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        "Patient Status",
+                        style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF121212)),
+                      ),
+                      TextButton(
+                        onPressed: () => context.push('/patient/vitals-history'),
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(0, 0),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          'See History',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: const Color(0xFFFF5200),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  _buildActionTile(
-                    context,
-                    title: 'Messages',
-                    subtitle: '${chats.length} chats',
-                    icon: Icons.article_outlined,
-                    color: Colors.indigo,
-                    bgColor: AppColors.softPurple,
-                    onTap: () => context.push('/chat-list'),
+                  const SizedBox(height: 12),
+                  const VitalsSummaryCard(),
+                  const SizedBox(height: 24),
+
+                  // Upcoming Appointments
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Upcoming Appointments',
+                        style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF121212)),
+                      ),
+                      TextButton(
+                        onPressed: () => context.push('/patient/book-appointment'),
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(0, 0),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          'Book New',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: const Color(0xFFFF5200),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  _buildActionTile(
-                    context,
-                    title: 'Privacy',
-                    subtitle: 'Data controls',
-                    icon: Icons.star_border_rounded,
-                    color: Colors.green,
-                    bgColor: const Color(0xFFDCFCE7),
-                    onTap: () => context.push(RouteNames.patientPrivacy),
+                  const SizedBox(height: 12),
+                  const AppointmentListWidget(),
+                  const SizedBox(height: 24),
+
+                  // My Doctors List
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        "My Doctors",
+                        style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF121212)),
+                      ),
+                      TextButton(
+                        onPressed: () {},
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(0, 0),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          'See All',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: const Color(0xFFFF5200),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 12),
+                  _buildDoctorItem('Dr. Priya Sharma', 'Cardiologist • 12 yrs exp.', 'PS', context),
+                  const SizedBox(height: 10),
+                  _buildDoctorItem('Dr. Rohan Verma', 'General Physician • 8 yrs exp.', 'RV', context),
+                  
+                  const SizedBox(height: 100),
                 ],
               ),
-              const SizedBox(height: 28),
-
-              // ─────────────────────────────────────────────────────────────────
-              // 7. MY DOCTORS
-              // ─────────────────────────────────────────────────────────────────
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "My Doctors",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.textMain, letterSpacing: -0.5),
-                  ),
-                  TextButton(
-                    onPressed: () {}, 
-                    child: const Text('See All', style: TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.w700)),
-                  ),
-                ],
-              ),
-              _buildDoctorItem('Dr. Priya Sharma', 'Cardiologist · 12 yrs exp.', 'PS', const Color(0xFFE0E7FF), context),
-              const SizedBox(height: 12),
-              _buildDoctorItem('Dr. Rohan Verma', 'General Physician · 8 yrs exp.', 'RV', const Color(0xFFDCFCE7), context),
-              
-              const SizedBox(height: 100), 
-            ],
-          ),
+            ),
+          ],
         ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.push('/patient/book-appointment'),
-        backgroundColor: const Color(0xFF6366F1),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        child: const Icon(Icons.add, color: Colors.white, size: 32),
+        backgroundColor: const Color(0xFF121212),
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: const Icon(Iconsax.add, color: Colors.white, size: 28),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: BottomAppBar(
@@ -277,152 +568,14 @@ class PatientDashboardScreen extends ConsumerWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildNavItem(Icons.home_filled, 'Home', true, () => context.go(RouteNames.patientDashboard)),
-              _buildNavItem(Icons.assignment_outlined, 'Records', false, () => context.push(RouteNames.patientMedicalHistory)),
-              const SizedBox(width: 48), 
-              _buildNavItem(Icons.person_outline_rounded, 'Profile', false, () => context.push(RouteNames.profile)),
-              _buildNavItem(Icons.settings_outlined, 'Settings', false, () => context.push(RouteNames.patientPrivacy)),
+              _buildNavItem(Iconsax.home, 'Home', true, () => context.go(RouteNames.patientDashboard)),
+              _buildNavItem(Iconsax.document_text, 'Records', false, () => context.push(RouteNames.patientMedicalHistory)),
+              const SizedBox(width: 48),
+              _buildNavItem(Iconsax.user, 'Profile', false, () => context.push(RouteNames.profile)),
+              _buildNavItem(Iconsax.radar5, 'Emergency', false, () => context.push(RouteNames.patientEmergency)),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildHighFidelityEmergencyCard(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF6366F1).withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => context.push(RouteNames.patientQrCode),
-          borderRadius: BorderRadius.circular(26),
-          child: Stack(
-            children: [
-              Positioned(
-                left: 20,
-                top: 20,
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.grid_view_rounded, color: Colors.white, size: 24),
-                ),
-              ),
-              Positioned(
-                right: 20,
-                top: 20,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  child: const Text(
-                    'EMERGENCY ID',
-                    style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.8),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 80, 24, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Emergency Access',
-                      style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.access_time, size: 14, color: Colors.white.withValues(alpha: 0.7)),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Tap to generate your secure QR code',
-                              style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13, fontWeight: FontWeight.w500),
-                            ),
-                          ],
-                        ),
-                        Row(
-                          children: [
-                            Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
-                            const SizedBox(width: 4),
-                            Container(width: 6, height: 6, decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.4), shape: BoxShape.circle)),
-                            const SizedBox(width: 4),
-                            Container(width: 6, height: 6, decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.4), shape: BoxShape.circle)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDoctorItem(String name, String subtitle, String initials, Color avatarColor, BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.borderSoft),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: avatarColor,
-            child: Text(initials, style: const TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.bold, fontSize: 14)),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: AppColors.textMain)),
-                const SizedBox(height: 2),
-                Text(subtitle, style: const TextStyle(color: AppColors.textSub, fontSize: 12, fontWeight: FontWeight.w500)),
-              ],
-            ),
-          ),
-          InkWell(
-            onTap: () => context.push('/chat-list'),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEEF2FF),
-                borderRadius: BorderRadius.circular(30),
-              ),
-              child: const Text('Message', style: TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.w800, fontSize: 12)),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -434,14 +587,14 @@ class PatientDashboardScreen extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: isActive ? const Color(0xFF6366F1) : AppColors.textLight, size: 26),
-          const SizedBox(height: 4),
+          Icon(icon, color: isActive ? const Color(0xFFFF5200) : const Color(0xFF94A3B8), size: 24),
+          const SizedBox(height: 3),
           Text(
             label,
-            style: TextStyle(
-              color: isActive ? const Color(0xFF6366F1) : AppColors.textLight,
-              fontSize: 10,
-              fontWeight: isActive ? FontWeight.w800 : FontWeight.w500,
+            style: GoogleFonts.plusJakartaSans(
+              color: isActive ? const Color(0xFFFF5200) : const Color(0xFF94A3B8),
+              fontSize: 9,
+              fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
             ),
           ),
         ],
@@ -449,57 +602,45 @@ class PatientDashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildActionTile(
-      BuildContext context, {
-        required String title,
-        required String subtitle,
-        required IconData icon,
-        required Color color,
-        required Color bgColor,
-        required VoidCallback onTap,
-      }) {
+  Widget _buildDoctorItem(String name, String subtitle, String initials, BuildContext context) {
     return Container(
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.borderSoft),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(24),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: const Color(0xFFF1F5F9),
+            child: Text(
+              initials,
+              style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: bgColor,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(icon, color: color, size: 24),
-                ),
-                const Spacer(),
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.textMain, fontSize: 16, letterSpacing: -0.3),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: const TextStyle(color: AppColors.textSub, fontSize: 11, fontWeight: FontWeight.w500),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                Text(name, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14, color: const Color(0xFF121212))),
+                const SizedBox(height: 2),
+                Text(subtitle, style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.w500)),
               ],
             ),
           ),
-        ),
+          IconButton(
+            icon: const Icon(Iconsax.message_2, size: 16, color: Color(0xFFFF5200)),
+            onPressed: () => context.push('/chat-list'),
+            style: IconButton.styleFrom(
+              backgroundColor: const Color(0xFFFF5200).withOpacity(0.08),
+              padding: const EdgeInsets.all(8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
@@ -502,42 +503,47 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
     final patient = ref.watch(patientDataProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC), // Slate 50
+      backgroundColor: const Color(0xFFFAFAFA), // Stark clean parchment surface
       appBar: AppBar(
-        title: const Text('Add Prescription'),
+        title: Text(
+          'Add Prescription',
+          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 18, color: const Color(0xFF121212)),
+        ),
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
+        surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppColors.textMain),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF121212)),
           onPressed: () => context.pop(),
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1.0),
-          child: Container(color: AppColors.borderSoft, height: 1.0),
+          child: Container(color: const Color(0xFFE2E8F0), height: 1.0),
         ),
       ),
       body: patient.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFFFF5200))),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (_) => Form(
           key: _formKey,
           child: SingleChildScrollView(
+            physics: const ClampingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // --- HERO SCAN SECTION ---
                 _buildHeroScanSection(),
-                const SizedBox(height: 32),
+                const SizedBox(height: 28),
                 
                 // --- FORM SECTION ---
                 Text(
                   'Prescription Details',
-                  style: GoogleFonts.outfit(
-                    fontSize: 18,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.textMain,
+                    color: const Color(0xFF121212),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -545,19 +551,18 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
                 // 1. Doctor Info
                 _buildMedicalSection(
                   title: 'Doctor Information',
-                  icon: Icons.medical_services_outlined,
+                  icon: Iconsax.user,
                   child: DoctorInfoCardWidget(
                     onChanged: (details) {
                       setState(() => _doctorDetails = details);
                     },
                   ),
                 ),
-                const SizedBox(height: 20),
 
                 // 2. Diagnosis & Date
                 _buildMedicalSection(
                   title: 'Diagnosis & Date',
-                  icon: Icons.calendar_today_outlined,
+                  icon: Iconsax.calendar_1,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -573,7 +578,7 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
                               onTap: () => _selectDate(context, false),
                             ),
                           ),
-                          const SizedBox(width: 16),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: _buildDatePicker(
                               context: context,
@@ -587,18 +592,17 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
 
                 // 3. Medications
                 _buildMedicalSection(
                   title: 'Medications',
-                  icon: Icons.medication_outlined,
+                  icon: Iconsax.box,
                   action: TextButton.icon(
                     onPressed: _addMedication,
-                    icon: const Icon(Icons.add_circle_outline, size: 18),
-                    label: const Text('Add Drug'),
+                    icon: Icon(Iconsax.add_circle, size: 16),
+                    label: Text('Add Drug', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13)),
                     style: TextButton.styleFrom(
-                      foregroundColor: AppColors.primary,
+                      foregroundColor: const Color(0xFFFF5200),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                   ),
@@ -606,15 +610,16 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
                     children: [
                       if (_medications.isEmpty)
                         Container(
-                          padding: const EdgeInsets.symmetric(vertical: 32),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           alignment: Alignment.center,
-                          child: Column(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.medication_liquid_outlined, size: 48, color: Colors.grey.withValues(alpha: 0.3)),
-                              const SizedBox(height: 8),
+                              const Icon(Iconsax.box, size: 16, color: Color(0xFF94A3B8)),
+                              const SizedBox(width: 8),
                               Text(
                                 'No medications added yet',
-                                style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                                style: GoogleFonts.plusJakartaSans(color: const Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w500),
                               ),
                             ],
                           ),
@@ -623,7 +628,7 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
                         ...List.generate(_medications.length, (index) => 
                            Padding(
                              padding: const EdgeInsets.only(bottom: 12.0),
-                             child: MedicationCardWidget( // Assuming this widget is simplified as well or looks good enough
+                             child: MedicationCardWidget(
                                 key: ValueKey(_medications[index].id),
                                 index: index,
                                 initialData: _medications[index],
@@ -635,12 +640,11 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
 
-                // 4. Notes (Collapsible/Simple)
+                // 4. Notes
                  _buildMedicalSection(
                     title: 'Additional Notes',
-                    icon: Icons.note_alt_outlined,
+                    icon: Iconsax.note,
                     child: Column(
                       children: [
                         TextFormField(
@@ -649,7 +653,7 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
                              hint: "Doctor's instructions...",
                              label: 'Doctor Notes',
                            ),
-                           maxLines: 2,
+                           maxLines: 1,
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
@@ -658,47 +662,50 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
                              hint: "Personal notes...",
                              label: 'My Notes',
                            ),
-                           maxLines: 2,
+                           maxLines: 1,
                         ),
                       ],
                     ),
                  ),
-                 const SizedBox(height: 20),
 
-                 // 5. Patient Context & Declaration
+                 // 5. Verification & Declaration
                  _buildMedicalSection(
                     title: 'Verification',
-                    icon: Icons.verified_user_outlined,
+                    icon: Iconsax.shield_security,
                     child: Column(
                       children: [
                         _buildPatientProfileRow(profile),
-                        const Divider(height: 24),
+                        const Divider(height: 24, color: Color(0xFFE2E8F0)),
                         _buildDeclaration(),
-                        const Divider(height: 24),
+                        const Divider(height: 24, color: Color(0xFFE2E8F0)),
                         _buildSafetyFlags(),
                       ],
                     ),
                  ),
 
-                 const SizedBox(height: 40),
+                 const SizedBox(height: 20),
                  
                  // Submit Button
                  SizedBox(
                    width: double.infinity,
-                   height: 56,
+                   height: 52,
                    child: ElevatedButton(
                       onPressed: _isLoading ? null : _submit,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: const Color(0xFF121212),
+                        foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        elevation: 4,
-                        shadowColor: AppColors.primary.withValues(alpha: 0.3),
+                        elevation: 0,
                       ),
                       child: _isLoading
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text(
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            )
+                          : Text(
                               'Save Prescription', 
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)
+                              style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)
                             ),
                    ),
                  ),
@@ -711,7 +718,7 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
     );
   }
 
-  // --- MEDICAL PROFESSIONAL UI COMPONENTS ---
+  // --- UI COMPONENTS ---
 
   Widget _buildMedicalSection({
     required String title,
@@ -720,74 +727,75 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
     Widget? action,
   }) {
     return Container(
+      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12), // Sharper corners
-        border: Border.all(color: AppColors.borderSoft),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.015),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      clipBehavior: Clip.antiAlias,
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Technical Header Strip
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9), // Slate 100
-              border: Border(bottom: BorderSide(color: AppColors.borderSoft)),
-            ),
-            child: Row(
-              children: [
-                Icon(icon, size: 16, color: AppColors.textSub),
-                const SizedBox(width: 8),
-                Text(
-                  title.toUpperCase(),
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.0,
-                    color: AppColors.textSub,
-                  ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF5200).withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
                 ),
-                const Spacer(),
-                if (action != null) action,
-              ],
-            ),
+                child: Icon(icon, size: 14, color: const Color(0xFFFF5200)),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF121212),
+                ),
+              ),
+              const Spacer(),
+              if (action != null) action,
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: child,
-          ),
+          const SizedBox(height: 18),
+          child,
         ],
       ),
     );
   }
 
-  // --- PATIENT PROFILE ROW ---
   Widget _buildPatientProfileRow(AsyncValue<dynamic> profile) {
     return profile.when(
       data: (p) => p != null
           ? Row(
               children: [
-                CircleAvatar(
-                  backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                  child: const Icon(Icons.person, color: AppColors.primary),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF5200).withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Iconsax.user, size: 16, color: const Color(0xFFFF5200)),
                 ),
                 const SizedBox(width: 12),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Patient', style: TextStyle(color: AppColors.textSub, fontSize: 12)),
+                    Text('Patient', style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 2),
                     Text(
                       p.fullName,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textMain),
+                      style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14, color: const Color(0xFF121212)),
                     ),
                   ],
                 ),
@@ -799,7 +807,6 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
     );
   }
 
-  // --- UPDATE: Diagnosis with new style ---
   Widget _buildDiagnosisField() {
     return LayoutBuilder(
         builder: (context, constraints) {
@@ -823,13 +830,11 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
               );
             },
             fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
-              // Ensure our controller stays in sync if user types directly
               controller.addListener(() {
                  if (_diagnosisController.text != controller.text) {
                    _diagnosisController.text = controller.text;
                  }
               });
-              // Initial value sync if coming from OCR
               if (_diagnosisController.text.isNotEmpty && controller.text.isEmpty) {
                 controller.text = _diagnosisController.text;
               }
@@ -855,62 +860,68 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: hasFile ? AppColors.success.withValues(alpha: 0.05) : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
+        color: hasFile ? const Color(0xFFD1FAE5).withValues(alpha: 0.2) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: hasFile ? AppColors.success.withValues(alpha: 0.3) : AppColors.primary.withValues(alpha: 0.2),
-          style: hasFile ? BorderStyle.solid : BorderStyle.solid, 
-          width: 1.5, // Slightly thicker for technical feel
+          color: hasFile ? const Color(0xFF10B981) : const Color(0xFFFF5200).withValues(alpha: 0.3),
+          width: 1.5,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.015),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: _showSourceSelectionSheet,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(20),
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: hasFile ? AppColors.success.withValues(alpha: 0.1) : AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    color: hasFile ? const Color(0xFF10B981).withValues(alpha: 0.1) : const Color(0xFFFF5200).withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    hasFile ? Icons.check_circle_outline : Icons.document_scanner_rounded,
-                    size: 28,
-                    color: hasFile ? AppColors.success : AppColors.primary,
+                    hasFile ? Iconsax.document_text5 : Iconsax.document_filter,
+                    size: 22,
+                    color: hasFile ? const Color(0xFF10B981) : const Color(0xFFFF5200),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         hasFile ? 'DIGITAL SCAN CAPTURED' : 'SCAN PRESCRIPTION',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.plusJakartaSans(
                           fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.2,
-                          color: hasFile ? AppColors.success : AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                          color: hasFile ? const Color(0xFF059669) : const Color(0xFFFF5200),
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Text(
-                        hasFile ? (_prescriptionUpload.fileName ?? 'File attached') : 'Tap to initialize smart capture',
-                         style: const TextStyle(
-                           fontSize: 14,
-                           fontWeight: FontWeight.w500,
-                           color: AppColors.textMain,
-                         ),
+                        hasFile ? (_prescriptionUpload.fileName ?? 'File attached') : 'Tap to scan photo or PDF with AI OCR',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF64748B),
+                        ),
                       ),
                     ],
                   ),
                 ),
-                Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.grey.withValues(alpha: 0.5)),
+                const Icon(Icons.chevron_right_rounded, size: 18, color: Color(0xFF94A3B8)),
               ],
             ),
           ),
@@ -919,34 +930,32 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
     );
   }
 
-  // --- UPDATED INPUT DECORATION ---
   InputDecoration _inputDecoration({required String hint, String? label, Widget? suffix}) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textSub),
+      labelStyle: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w500, color: const Color(0xFF64748B)),
       hintText: hint,
-      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+      hintStyle: GoogleFonts.plusJakartaSans(color: const Color(0xFF94A3B8), fontSize: 13),
       filled: true,
-      fillColor: Colors.white, // White background for crisp look
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(6), // Sharper 6px radius
-        borderSide: BorderSide(color: AppColors.border),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(6),
-        borderSide: BorderSide(color: AppColors.borderSoft),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(6),
-        borderSide: const BorderSide(color: AppColors.primary, width: 1.5), // Precision focus
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFFF5200), width: 1.5),
       ),
       suffixIcon: suffix,
       isDense: true,
     );
   }
 
-  // --- DATE PICKER UPDATE ---
   Widget _buildDatePicker({
     required BuildContext context,
     required String label,
@@ -955,28 +964,40 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13), // Match input height
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          border: Border.all(color: AppColors.borderSoft),
-          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          borderRadius: BorderRadius.circular(14),
           color: Colors.white,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(label.toUpperCase(), style: const TextStyle(color: AppColors.textSub, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
-            const SizedBox(height: 4),
+            Text(
+              label.toUpperCase(),
+              style: GoogleFonts.plusJakartaSans(
+                color: const Color(0xFF64748B),
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 6),
             Row(
               children: [
-                 const Icon(Icons.calendar_month, size: 14, color: AppColors.textMain),
-                 const SizedBox(width: 8),
-                 Text(
-                   DateFormat('dd MMM yyyy').format(value),
-                   style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textMain),
-                 ),
+                Icon(Iconsax.calendar_1, size: 14, color: const Color(0xFF121212)),
+                const SizedBox(width: 8),
+                Text(
+                  DateFormat('dd MMM yyyy').format(value),
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    color: const Color(0xFF121212),
+                  ),
+                ),
               ],
             ),
           ],
@@ -985,15 +1006,14 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
     );
   }
 
-  // --- SAFETY FLAGS UPDATE ---
   Widget _buildSafetyFlags() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSafetyCheckTile('ALLERGIES DETECTED?', _allergiesMentioned, (v) => setState(() => _allergiesMentioned = v)),
-        const Divider(height: 24, color: AppColors.borderSoft),
+        const Divider(height: 24, color: Color(0xFFE2E8F0)),
         _buildSafetyCheckTile('PREGNANCY / BREASTFEEDING?', _pregnancyBreastfeeding, (v) => setState(() => _pregnancyBreastfeeding = v)),
-        const Divider(height: 24, color: AppColors.borderSoft),
+        const Divider(height: 24, color: Color(0xFFE2E8F0)),
         _buildSafetyCheckTile('CHRONIC CONDITION LINK?', _chronicConditionLinked, (v) => setState(() => _chronicConditionLinked = v)),
       ],
     );
@@ -1002,9 +1022,18 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
   Widget _buildSafetyCheckTile(String title, bool? value, Function(bool?) onChanged) {
     return Row(
       children: [
-        Expanded(child: Text(title, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMain, letterSpacing: 0.5))),
+        Expanded(
+          child: Text(
+            title,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF121212),
+            ),
+          ),
+        ),
         Row(
-          mainAxisSize: MainAxisSize.min, // Fix row expansion
+          mainAxisSize: MainAxisSize.min,
           children: [
              _buildRadioBtn(true, value, onChanged, 'YES'),
              const SizedBox(width: 8),
@@ -1019,26 +1048,26 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
      final isSelected = currentVal == optionVal;
      return InkWell(
         onTap: () => onChanged(optionVal),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(10),
         child: Container(
-           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
            decoration: BoxDecoration(
              color: isSelected 
-                 ? (optionVal ? AppColors.error : AppColors.success)
+                 ? (optionVal ? const Color(0xFFEF4444) : const Color(0xFF10B981))
                  : Colors.transparent,
-             borderRadius: BorderRadius.circular(4),
+             borderRadius: BorderRadius.circular(10),
              border: Border.all(
                color: isSelected 
-                  ? (optionVal ? AppColors.error : AppColors.success)
-                  : AppColors.borderSoft,
+                  ? (optionVal ? const Color(0xFFEF4444) : const Color(0xFF10B981))
+                  : const Color(0xFFE2E8F0),
              ),
            ),
            child: Text(
              label,
-             style: TextStyle(
-               fontSize: 10,
-               fontWeight: FontWeight.w700,
-               color: isSelected ? Colors.white : AppColors.textSub,
+             style: GoogleFonts.plusJakartaSans(
+               fontSize: 11,
+               fontWeight: FontWeight.bold,
+               color: isSelected ? Colors.white : const Color(0xFF64748B),
              ),
            ),
         ),
@@ -1047,11 +1076,11 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
 
   Widget _buildDeclaration() {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppColors.borderSoft),
+        color: const Color(0xFFFAFAFA),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1064,8 +1093,8 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
               onChanged: (value) {
                 setState(() => _declarationAccepted = value ?? false);
               },
-              activeColor: AppColors.primary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)), // Sharp checkbox
+              activeColor: const Color(0xFFFF5200),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ),
@@ -1075,9 +1104,9 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
               onTap: () {
                 setState(() => _declarationAccepted = !_declarationAccepted);
               },
-              child: const Text(
+              child: Text(
                 'I declare that this is a valid medical prescription.',
-                style: TextStyle(fontSize: 12, color: AppColors.textMain, fontWeight: FontWeight.w500),
+                style: GoogleFonts.plusJakartaSans(fontSize: 12, color: const Color(0xFF121212), fontWeight: FontWeight.w500),
               ),
             ),
           ),

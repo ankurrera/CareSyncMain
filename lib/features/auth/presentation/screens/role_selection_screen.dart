@@ -1,135 +1,186 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_spacing.dart';
 import '../../../../routing/route_names.dart';
-import '../widgets/role_card.dart';
 
 class RoleSelectionScreen extends StatelessWidget {
   const RoleSelectionScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              isDark 
-                  ? AppColors.primary.withValues(alpha: 0.15) 
-                  : AppColors.primarySurface,
-              Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: const Color(0xFFFAFAFA),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 24),
+              // Branding
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF121212),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Iconsax.health,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'CareSync',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF121212),
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 54),
+              // Headings
+              Text(
+                'Welcome to CareSync',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF121212),
+                  letterSpacing: -1,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Select your role to get started with the healthcare portal',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 15,
+                  color: const Color(0xFF64748B),
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 40),
+
+              // Role options
+              _buildRoleItem(
+                context,
+                title: 'Patient Portal',
+                description: 'Manage your medical records, check appointments, and view emergency pass.',
+                icon: Iconsax.user,
+                color: AppColors.patient,
+                role: 'patient',
+              ),
+              const SizedBox(height: 16),
+              _buildRoleItem(
+                context,
+                title: 'Doctor Portal',
+                description: 'Consult patients, write digital prescriptions, and check history.',
+                icon: Iconsax.teacher,
+                color: AppColors.doctor,
+                role: 'doctor',
+              ),
+              const SizedBox(height: 16),
+              _buildRoleItem(
+                context,
+                title: 'Pharmacist Portal',
+                description: 'Dispense prescribed medicines, verify patients, and log details.',
+                icon: Icons.medication_rounded,
+                color: AppColors.pharmacist,
+                role: 'pharmacist',
+              ),
             ],
-            stops: const [0.0, 0.4],
-          ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: AppSpacing.screenPadding,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 24),
-                // Header
-                Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: const Icon(
-                        Icons.medical_services_rounded,
-                        color: Colors.white,
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'CareSync',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 40),
-                // Title
-                const Text(
-                  'Welcome!',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -1,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Select your role to get started',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                // Role cards
-                Expanded(
-                  child: GridView.count(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 16,
-                    crossAxisSpacing: 16,
-                    childAspectRatio: 0.95,
-                    children: [
-                      RoleCard(
-                        title: 'Patient',
-                        description: 'Manage your prescriptions & medical history',
-                        icon: Icons.person_rounded,
-                        color: AppColors.patient,
-                        onTap: () => _navigateToSignIn(context, 'patient'),
-                      ),
-                      RoleCard(
-                        title: 'Doctor',
-                        description: 'Create prescriptions & view patient records',
-                        icon: Icons.local_hospital_rounded,
-                        color: AppColors.doctor,
-                        onTap: () => _navigateToSignIn(context, 'doctor'),
-                      ),
-                      RoleCard(
-                        title: 'Pharmacist',
-                        description: 'Dispense medicines & track transactions',
-                        icon: Icons.medication_rounded,
-                        color: AppColors.pharmacist,
-                        onTap: () => _navigateToSignIn(context, 'pharmacist'),
-                      ),
-                      RoleCard(
-                        title: 'First Responder',
-                        description: 'Access emergency medical data via QR scan',
-                        icon: Icons.emergency_rounded,
-                        color: AppColors.firstResponder,
-                        onTap: () => _navigateToSignIn(context, 'first_responder'),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ),
     );
   }
 
-  void _navigateToSignIn(BuildContext context, String role) {
-    context.push(RouteNames.signIn, extra: role);
+  Widget _buildRoleItem(
+    BuildContext context, {
+    required String title,
+    required String description,
+    required IconData icon,
+    required Color color,
+    required String role,
+  }) {
+    return InkWell(
+      onTap: () => context.push(RouteNames.signIn, extra: role),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.015),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Icon
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                color: color,
+                size: 26,
+              ),
+            ),
+            const SizedBox(width: 18),
+            // Text Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF121212),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12,
+                      color: const Color(0xFF64748B),
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Arrow indicator
+            const Icon(
+              Iconsax.arrow_right_1,
+              color: Color(0xFF64748B),
+              size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
-

@@ -38,10 +38,10 @@ class EmergencyAccessService {
 
     final role = profile['role'] as String;
 
-    // Only doctors and first responders can request emergency access
-    if (role != 'doctor' && role != 'first_responder') {
+    // Only doctors and patients can request emergency access
+    if (role != 'doctor' && role != 'patient') {
       throw EmergencyAccessException(
-        'Only doctors and first responders can request emergency access',
+        'Only doctors and patients can request emergency access',
       );
     }
 

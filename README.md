@@ -1,6 +1,6 @@
 # CareSync - Biometric Medical Logging & E-Prescription Platform
 
-CareSync is a highly secure, HIPAA-compliant, biometric-authenticated medical logging and electronic prescription application built with **Flutter**, **Riverpod**, and **Supabase**. It facilitates secure interaction between Patients, Doctors, Pharmacists, and First Responders, backed by advanced on-device and cloud biometrics (Azure Face API).
+CareSync is a highly secure, HIPAA-compliant, biometric-authenticated medical logging and electronic prescription application built with **Flutter**, **Riverpod**, and **Supabase**. It facilitates secure interaction between Patients, Doctors, Pharmacists, and First Responders, backed by advanced on-device biometrics and a self-hosted facial recognition API (ArcFace + pgvector).
 
 ---
 
@@ -23,7 +23,7 @@ graph TD
         AS[Auth Controller]
         SS[Secure Storage - encrypted]
         SbS[Supabase Service]
-        AFS[Azure Face Service]
+        AFS[Custom Biometric Service]
         PDF[PDF Service]
         OCR[OCR Service]
     end
@@ -38,7 +38,7 @@ graph TD
 
     %% External APIs %%
     subgraph External [External APIs]
-        Azure[Azure Face API]
+        Azure[Custom Biometric API - ArcFace]
     end
 
     %% Connections %%
@@ -52,8 +52,7 @@ graph TD
     SbS --> DB
     SbS --> Storage
     
-    AFS --> EF
-    EF --> Azure
+    AFS --> Azure
     
     OCR --> SbS
     PDF --> SbS
@@ -103,7 +102,7 @@ flowchart TD
 ```
 
 ### 1. Patient Workflow
-* **Biometric Enrollment & Verification**: Complete identity verification with ID documents, selfies, and Azure Face biometric scanning. Subsequent logins on the same device are handled instantly via native biometrics (Face ID/Fingerprint).
+* **Biometric Enrollment & Verification**: Complete identity verification with ID documents, selfies, and custom ArcFace biometric scanning. Subsequent logins on the same device are handled instantly via native biometrics (Face ID/Fingerprint).
 * **Vitals & Health Tracking**: Log and visualize blood pressure, heart rate, weight, blood sugar, and oxygen levels.
 * **Appointments & Messaging**: Book appointments with doctors and chat with them in real-time.
 * **Emergency QR Generation**: Generates a secure, encrypted QR code. It encodes critical medical history (allergies, chronic conditions, emergency contacts) directly in the payload so that first responders can read it even when completely offline.
@@ -135,7 +134,7 @@ flowchart TD
 ### 1. Dual-Layer Biometric Verification
 CareSync combines local on-device hardware verification with cloud-based biometric scanning:
 * **Local Biometrics (`local_auth`)**: Native Fingerprint/Face ID triggers the release of local encrypted session keys from the device's Secure Enclave/TEE.
-* **Cloud Biometrics (Azure Face)**: Integrates with Azure Face API to perform high-confidence identity verification during KYC enrollment.
+* **Cloud Biometrics (ArcFace + pgvector)**: Integrates with a self-hosted FastAPI microservice running ArcFace to extract facial vector embeddings and search them inside Supabase using `pgvector`.
 
 ### 2. Know Your Customer (KYC) & Two-Factor Authentication (2FA)
 * **Identity Audits**: Patient registration requires identity document uploads and selfies matched via face verification.
@@ -167,7 +166,7 @@ CareSync combines local on-device hardware verification with cloud-based biometr
 │   │   └── route_names.dart
 │   ├── services/                   # Business logic APIs & Backend integration
 │   │   ├── auth_controller.dart    # Login, signup, device registry, 2FA
-│   │   ├── azure_face_service.dart # Azure Face verification API
+│   │   ├── custom_biometric_service.dart # Custom Biometric/ArcFace API wrapper
 │   │   ├── biometric_service.dart  # local_auth integrations
 │   │   ├── supabase_service.dart   # Core DB & storage client
 │   │   ├── pdf_service.dart        # Prescription PDF generators
@@ -183,8 +182,8 @@ CareSync combines local on-device hardware verification with cloud-based biometr
 │       ├── family/                 # Family members management screen
 │       └── shared/                 # Chat screens, profiles, and notifications
 ├── supabase/                       # Supabase Backend Configuration
-│   ├── functions/                  # Supabase Edge Functions (e.g., Azure Face)
-│   └── *.sql                       # Numbered SQL migrations (001 to 016)
+│   │   └── *.sql                       # Numbered SQL migrations (001 to 017)
+├── biometric_api/                  # Custom Biometric Python API (ArcFace + FastAPI)
 └── pubspec.yaml                    # Package dependencies & assets configuration
 ```
 
@@ -195,25 +194,39 @@ CareSync combines local on-device hardware verification with cloud-based biometr
 ### Prerequisites
 * Flutter SDK (3.7+)
 * Supabase Account & Database Project
-* Azure Cognitive Services Account (optional for Azure Face features)
+* Python 3.8+ (for running the self-hosted biometric API)
 
 ### 1. Set Up Backend (Supabase)
 1. Register/Login to [supabase.com](https://supabase.com) and spin up a new project.
-2. Under **SQL Editor**, execute the numbered SQL files in chronological order from the `supabase/` folder (`001_schema.sql` through `016_azure_face_schema.sql`).
+2. Under **SQL Editor**, execute the numbered SQL files in chronological order from the `supabase/` folder (`001_schema.sql` through `017_biometric_vector_schema.sql`).
 3. Create a private bucket named `kyc-documents` in your Supabase Storage.
+4. Create a public bucket named `emergency-scans` in your Supabase Storage.
 
 ### 2. Configure Environment
 1. Clone this repository locally.
-2. In `lib/core/config/env_config.dart`, update your Supabase secrets:
-   ```dart
-   abstract class EnvConfig {
-     static const String supabaseUrl = 'https://your-supabase-url.supabase.co';
-     static const String supabaseAnonKey = 'your-anon-key-here';
-   }
+2. Copy `.env.example` to `.env` in the project root and fill in your Supabase credentials:
+   ```env
+   SUPABASE_URL=https://your-supabase-url.supabase.co
+   SUPABASE_ANON_KEY=your-anon-key-here
+   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+   BIOMETRIC_API_URL=http://localhost:8000
    ```
-3. *(Optional)* Deploy the Azure Face Edge Function under `supabase/functions/azure-face/` and set your Azure Face endpoint/key environment variables.
 
-### 3. Run the App
+### 3. Run the Biometric API (FastAPI)
+1. Navigate to the `biometric_api` directory:
+   ```bash
+   cd biometric_api
+   ```
+2. Install Python dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Run the server locally:
+   ```bash
+   uvicorn main:app --reload --port 8000
+   ```
+
+### 4. Run the App
 1. Install dependencies:
    ```bash
    flutter pub get

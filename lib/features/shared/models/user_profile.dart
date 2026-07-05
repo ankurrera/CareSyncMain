@@ -83,7 +83,6 @@ class UserProfile {
   bool get isPatient => role == 'patient';
   bool get isDoctor => role == 'doctor';
   bool get isPharmacist => role == 'pharmacist';
-  bool get isFirstResponder => role == 'first_responder';
 
   String get roleDisplayName {
     switch (role) {
@@ -93,8 +92,6 @@ class UserProfile {
         return 'Doctor';
       case 'pharmacist':
         return 'Pharmacist';
-      case 'first_responder':
-        return 'First Responder';
       default:
         return role;
     }

@@ -40,8 +40,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         return AppColors.doctor;
       case 'pharmacist':
         return AppColors.pharmacist;
-      case 'first_responder':
-        return AppColors.firstResponder;
       default:
         return AppColors.patient;
     }
@@ -53,8 +51,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         return 'Doctor';
       case 'pharmacist':
         return 'Pharmacist';
-      case 'first_responder':
-        return 'First Responder';
       default:
         return 'Patient';
     }
@@ -66,8 +62,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         return Icons.medical_services_rounded;
       case 'pharmacist':
         return Icons.local_pharmacy_rounded;
-      case 'first_responder':
-        return Icons.emergency_rounded;
       default:
         return Icons.person_rounded;
     }
@@ -377,8 +371,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         return AppColors.doctor;
       case 'pharmacist':
         return AppColors.pharmacist;
-      case 'first_responder':
-        return AppColors.firstResponder;
       default:
         return AppColors.patient;
     }
@@ -390,8 +382,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         return Icons.medical_services_rounded;
       case 'pharmacist':
         return Icons.local_pharmacy_rounded;
-      case 'first_responder':
-        return Icons.emergency_rounded;
       default:
         return Icons.person_rounded;
     }
@@ -403,8 +393,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         return 'Doctor';
       case 'pharmacist':
         return 'Pharmacist';
-      case 'first_responder':
-        return 'First Responder';
       case 'patient':
       default:
         return 'Patient';
@@ -418,9 +406,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         break;
       case 'pharmacist':
         context.go(RouteNames.pharmacistDashboard);
-        break;
-      case 'first_responder':
-        context.go(RouteNames.firstResponderDashboard);
         break;
       default:
         context.go(RouteNames.patientDashboard);

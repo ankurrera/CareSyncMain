@@ -1,13 +1,16 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../../routing/route_names.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../services/supabase_service.dart';
+import '../../../../services/custom_biometric_service.dart';
 import 'new_prescription_screen.dart';
 
 class PatientLookupScreen extends ConsumerStatefulWidget {
@@ -29,7 +32,7 @@ class _PatientLookupScreenState extends ConsumerState<PatientLookupScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -146,6 +149,10 @@ class _PatientLookupScreenState extends ConsumerState<PatientLookupScreen>
               icon: Icon(Icons.qr_code_scanner_rounded),
               text: 'Scan QR',
             ),
+            Tab(
+              icon: Icon(Icons.face),
+              text: 'Scan Face',
+            ),
           ],
         ),
       ),
@@ -154,6 +161,7 @@ class _PatientLookupScreenState extends ConsumerState<PatientLookupScreen>
         children: [
           _buildSearchTab(),
           _buildScanTab(),
+          _buildFaceScanTab(),
         ],
       ),
     );
@@ -398,6 +406,20 @@ class _PatientLookupScreenState extends ConsumerState<PatientLookupScreen>
       },
     );
   }
+
+  Widget _buildFaceScanTab() {
+    return _PatientFaceScanner(
+      onPatientFound: (patientId, patientName) {
+        context.push(
+          RouteNames.doctorPatientRecord,
+          extra: {
+            'patientId': patientId,
+            'patientName': patientName,
+          },
+        );
+      },
+    );
+  }
 }
 
 class _PatientQrScanner extends StatefulWidget {
@@ -592,6 +614,264 @@ class _PatientQrScannerState extends State<_PatientQrScanner> {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _PatientFaceScanner extends StatefulWidget {
+  final void Function(String patientId, String patientName) onPatientFound;
+
+  const _PatientFaceScanner({required this.onPatientFound});
+
+  @override
+  State<_PatientFaceScanner> createState() => _PatientFaceScannerState();
+}
+
+class _PatientFaceScannerState extends State<_PatientFaceScanner>
+    with SingleTickerProviderStateMixin {
+  bool _isIdentifying = false;
+  String _scanningStatus = 'Initializing...';
+  late AnimationController _scannerController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scannerController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _scannerController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _scanFace() async {
+    final picker = ImagePicker();
+    try {
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.rear,
+        maxWidth: 1080,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+
+      if (image == null) return; // User cancelled
+
+      setState(() {
+        _isIdentifying = true;
+        _scanningStatus = 'Uploading face scan...';
+      });
+
+      // Call custom Biometric matching service
+      final matchResult = await CustomBiometricService.instance.identifyPatient(File(image.path));
+
+      if (!mounted) return;
+
+      setState(() {
+        _isIdentifying = false;
+      });
+
+      if (matchResult != null && matchResult['patient_id'] != null) {
+        final patientId = matchResult['patient_id'] as String;
+        final fullName = matchResult['full_name'] as String;
+        final confidence = matchResult['confidence'] as num? ?? 100.0;
+        final pose = matchResult['pose_matched'] as String? ?? 'neutral';
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Matched Patient: $fullName (${confidence.toStringAsFixed(1)}% confidence, pose: $pose)'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
+        widget.onPatientFound(patientId, fullName);
+      } else {
+        _showNoMatchDialog();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isIdentifying = false;
+        });
+      }
+      debugPrint('[DOC] Face scan identification error: $e');
+      _showErrorDialog(e.toString());
+    }
+  }
+
+  void _showNoMatchDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+            SizedBox(width: 8),
+            Text('No Match Found'),
+          ],
+        ),
+        content: const Text(
+          'We could not find a matching patient profile in the CareSync database.\n\nPlease check lighting, ensure the face is centered, or try searching manually.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _scanFace();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Try Again'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.error_outline_rounded, color: Colors.red, size: 28),
+            SizedBox(width: 8),
+            Text('Scanning Error'),
+          ],
+        ),
+        content: Text(
+          'An error occurred while matching the patient face:\n\n${message.contains("Exception:") ? message.split("Exception:").last : message}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Face scan illustration/container
+            Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 20,
+                    spreadRadius: 5,
+                  ),
+                ],
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.1), width: 4),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(
+                    Icons.face,
+                    size: 100,
+                    color: AppColors.primary.withValues(alpha: 0.7),
+                  ),
+                  if (_isIdentifying)
+                    AnimatedBuilder(
+                      animation: _scannerController,
+                      builder: (context, child) {
+                        return Positioned(
+                          top: 40 + (_scannerController.value * 120),
+                          left: 40,
+                          right: 40,
+                          child: Container(
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(2),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primary.withValues(alpha: 0.5),
+                                  blurRadius: 8,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+            if (_isIdentifying) ...[
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(
+                _scanningStatus,
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ] else ...[
+              const Text(
+                'AI Face Recognition',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Identify patient by scanning their face.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton.icon(
+                onPressed: _scanFace,
+                icon: const Icon(Icons.camera_alt_rounded),
+                label: const Text('Scan Patient Face'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                  elevation: 2,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

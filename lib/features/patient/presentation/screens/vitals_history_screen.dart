@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../models/vital.dart';
 import '../../providers/vitals_provider.dart';
@@ -21,19 +23,32 @@ class _VitalsHistoryScreenState extends ConsumerState<VitalsHistoryScreen> {
     final vitalsAsync = ref.watch(filteredVitalsProvider(_selectedTypeFilter));
 
     return Scaffold(
-      backgroundColor: AppColors.softBackground,
+      backgroundColor: const Color(0xFFFAFAFA),
       appBar: AppBar(
-        title: const Text('Health History'),
-        backgroundColor: Colors.transparent,
+        title: Text(
+          'Health History',
+          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 18, color: const Color(0xFF121212)),
+        ),
+        backgroundColor: Colors.white,
         elevation: 0,
-        foregroundColor: AppColors.textMain,
+        centerTitle: true,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF121212)),
+          onPressed: () => Navigator.pop(context),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1.0),
+          child: Container(color: const Color(0xFFE2E8F0), height: 1.0),
+        ),
       ),
       body: Column(
         children: [
-          // Filter Chips
+          // Segmented Filter Chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Row(
               children: [
                 _buildFilterChip('all', 'All'),
@@ -55,19 +70,54 @@ class _VitalsHistoryScreenState extends ConsumerState<VitalsHistoryScreen> {
             child: vitalsAsync.when(
               data: (vitals) {
                 if (vitals.isEmpty) {
-                  return const Center(child: Text('No health records found'));
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: const Icon(Iconsax.activity, size: 40, color: Color(0xFF94A3B8)),
+                          ),
+                          const SizedBox(height: 18),
+                          Text(
+                            'No Health Records',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF121212),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'No vital records logged yet under this category.',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
                 }
-                return ListView.builder(
-                  padding: const EdgeInsets.all(24),
+                return ListView.separated(
+                  physics: const ClampingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   itemCount: vitals.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final vital = vitals[index];
                     return _VitalRecordCard(vital: vital);
                   },
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, stack) => Center(child: Text('Error: $err')),
+              loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFFFF5200))),
+              error: (err, stack) => Center(child: Text('Error: $err', style: GoogleFonts.plusJakartaSans())),
             ),
           ),
         ],
@@ -77,17 +127,29 @@ class _VitalsHistoryScreenState extends ConsumerState<VitalsHistoryScreen> {
 
   Widget _buildFilterChip(String value, String label) {
     final isSelected = _selectedTypeFilter == value;
-    return FilterChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (selected) {
+    return GestureDetector(
+      onTap: () {
         setState(() => _selectedTypeFilter = value);
       },
-      selectedColor: AppColors.softPrimary.withValues(alpha: 0.2),
-      checkmarkColor: AppColors.softPrimary,
-      labelStyle: TextStyle(
-        color: isSelected ? AppColors.softPrimary : AppColors.textSecondary,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFFF5200) : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? const Color(0xFFFF5200) : const Color(0xFFE2E8F0),
+            width: 1.0,
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            color: isSelected ? Colors.white : const Color(0xFF64748B),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+            fontSize: 13,
+          ),
+        ),
       ),
     );
   }
@@ -120,7 +182,11 @@ class _VitalRecordCardState extends State<_VitalRecordCard> {
       if (mounted) {
         setState(() => _isDecrypting = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Decryption failed: $e')),
+          SnackBar(
+            content: Text('Decryption failed: $e', style: GoogleFonts.plusJakartaSans()),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     }
@@ -131,14 +197,14 @@ class _VitalRecordCardState extends State<_VitalRecordCard> {
     final dateStr = DateFormat('MMM d, yyyy • h:mm a').format(widget.vital.recordedAt);
     
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.shadowSoft.withValues(alpha: 0.3),
+            color: Colors.black.withValues(alpha: 0.015),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -147,36 +213,37 @@ class _VitalRecordCardState extends State<_VitalRecordCard> {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.softPrimary.withValues(alpha: 0.1),
+              color: const Color(0xFFFF5200).withValues(alpha: 0.08),
               shape: BoxShape.circle,
             ),
             child: Icon(
               _getIcon(widget.vital.type),
-              color: AppColors.softPrimary,
-              size: 24,
+              color: const Color(0xFFFF5200),
+              size: 20,
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   _getDisplayName(widget.vital.type),
-                  style: const TextStyle(
+                  style: GoogleFonts.plusJakartaSans(
                     fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: AppColors.textMain,
+                    fontSize: 14,
+                    color: const Color(0xFF121212),
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   dateStr,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF64748B),
                   ),
                 ),
               ],
@@ -184,30 +251,36 @@ class _VitalRecordCardState extends State<_VitalRecordCard> {
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (_decryptedValue != null)
                 Text(
                   '$_decryptedValue ${widget.vital.unit}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 18,
-                    color: AppColors.textMain,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: const Color(0xFF121212),
                   ),
                 )
               else if (_isDecrypting)
                 const SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(color: Color(0xFFFF5200), strokeWidth: 2),
                 )
               else
-                TextButton.icon(
+                OutlinedButton.icon(
                   onPressed: _decrypt,
-                  icon: const Icon(Icons.lock_outline_rounded, size: 14),
-                  label: const Text('Unlock'),
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    foregroundColor: AppColors.softPrimary,
+                  icon: const Icon(Iconsax.lock_1, size: 12),
+                  label: Text('Unlock', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFFF5200),
+                    side: const BorderSide(color: Color(0xFFFFE2D5)),
+                    backgroundColor: const Color(0xFFFFF4F0),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                 ),
             ],
@@ -219,11 +292,11 @@ class _VitalRecordCardState extends State<_VitalRecordCard> {
 
   IconData _getIcon(String type) {
     switch (type) {
-      case 'blood_pressure': return Icons.water_drop_rounded;
-      case 'glucose': return Icons.opacity_rounded;
-      case 'weight': return Icons.monitor_weight_rounded;
-      case 'heart_rate': return Icons.favorite_rounded;
-      default: return Icons.analytics_rounded;
+      case 'blood_pressure': return Iconsax.heart;
+      case 'glucose': return Iconsax.drop;
+      case 'weight': return Iconsax.weight;
+      case 'heart_rate': return Iconsax.activity;
+      default: return Iconsax.activity;
     }
   }
 

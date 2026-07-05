@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../models/prescription_input_models.dart';
@@ -36,7 +38,6 @@ class _MedicationCardWidgetState extends State<MedicationCardWidget> {
   FoodTiming? _foodTiming;
 
   // Frequency mapping for auto-calculation
-  // All frequencies are daily-based (times per day)
   static const Map<String, int> frequencyMap = {
     "Once a day": 1,
     "Twice a day": 2,
@@ -51,8 +52,6 @@ class _MedicationCardWidgetState extends State<MedicationCardWidget> {
     super.initState();
     _nameController = TextEditingController(text: widget.initialData?.medicineName);
     _dosageController = TextEditingController(text: widget.initialData?.dosage);
-    // Convert empty/invalid frequency to null to avoid dropdown crash
-    // Ensure frequency exists in frequencyMap (which doesn't include empty strings)
     final initialFrequency = widget.initialData?.frequency;
     _selectedFrequency = (initialFrequency != null && frequencyMap.containsKey(initialFrequency))
         ? initialFrequency
@@ -73,7 +72,7 @@ class _MedicationCardWidgetState extends State<MedicationCardWidget> {
     _nameController.addListener(_notifyChange);
     _dosageController.addListener(_notifyChange);
     _durationController.addListener(_calculateQuantity);
-    _quantityController.addListener(_notifyChange); // Allow manual quantity override
+    _quantityController.addListener(_notifyChange);
     _instructionsController.addListener(_notifyChange);
   }
 
@@ -91,34 +90,26 @@ class _MedicationCardWidgetState extends State<MedicationCardWidget> {
   void _calculateQuantity() {
     if (_durationController.text.isEmpty || _selectedFrequency == null) {
       _quantityController.text = '';
-      // Note: _notifyChange() will be called by _quantityController listener
       return;
     }
 
-    // Parse duration as integer (days)
-    // Input is numeric-only via FilteringTextInputFormatter
     final int? duration = int.tryParse(_durationController.text.trim());
-    
     if (duration == null) {
       _quantityController.text = '';
-      // Note: _notifyChange() will be called by _quantityController listener
       return;
     }
 
     final int frequencyPerDay = frequencyMap[_selectedFrequency] ?? 1;
-
     final int calculatedQuantity = duration * frequencyPerDay;
 
     _quantityController.text = calculatedQuantity.toString();
-    // Note: _notifyChange() will be called by _quantityController listener
   }
 
   void _notifyChange() {
     final quantity = int.tryParse(_quantityController.text) ?? 0;
 
-    // FIX: Preserve the existing ID using widget.initialData?.id
     final medication = MedicationDetails(
-      id: widget.initialData?.id,  // <--- ADD THIS LINE
+      id: widget.initialData?.id,
       medicineName: _nameController.text,
       dosage: _dosageController.text,
       frequency: _selectedFrequency ?? '',
@@ -135,69 +126,103 @@ class _MedicationCardWidgetState extends State<MedicationCardWidget> {
     widget.onChanged(medication);
   }
 
+  InputDecoration _inputDecoration({required String hint, String? label, Widget? suffix}) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w500, color: const Color(0xFF64748B)),
+      hintText: hint,
+      hintStyle: GoogleFonts.plusJakartaSans(color: const Color(0xFF94A3B8), fontSize: 12),
+      filled: true,
+      fillColor: const Color(0xFFFAFAFA),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFFF5200), width: 1.5),
+      ),
+      suffixIcon: suffix,
+      isDense: true,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      padding: const EdgeInsets.all(AppSpacing.md),
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-        ),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.015),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
+          // Header Row
           Row(
             children: [
               Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: AppColors.pharmacist.withValues(alpha: 0.1),
+                width: 24,
+                height: 24,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFFF4F0),
                   shape: BoxShape.circle,
                 ),
                 child: Center(
                   child: Text(
                     '${widget.index + 1}',
-                    style: const TextStyle(
-                      color: AppColors.pharmacist,
+                    style: GoogleFonts.plusJakartaSans(
+                      color: const Color(0xFFFF5200),
                       fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                      fontSize: 11,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
-              const Text(
+              const SizedBox(width: 8),
+              Text(
                 'Medication',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: const Color(0xFF121212),
                 ),
               ),
               const Spacer(),
               IconButton(
                 onPressed: widget.onRemove,
-                icon: const Icon(Icons.close_rounded, size: 20),
+                icon: const Icon(Iconsax.trash, size: 14),
                 style: IconButton.styleFrom(
-                  foregroundColor: AppColors.error,
+                  foregroundColor: const Color(0xFFEF4444),
+                  backgroundColor: const Color(0xFFFEE2E2),
+                  padding: const EdgeInsets.all(6),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: 16),
 
-          // Medicine Name *
+          // Medicine Name
           TextFormField(
             controller: _nameController,
-            decoration: const InputDecoration(
-              labelText: 'Medicine Name *',
-              hintText: 'e.g., Paracetamol',
-              prefixIcon: Icon(Icons.medication_outlined, size: 20),
+            decoration: _inputDecoration(
+              hint: 'e.g., Paracetamol',
+              label: 'Medicine Name *',
+              suffix: const Icon(Iconsax.box, size: 16, color: Color(0xFF94A3B8)),
             ),
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
@@ -206,18 +231,18 @@ class _MedicationCardWidgetState extends State<MedicationCardWidget> {
               return null;
             },
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: 12),
 
-          // Dosage * and Frequency * (Row)
+          // Dosage and Frequency Row
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: TextFormField(
                   controller: _dosageController,
-                  decoration: const InputDecoration(
-                    labelText: 'Dosage *',
-                    hintText: 'e.g., 500mg',
+                  decoration: _inputDecoration(
+                    hint: 'e.g., 500mg',
+                    label: 'Dosage *',
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
@@ -227,20 +252,21 @@ class _MedicationCardWidgetState extends State<MedicationCardWidget> {
                   },
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
+              const SizedBox(width: 12),
               Expanded(
                 child: DropdownButtonFormField<String>(
                   value: _selectedFrequency,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Frequency *',
-                    hintText: 'Select',
+                  decoration: _inputDecoration(
+                    hint: 'Select',
+                    label: 'Frequency *',
                   ),
                   items: frequencyMap.keys.map((frequency) {
                     return DropdownMenuItem(
                       value: frequency,
                       child: Text(
                         frequency,
+                        style: GoogleFonts.plusJakartaSans(fontSize: 13),
                         overflow: TextOverflow.ellipsis,
                       ),
                     );
@@ -259,19 +285,18 @@ class _MedicationCardWidgetState extends State<MedicationCardWidget> {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: 12),
 
-          // Duration * and Quantity * (Row)
+          // Duration and Quantity Row
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: TextFormField(
                   controller: _durationController,
-                  decoration: const InputDecoration(
-                    labelText: 'Duration (Days) *',
-                    hintText: 'e.g., 7',
-                    helperText: 'Number of days',
+                  decoration: _inputDecoration(
+                    hint: 'e.g., 7',
+                    label: 'Duration (Days) *',
                   ),
                   keyboardType: TextInputType.number,
                   inputFormatters: [
@@ -289,7 +314,7 @@ class _MedicationCardWidgetState extends State<MedicationCardWidget> {
                   },
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
+              const SizedBox(width: 12),
               Expanded(
                 child: Semantics(
                   label: _quantityController.text.isNotEmpty 
@@ -297,15 +322,10 @@ class _MedicationCardWidgetState extends State<MedicationCardWidget> {
                       : 'Quantity',
                   child: TextFormField(
                     controller: _quantityController,
-                    decoration: const InputDecoration(
-                      labelText: 'Quantity *',
-                      hintText: 'Auto-calculated or enter manually',
-                      helperText: 'Auto-fills but editable',
+                    decoration: _inputDecoration(
+                      hint: 'Manual override',
+                      label: 'Quantity *',
                     ),
-                    // FIXED: Removed readOnly: true to allow manual quantity entry
-                    // Auto-calculation still works via _calculateQuantity() listener
-                    // on duration/frequency changes, but users can override when needed
-                    // (e.g., for custom prescription amounts that don't match the formula)
                     keyboardType: TextInputType.number,
                     inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
@@ -325,21 +345,22 @@ class _MedicationCardWidgetState extends State<MedicationCardWidget> {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: 12),
 
-          // Medicine Type * (Required dropdown)
+          // Medicine Type
           DropdownButtonFormField<MedicineType>(
             value: _medicineType,
             isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Medicine Type *',
-              hintText: 'Select type',
+            decoration: _inputDecoration(
+              hint: 'Select type',
+              label: 'Medicine Type *',
             ),
             items: MedicineType.values.map((type) {
               return DropdownMenuItem(
                 value: type,
                 child: Text(
                   type.displayName,
+                  style: GoogleFonts.plusJakartaSans(fontSize: 13),
                   overflow: TextOverflow.ellipsis,
                 ),
               );
@@ -355,9 +376,9 @@ class _MedicationCardWidgetState extends State<MedicationCardWidget> {
               return null;
             },
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: 12),
 
-          // Route * and Food Timing * (Row)
+          // Route and Food Timing Row
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -365,15 +386,16 @@ class _MedicationCardWidgetState extends State<MedicationCardWidget> {
                 child: DropdownButtonFormField<RouteOfAdministration>(
                   value: _route,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Route *',
-                    hintText: 'Select',
+                  decoration: _inputDecoration(
+                    hint: 'Select',
+                    label: 'Route *',
                   ),
                   items: RouteOfAdministration.values.map((route) {
                     return DropdownMenuItem(
                       value: route,
                       child: Text(
                         route.displayName,
+                        style: GoogleFonts.plusJakartaSans(fontSize: 13),
                         overflow: TextOverflow.ellipsis,
                       ),
                     );
@@ -390,20 +412,21 @@ class _MedicationCardWidgetState extends State<MedicationCardWidget> {
                   },
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
+              const SizedBox(width: 12),
               Expanded(
                 child: DropdownButtonFormField<FoodTiming>(
                   value: _foodTiming,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Food Timing *',
-                    hintText: 'Select',
+                  decoration: _inputDecoration(
+                    hint: 'Select',
+                    label: 'Food Timing *',
                   ),
                   items: FoodTiming.values.map((timing) {
                     return DropdownMenuItem(
                       value: timing,
                       child: Text(
                         timing.displayName,
+                        style: GoogleFonts.plusJakartaSans(fontSize: 13),
                         overflow: TextOverflow.ellipsis,
                       ),
                     );
@@ -422,18 +445,17 @@ class _MedicationCardWidgetState extends State<MedicationCardWidget> {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: 12),
 
-          // Instructions (Optional)
+          // Instructions
           TextFormField(
             controller: _instructionsController,
-            decoration: const InputDecoration(
-              labelText: 'Instructions',
-              hintText: 'e.g., Take after meals with water',
+            decoration: _inputDecoration(
+              hint: 'e.g., Take after meals with water',
+              label: 'Instructions',
             ),
             maxLines: 2,
             validator: (value) {
-              // Optional field, but check for placeholders if provided
               if (value != null && value.trim().isNotEmpty) {
                 final lowerValue = value.trim().toLowerCase();
                 if (lowerValue == 'mm' || lowerValue == 'mmm' || 
