@@ -12,6 +12,15 @@ class CustomBiometricService {
 
   final _supabase = Supabase.instance.client;
 
+  Map<String, String> get _headers {
+    final headers = {'Content-Type': 'application/json'};
+    final token = EnvConfig.hfToken;
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+    return headers;
+  }
+
   /// Enroll a patient's face by sending their user ID, selfie URL, and pose label
   /// to the self-hosted custom Biometric API.
   Future<void> enrollPatient({
@@ -25,7 +34,7 @@ class CustomBiometricService {
       
       final response = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: _headers,
         body: jsonEncode({
           'userId': userId,
           'selfieUrl': selfieUrl,
@@ -80,7 +89,7 @@ class CustomBiometricService {
       final url = Uri.parse('${EnvConfig.biometricApiUrl}/identify');
       final response = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: _headers,
         body: jsonEncode({
           'scanPath': fileName,
         }),
@@ -125,7 +134,7 @@ class CustomBiometricService {
       
       final response = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: _headers,
         body: jsonEncode({
           'selfieUrl': selfieUrl,
           'idDocumentUrl': idDocumentUrl,

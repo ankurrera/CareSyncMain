@@ -72,12 +72,13 @@ class KYCService {
             ),
           );
 
-      // Get public URL
-      final publicUrl = _supabase.storage
+      // Generate a signed URL (1 hour) since kyc-documents is a private bucket.
+      // getPublicUrl would return a URL that returns 400/403 for private buckets.
+      final signedUrl = await _supabase.storage
           .from('kyc-documents')
-          .getPublicUrl(fileName);
+          .createSignedUrl(fileName, 3600);
 
-      return publicUrl;
+      return signedUrl;
     } on StorageException catch (e) {
       throw KYCException('Failed to upload document: ${e.message}');
     } catch (e) {
@@ -142,7 +143,7 @@ class KYCService {
             'kyc_status': 'rejected',
             'created_at': DateTime.now().toIso8601String(),
             'updated_at': DateTime.now().toIso8601String(),
-          });
+          }, onConflict: 'user_id');
           
           throw KYCException(
             'Government ID Verification Failed: The name or birth year on the ID document does not match the entered profile details. Please make sure the photo is clear and matches the input.'
@@ -174,7 +175,7 @@ class KYCService {
             'kyc_status': 'rejected',
             'created_at': DateTime.now().toIso8601String(),
             'updated_at': DateTime.now().toIso8601String(),
-          });
+          }, onConflict: 'user_id');
           
           throw KYCException('Facial Biometric Matching Failed: $faceErr');
         }
@@ -192,7 +193,7 @@ class KYCService {
             'kyc_status': 'rejected',
             'created_at': DateTime.now().toIso8601String(),
             'updated_at': DateTime.now().toIso8601String(),
-          });
+          }, onConflict: 'user_id');
 
           throw KYCException(
             'Facial Verification Failed: The face visible on the Government ID card does not match the live captured selfie. Please check lighting and verify the ID belongs to you.'
@@ -214,7 +215,7 @@ class KYCService {
         'updated_at': DateTime.now().toIso8601String(),
       };
 
-      await _supabase.from('kyc_verifications').upsert(data);
+      await _supabase.from('kyc_verifications').upsert(data, onConflict: 'user_id');
 
       // Ensure the patient record exists in the 'patients' table
       try {

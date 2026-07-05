@@ -35,6 +35,47 @@ app = FastAPI(
     version="2.0.0"
 )
 
+# ============================================================================
+# SUPABASE STORAGE HELPER — works for public, signed, or any URL format
+# ============================================================================
+
+def download_supabase_file(storage_url: str, dest_suffix: str = ".jpg") -> str:
+    """
+    Downloads a file from Supabase Storage given any URL format
+    (public: /object/public/<bucket>/<path>  or
+     signed: /object/sign/<bucket>/<path>?token=...).
+    Uses the supabase service-role client directly so it always works
+    regardless of bucket visibility or token expiry issues.
+    Returns the local temp file path.
+    """
+    from urllib.parse import urlparse, unquote
+
+    parsed = urlparse(storage_url)
+    # Path looks like: /storage/v1/object/public/<bucket>/<file_path>
+    #               or /storage/v1/object/sign/<bucket>/<file_path>
+    path_parts = parsed.path.split("/")
+    # path_parts: ['', 'storage', 'v1', 'object', 'public'|'sign', '<bucket>', '<file...>']
+    try:
+        object_idx = path_parts.index("object")
+        bucket = path_parts[object_idx + 2]          # e.g. "kyc-documents"
+        file_path = "/".join(path_parts[object_idx + 3:])  # e.g. "user_id/selfie-123.jpg"
+        file_path = unquote(file_path)
+    except (ValueError, IndexError) as e:
+        raise HTTPException(status_code=400, detail=f"Cannot parse Supabase storage URL: {storage_url[:80]}")
+
+    logger.info(f"Downloading from bucket='{bucket}' path='{file_path}' via service-role client")
+    try:
+        file_bytes: bytes = supabase.storage.from_(bucket).download(file_path)
+    except Exception as e:
+        logger.error(f"Supabase storage download failed: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to retrieve file from storage: {str(e)}")
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=dest_suffix) as tmp:
+        tmp.write(file_bytes)
+        return tmp.name
+
+
+
 # Pydantic models for request validation
 class EnrollRequest(BaseModel):
     userId: str
@@ -196,19 +237,9 @@ async def enroll(payload: EnrollRequest):
     try:
         logger.info(f"Enrolling pose '{payload.poseLabel}' for user: {payload.userId}")
         
-        # 1. Fetch image from Supabase Storage
-        import requests
-        response = requests.get(payload.selfieUrl, stream=True)
-        if response.status_code != 200:
-            raise HTTPException(
-                status_code=400, 
-                detail="Failed to retrieve selfie from storage server."
-            )
-            
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
-            for chunk in response.iter_content(chunk_size=8192):
-                temp_file.write(chunk)
-            temp_img_path = temp_file.name
+        # 1. Fetch image from Supabase Storage via service-role client
+        # Works with any URL format (public /object/public/ or signed /object/sign/)
+        temp_img_path = download_supabase_file(payload.selfieUrl, dest_suffix=".jpg")
 
         # 2. Quality Evaluation
         quality_metrics = evaluate_image_quality(temp_img_path)
@@ -291,26 +322,10 @@ async def verify_id(payload: VerifyIDRequest):
     temp_selfie_path = None
     temp_id_path = None
     try:
-        logger.info("Comparing face from selfie against ID document.")
-        import requests
-        
-        # Download selfie
-        selfie_res = requests.get(payload.selfieUrl, stream=True)
-        if selfie_res.status_code != 200:
-            raise HTTPException(status_code=400, detail="Failed to retrieve selfie.")
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as f:
-            for chunk in selfie_res.iter_content(chunk_size=8192):
-                f.write(chunk)
-            temp_selfie_path = f.name
+        # Download selfie & ID via service-role client — works for public or signed URLs
+        temp_selfie_path = download_supabase_file(payload.selfieUrl, dest_suffix=".jpg")
+        temp_id_path = download_supabase_file(payload.idDocumentUrl, dest_suffix=".jpg")
 
-        # Download ID Document
-        id_res = requests.get(payload.idDocumentUrl, stream=True)
-        if id_res.status_code != 200:
-            raise HTTPException(status_code=400, detail="Failed to retrieve ID document.")
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as f:
-            for chunk in id_res.iter_content(chunk_size=8192):
-                f.write(chunk)
-            temp_id_path = f.name
 
         # Perform verification
         result = DeepFace.verify(

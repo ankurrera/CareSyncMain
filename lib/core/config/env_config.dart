@@ -20,6 +20,9 @@ abstract class EnvConfig {
   static String get biometricApiUrl => 
       dotenv.env['BIOMETRIC_API_URL'] ?? 'http://localhost:8000';
 
+  /// Hugging Face Token for private Space API authentication
+  static String? get hfToken => dotenv.env['HF_TOKEN'];
+
   
   /// Helper to throw meaningful error for missing env vars
   static String _throwMissingEnv(String key) {

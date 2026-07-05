@@ -73,8 +73,8 @@ CREATE TABLE IF NOT EXISTS two_factor_codes (
 );
 
 -- Index for faster lookups
-CREATE INDEX idx_two_factor_codes_user_id ON two_factor_codes(user_id);
-CREATE INDEX idx_two_factor_codes_expires_at ON two_factor_codes(expires_at);
+CREATE INDEX IF NOT EXISTS idx_two_factor_codes_user_id ON two_factor_codes(user_id);
+CREATE INDEX IF NOT EXISTS idx_two_factor_codes_expires_at ON two_factor_codes(expires_at);
 
 -- ============================================================================
 -- AUDIT LOG TABLE
@@ -93,9 +93,9 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 
 -- Index for efficient querying
-CREATE INDEX idx_audit_log_user_id ON audit_log(user_id);
-CREATE INDEX idx_audit_log_timestamp ON audit_log(timestamp);
-CREATE INDEX idx_audit_log_action ON audit_log(action);
+CREATE INDEX IF NOT EXISTS idx_audit_log_user_id ON audit_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp);
+CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
 
 -- ============================================================================
 -- STORAGE BUCKET FOR KYC DOCUMENTS
@@ -124,17 +124,21 @@ ALTER TABLE two_factor_codes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
 
 -- KYC VERIFICATIONS POLICIES
+DROP POLICY IF EXISTS "Users can view their own KYC data" ON kyc_verifications;
 CREATE POLICY "Users can view their own KYC data"
     ON kyc_verifications FOR SELECT
     USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own KYC data" ON kyc_verifications;
 CREATE POLICY "Users can insert their own KYC data"
     ON kyc_verifications FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can update their own pending KYC data"
+DROP POLICY IF EXISTS "Users can update their own pending KYC data" ON kyc_verifications;
+DROP POLICY IF EXISTS "Users can update their own KYC data" ON kyc_verifications;
+CREATE POLICY "Users can update their own KYC data"
     ON kyc_verifications FOR UPDATE
-    USING (auth.uid() = user_id AND kyc_status = 'pending');
+    USING (auth.uid() = user_id);
 
 -- Admin policies for KYC verification (you can create admin role later)
 -- CREATE POLICY "Admins can view all KYC data"
@@ -142,62 +146,76 @@ CREATE POLICY "Users can update their own pending KYC data"
 --     USING ((SELECT role FROM profiles WHERE id = auth.uid()) = 'admin');
 
 -- REGISTERED DEVICES POLICIES
+DROP POLICY IF EXISTS "Users can view their own devices" ON registered_devices;
 CREATE POLICY "Users can view their own devices"
     ON registered_devices FOR SELECT
     USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own devices" ON registered_devices;
 CREATE POLICY "Users can insert their own devices"
     ON registered_devices FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own devices" ON registered_devices;
 CREATE POLICY "Users can update their own devices"
     ON registered_devices FOR UPDATE
     USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own devices" ON registered_devices;
 CREATE POLICY "Users can delete their own devices"
     ON registered_devices FOR DELETE
     USING (auth.uid() = user_id);
 
 -- MEDICAL RECORDS POLICIES
+DROP POLICY IF EXISTS "Users can view their own medical records" ON medical_records;
 CREATE POLICY "Users can view their own medical records"
     ON medical_records FOR SELECT
     USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert their own medical records" ON medical_records;
 CREATE POLICY "Users can insert their own medical records"
     ON medical_records FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own medical records" ON medical_records;
 CREATE POLICY "Users can update their own medical records"
     ON medical_records FOR UPDATE
     USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own medical records" ON medical_records;
 CREATE POLICY "Users can delete their own medical records"
     ON medical_records FOR DELETE
     USING (auth.uid() = user_id);
 
 -- Doctors can view patient medical records (extend as needed)
+DROP POLICY IF EXISTS "Doctors can view medical records" ON medical_records;
 CREATE POLICY "Doctors can view medical records"
     ON medical_records FOR SELECT
     USING ((SELECT role FROM profiles WHERE id = auth.uid()) = 'doctor');
 
 -- TWO FACTOR CODES POLICIES
+DROP POLICY IF EXISTS "Users can view their own 2FA codes" ON two_factor_codes;
 CREATE POLICY "Users can view their own 2FA codes"
     ON two_factor_codes FOR SELECT
     USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "System can insert 2FA codes" ON two_factor_codes;
 CREATE POLICY "System can insert 2FA codes"
     ON two_factor_codes FOR INSERT
     WITH CHECK (true); -- Allow insertion from server functions
 
+DROP POLICY IF EXISTS "Users can update their own 2FA codes" ON two_factor_codes;
 CREATE POLICY "Users can update their own 2FA codes"
     ON two_factor_codes FOR UPDATE
     USING (auth.uid() = user_id);
 
 -- AUDIT LOG POLICIES
+DROP POLICY IF EXISTS "Users can view their own audit logs" ON audit_log;
 CREATE POLICY "Users can view their own audit logs"
     ON audit_log FOR SELECT
     USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "System can insert audit logs" ON audit_log;
 CREATE POLICY "System can insert audit logs"
     ON audit_log FOR INSERT
     WITH CHECK (true); -- Allow insertion from any authenticated context
@@ -207,6 +225,7 @@ CREATE POLICY "System can insert audit logs"
 -- ============================================================================
 
 -- Policy to allow users to upload their KYC documents
+DROP POLICY IF EXISTS "Users can upload their own KYC documents" ON storage.objects;
 CREATE POLICY "Users can upload their own KYC documents"
 ON storage.objects FOR INSERT
 TO authenticated
@@ -216,6 +235,7 @@ WITH CHECK (
 );
 
 -- Policy to allow users to view their own KYC documents
+DROP POLICY IF EXISTS "Users can view their own KYC documents" ON storage.objects;
 CREATE POLICY "Users can view their own KYC documents"
 ON storage.objects FOR SELECT
 TO authenticated
@@ -225,6 +245,7 @@ USING (
 );
 
 -- Policy to allow users to update their own KYC documents
+DROP POLICY IF EXISTS "Users can update their own KYC documents" ON storage.objects;
 CREATE POLICY "Users can update their own KYC documents"
 ON storage.objects FOR UPDATE
 TO authenticated
