@@ -26,23 +26,16 @@ class RoleCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         child: Ink(
           decoration: BoxDecoration(
             color: isDark
                 ? Theme.of(context).colorScheme.surface
                 : Colors.white,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
             border: Border.all(
-              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5),
+              color: Theme.of(context).colorScheme.outline.withValues(alpha: isDark ? 0.2 : 0.5),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.1),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
           ),
           child: Padding(
             padding: const EdgeInsets.all(14),
@@ -55,7 +48,7 @@ class RoleCard extends StatelessWidget {
                   height: 44,
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
                     icon,

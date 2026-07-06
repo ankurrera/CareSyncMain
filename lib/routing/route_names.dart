@@ -42,5 +42,6 @@ abstract class RouteNames {
   static const String patientEmergency = '/patient/emergency';
   static const String patientEmergencyScan = '/patient/emergency/scan';
   static const String patientEmergencyView = '/patient/emergency/view';
+  static const String patientEmergencyAudit = '/patient/emergency/audit';
 }
 

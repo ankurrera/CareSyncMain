@@ -154,30 +154,37 @@ class _MedicalHistoryScreenState extends ConsumerState<MedicalHistoryScreen>
           ),
         ],
       ),
-      floatingActionButton: _tabController.index == 0
-          ? FloatingActionButton.extended(
-              heroTag: 'add_prescription_btn',
-              onPressed: () =>
-                  context.push(RouteNames.patientAddPrescription),
-              backgroundColor: const Color(0xFF121212),
-              foregroundColor: Colors.white,
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              icon: const Icon(Iconsax.add, size: 20),
-              label: Text('Add Rx', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
-            )
-          : FloatingActionButton.extended(
-              heroTag: 'add_condition_btn',
-              onPressed: () => _showAddConditionDialog(context),
-              backgroundColor: const Color(0xFF121212),
-              foregroundColor: Colors.white,
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              icon: const Icon(Iconsax.add, size: 20),
-              label: Text('Add Condition', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
-            ),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 72),
+        child: _tabController.index == 0
+            ? FloatingActionButton.extended(
+                heroTag: 'add_prescription_btn',
+                onPressed: () =>
+                    context.push(RouteNames.patientAddPrescription),
+                backgroundColor: const Color(0xFF121212),
+                foregroundColor: Colors.white,
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                icon: const Icon(Iconsax.add, size: 20),
+                label: Text('Add Rx',
+                    style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.bold)),
+              )
+            : FloatingActionButton.extended(
+                heroTag: 'add_condition_btn',
+                onPressed: () => _showAddConditionDialog(context),
+                backgroundColor: const Color(0xFF121212),
+                foregroundColor: Colors.white,
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                icon: const Icon(Iconsax.add, size: 20),
+                label: Text('Add Condition',
+                    style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.bold)),
+              ),
+      ),
     );
   }
 
@@ -349,56 +356,54 @@ class _MedicalHistoryScreenState extends ConsumerState<MedicalHistoryScreen>
     final severity = condition.severity;
     final isPublic = condition.isPublic;
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      elevation: 0,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: Color(0xFFE2E8F0)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.012),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: _getTypeColor(type).withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: _getTypeColor(type).withValues(alpha: 0.2),
-                    ),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     _formatType(type),
                     style: GoogleFonts.plusJakartaSans(
-                      fontSize: 10,
+                      fontSize: 9,
                       fontWeight: FontWeight.bold,
                       color: _getTypeColor(type),
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 if (severity != null)
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: _getSeverityColor(severity).withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: _getSeverityColor(severity).withValues(alpha: 0.2),
-                      ),
+                      borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       severity.toUpperCase(),
                       style: GoogleFonts.plusJakartaSans(
-                        fontSize: 10,
+                        fontSize: 9,
                         fontWeight: FontWeight.bold,
                         color: _getSeverityColor(severity),
                       ),
@@ -407,25 +412,25 @@ class _MedicalHistoryScreenState extends ConsumerState<MedicalHistoryScreen>
                 const Spacer(),
                 Icon(
                   isPublic ? Iconsax.eye : Iconsax.eye_slash,
-                  size: 18,
+                  size: 16,
                   color: isPublic
                       ? const Color(0xFF10B981)
                       : const Color(0xFF64748B),
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             Text(
               condition.description,
               style: GoogleFonts.plusJakartaSans(
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.bold,
-                color: const Color(0xFF121212),
+                color: const Color(0xFF1E293B),
               ),
             ),
-            const SizedBox(height: 14),
-            const Divider(height: 1, color: Color(0xFFE2E8F0)),
             const SizedBox(height: 10),
+            const Divider(height: 1, color: Color(0xFFE2E8F0)),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Icon(
@@ -443,10 +448,17 @@ class _MedicalHistoryScreenState extends ConsumerState<MedicalHistoryScreen>
                   ),
                 ),
                 const Spacer(),
-                IconButton(
-                  icon: const Icon(Iconsax.trash, size: 18),
-                  color: const Color(0xFFEF4444),
-                  onPressed: () => _deleteCondition(context, condition.id),
+                GestureDetector(
+                  onTap: () => _deleteCondition(context, condition.id),
+                  behavior: HitTestBehavior.opaque,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    child: Icon(
+                      Iconsax.trash,
+                      size: 16,
+                      color: Color(0xFFEF4444),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -607,7 +619,7 @@ class _MedicalHistoryScreenState extends ConsumerState<MedicalHistoryScreen>
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                   ),
                   items: const [
-                    DropdownMenuItem(value: 'low', child: Text('Low')),
+                    DropdownMenuItem(value: 'mild', child: Text('Mild')),
                     DropdownMenuItem(value: 'moderate', child: Text('Moderate')),
                     DropdownMenuItem(value: 'severe', child: Text('Severe')),
                     DropdownMenuItem(value: 'critical', child: Text('Critical')),

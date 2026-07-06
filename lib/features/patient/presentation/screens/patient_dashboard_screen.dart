@@ -11,7 +11,6 @@ import '../widgets/daily_medication_schedule.dart';
 import '../widgets/vitals_summary_card.dart';
 import '../../../shared/presentation/widgets/appointment_list_widget.dart';
 import '../../providers/patient_provider.dart';
-import '../../../shared/providers/chat_provider.dart';
 
 class PatientDashboardScreen extends ConsumerStatefulWidget {
   const PatientDashboardScreen({super.key});
@@ -149,8 +148,11 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
     final isKycVerifiedAsyncValue = ref.watch(isKycVerifiedProvider);
     final isKycVerified = isKycVerifiedAsyncValue.valueOrNull ?? false;
 
-    // Ask for the data modally if user profile loaded and is not verified
-    if (isKycVerifiedAsyncValue.hasValue && !isKycVerified && !_hasPrompted) {
+    final patientDataAsync = ref.watch(patientDataProvider);
+    final hasFaceScan = patientDataAsync.valueOrNull?.faceScanUrl != null;
+
+    // Ask for the data modally if user profile loaded, not verified, and has no face scan
+    if (isKycVerifiedAsyncValue.hasValue && patientDataAsync.hasValue && !isKycVerified && !hasFaceScan && !_hasPrompted) {
       _showBiometricSetupPrompt();
     }
 
@@ -163,16 +165,10 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── 1. DARK HERO HEADER CORNER ───────────────────────────────────
+            // ── 1. LIGHT HERO HEADER ─────────────────────────────────────────
             Container(
               width: double.infinity,
-              decoration: const BoxDecoration(
-                color: Color(0xFF121212),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(32),
-                  bottomRight: Radius.circular(32),
-                ),
-              ),
+              color: Colors.white,
               child: SafeArea(
                 bottom: false,
                 child: Padding(
@@ -188,17 +184,20 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
                             child: Container(
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white.withOpacity(0.15), width: 2),
+                                border: Border.all(
+                                  color: const Color(0xFFE5E7EB),
+                                  width: 1.5,
+                                ),
                               ),
                               child: CircleAvatar(
                                 radius: 22,
-                                backgroundColor: const Color(0xFFFF5200),
+                                backgroundColor: const Color(0xFFFF5200).withValues(alpha: 0.1),
                                 child: Text(
                                   profile.valueOrNull?.fullName.isNotEmpty == true
                                       ? profile.valueOrNull!.fullName.substring(0, 1).toUpperCase()
                                       : 'A',
                                   style: GoogleFonts.plusJakartaSans(
-                                    color: Colors.white,
+                                    color: const Color(0xFFFF5200),
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,
                                   ),
@@ -214,16 +213,17 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
                                 Text(
                                   'Hi, ${profile.valueOrNull?.fullName.split(' ').first ?? 'Ankur'}',
                                   style: GoogleFonts.plusJakartaSans(
-                                    color: Colors.white,
+                                    color: const Color(0xFF111827),
                                     fontWeight: FontWeight.bold,
                                     fontSize: 18,
+                                    letterSpacing: -0.3,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
                                   todayDate,
                                   style: GoogleFonts.plusJakartaSans(
-                                    color: const Color(0xFF64748B),
+                                    color: const Color(0xFF6B7280),
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -237,11 +237,11 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
                               width: 40,
                               height: 40,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.08),
+                                color: Colors.white,
                                 shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white.withOpacity(0.12)),
+                                border: Border.all(color: const Color(0xFFE5E7EB)),
                               ),
-                              child: const Icon(Iconsax.message_2, color: Colors.white, size: 20),
+                              child: const Icon(Iconsax.message_2, color: Color(0xFF374151), size: 20),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -251,24 +251,31 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
                               width: 40,
                               height: 40,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.08),
+                                color: Colors.white,
                                 shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white.withOpacity(0.12)),
+                                border: Border.all(color: const Color(0xFFE5E7EB)),
                               ),
-                              child: const Icon(Iconsax.notification, color: Colors.white, size: 20),
+                              child: const Icon(Iconsax.notification, color: Color(0xFF374151), size: 20),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
 
-                      // Emergency Access Pass Card (V2 glassmorphism styling)
+                      // Emergency Access Pass Card (V2 light styling)
                       Container(
                         width: double.infinity,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.06),
+                          color: Colors.white,
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.white.withOpacity(0.12)),
+                          border: Border.all(color: const Color(0xFFE5E7EB)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.02),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
                         child: Material(
                           color: Colors.transparent,
@@ -286,9 +293,9 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFFFF5200).withOpacity(0.12),
+                                          color: const Color(0xFFFF5200).withValues(alpha: 0.1),
                                           borderRadius: BorderRadius.circular(20),
-                                          border: Border.all(color: const Color(0xFFFF5200).withOpacity(0.3)),
+                                          border: Border.all(color: const Color(0xFFFF5200).withValues(alpha: 0.2)),
                                         ),
                                         child: Text(
                                           'EMERGENCY PASS',
@@ -300,14 +307,14 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
                                           ),
                                         ),
                                       ),
-                                      const Icon(Iconsax.barcode, color: Colors.white70, size: 20),
+                                      const Icon(Iconsax.barcode, color: Color(0xFF374151), size: 20),
                                     ],
                                   ),
                                   const SizedBox(height: 16),
                                   Text(
                                     'Emergency ID Access',
                                     style: GoogleFonts.plusJakartaSans(
-                                      color: Colors.white,
+                                      color: const Color(0xFF111827),
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
                                       letterSpacing: -0.2,
@@ -316,12 +323,12 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
                                   const SizedBox(height: 6),
                                   Row(
                                     children: [
-                                      Icon(Iconsax.scan, size: 12, color: Colors.white.withOpacity(0.5)),
+                                      const Icon(Iconsax.scan, size: 12, color: Color(0xFF6B7280)),
                                       const SizedBox(width: 6),
                                       Text(
                                         'Tap to generate QR code or scan face',
                                         style: GoogleFonts.plusJakartaSans(
-                                          color: Colors.white.withOpacity(0.5),
+                                          color: const Color(0xFF6B7280),
                                           fontSize: 11,
                                           fontWeight: FontWeight.w500,
                                         ),
@@ -339,6 +346,7 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
                 ),
               ),
             ),
+            Container(height: 1, color: const Color(0xFFE5E7EB)),
 
             // ── 2. SCROLLABLE CONTENT BODY ────────────────────────────────────
             Padding(
@@ -346,8 +354,8 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Biometrics caution banner (contextual warning)
-                  if (!isKycVerified) ...[
+                   // Biometrics caution banner (contextual warning)
+                  if (patientDataAsync.hasValue && !isKycVerified && !hasFaceScan) ...[
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
@@ -544,100 +552,99 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
                   const SizedBox(height: 10),
                   _buildDoctorItem('Dr. Rohan Verma', 'General Physician • 8 yrs exp.', 'RV', context),
                   
-                  const SizedBox(height: 100),
+                  const SizedBox(height: 120),
                 ],
               ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push('/patient/book-appointment'),
-        backgroundColor: const Color(0xFF121212),
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: const Icon(Iconsax.add, color: Colors.white, size: 28),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8,
-        color: Colors.white,
-        child: SizedBox(
-          height: 64,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildNavItem(Iconsax.home, 'Home', true, () => context.go(RouteNames.patientDashboard)),
-              _buildNavItem(Iconsax.document_text, 'Records', false, () => context.push(RouteNames.patientMedicalHistory)),
-              const SizedBox(width: 48),
-              _buildNavItem(Iconsax.user, 'Profile', false, () => context.push(RouteNames.profile)),
-              _buildNavItem(Iconsax.radar5, 'Emergency', false, () => context.push(RouteNames.patientEmergency)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(IconData icon, String label, bool isActive, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: isActive ? const Color(0xFFFF5200) : const Color(0xFF94A3B8), size: 24),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            style: GoogleFonts.plusJakartaSans(
-              color: isActive ? const Color(0xFFFF5200) : const Color(0xFF94A3B8),
-              fontSize: 9,
-              fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
   Widget _buildDoctorItem(String name, String subtitle, String initials, BuildContext context) {
+    // Generate role-matched accent theme (Violet or Indigo based on initials hash)
+    final colors = [
+      const Color(0xFF8B5CF6), // Violet
+      const Color(0xFF6366F1), // Indigo
+    ];
+    final accentColor = colors[initials.hashCode.abs() % colors.length];
+    final boxBg = accentColor.withValues(alpha: 0.08);
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.015),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: const Color(0xFFF1F5F9),
-            child: Text(
-              initials,
-              style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 12),
+          // Styled Avatar
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: boxBg,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                initials,
+                style: GoogleFonts.plusJakartaSans(
+                  color: accentColor,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                ),
+              ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
+          // Info Details
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14, color: const Color(0xFF121212))),
-                const SizedBox(height: 2),
-                Text(subtitle, style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.w500)),
+                Text(
+                  name,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    color: const Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.plusJakartaSans(
+                    color: const Color(0xFF64748B),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Iconsax.message_2, size: 16, color: Color(0xFFFF5200)),
-            onPressed: () => context.push('/chat-list'),
-            style: IconButton.styleFrom(
-              backgroundColor: const Color(0xFFFF5200).withOpacity(0.08),
-              padding: const EdgeInsets.all(8),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          const SizedBox(width: 8),
+          // Message Circle Button
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: boxBg,
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              padding: EdgeInsets.zero,
+              icon: Icon(Iconsax.message_2, size: 16, color: accentColor),
+              onPressed: () => context.push('/chat-list'),
             ),
           ),
         ],

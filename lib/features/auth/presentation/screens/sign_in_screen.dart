@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -255,41 +256,14 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   Future<void> _complete2FASetup(String userRole) async {
     if (!mounted) return;
 
-    // Ask if user wants to enable biometric
-    final enableBiometric = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Enable Biometric Login?'),
-        content: const Text(
-          'Would you like to enable biometric login (fingerprint/Face ID) for quick access on this device?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Skip'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Enable'),
-          ),
-        ],
-      ),
-    );
+    // Complete 2FA and register device
+    await ref.read(authNotifierProvider.notifier).completeTwoFactor(
+          registerDevice: true,
+          enableBiometric: false,
+        );
 
     if (mounted) {
-      // Complete 2FA and register device
-      await ref.read(authNotifierProvider.notifier).completeTwoFactor(
-            registerDevice: true,
-            enableBiometric: enableBiometric ?? false,
-          );
-
-      if (mounted) {
-        _navigateToDashboard(userRole);
-      }
+      _navigateToDashboard(userRole);
     }
   }
 
@@ -414,293 +388,300 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
     return Scaffold(
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: AppSpacing.screenPadding,
+          padding: const EdgeInsets.symmetric(horizontal: 28),
           child: Form(
             key: _formKey,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 16),
-                // Back button
-                IconButton(
-                  onPressed: () => context.pop(),
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  style: IconButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.surface,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                // Role indicator - more prominent
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _roleColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: _roleColor.withValues(alpha: 0.3),
-                      width: 2,
+                SizedBox(height: size.height * 0.04),
+
+                // ── Back button ─────────────────────────────────
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    onPressed: () => context.pop(),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    style: IconButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(36, 36),
+                      alignment: Alignment.centerLeft,
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: _roleColor.withValues(alpha: 0.2),
-                          shape: BoxShape.circle,
-                  ),
-                        child: Icon(
-                          _roleIcon,
-                          color: _roleColor,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Signing in as',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: _roleColor.withValues(alpha: 0.8),
-                              ),
-                            ),
-                            Text(
-                    _roleTitle,
-                    style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                      color: _roleColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => context.go(RouteNames.roleSelection),
-                        style: TextButton.styleFrom(
-                          foregroundColor: _roleColor,
-                        ),
-                        child: const Text('Change'),
-                    ),
-                    ],
+                ),
+
+                SizedBox(height: size.height * 0.03),
+
+                // ── 1. LOGO & BRANDING ──────────────────────────
+                Center(
+                  child: Image.asset(
+                    'assets/logo_foreground.png',
+                    height: 150,
+                    width: 150,
+                    fit: BoxFit.contain,
                   ),
                 ),
-                const SizedBox(height: 24),
-                // Title
-                const Text(
-                  'Welcome back!',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
+                const SizedBox(height: 0),
+                Text(
+                  'CARESYNC',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.plusJakartaSans(
+                    color: const Color(0xFF0D0D0D),
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 5,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0D0D0D),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '${_roleTitle.toUpperCase()} PORTAL',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Enter your $_roleTitle account credentials',
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.6),
+                  'Sign in to your healthcare account',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    color: const Color(0xFF6B7280),
+                    letterSpacing: 0.1,
                   ),
                 ),
-                const SizedBox(height: 40),
-                // Email field
-                AuthTextField(
+
+                SizedBox(height: size.height * 0.05),
+
+                // ── 2. INPUT FIELDS ─────────────────────────────
+                _buildLabel('Email Address'),
+                const SizedBox(height: 8),
+                TextFormField(
                   controller: _emailController,
-                  label: 'Email',
-                  hint: 'Enter your email',
                   keyboardType: TextInputType.emailAddress,
-                  prefixIcon: Icons.email_outlined,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF0D0D0D),
+                  ),
+                  cursorColor: const Color(0xFF0D0D0D),
+                  decoration: _inputDecoration(
+                    hint: 'Enter your email address',
+                    icon: Icons.email_outlined,
+                  ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your email';
-                    }
-                    if (!value.contains('@')) {
-                      return 'Please enter a valid email';
-                    }
+                    if (value == null || value.isEmpty) return 'Email is required';
+                    if (!value.contains('@')) return 'Enter a valid email';
                     return null;
                   },
                 ),
-                const SizedBox(height: 16),
-                // Password field
-                AuthTextField(
+                const SizedBox(height: 20),
+                _buildLabel('Password'),
+                const SizedBox(height: 8),
+                TextFormField(
                   controller: _passwordController,
-                  label: 'Password',
-                  hint: 'Enter your password',
                   obscureText: _obscurePassword,
-                  prefixIcon: Icons.lock_outline_rounded,
-                  suffixIcon: IconButton(
-                    onPressed: () {
-                      setState(() => _obscurePassword = !_obscurePassword);
-                    },
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF0D0D0D),
+                  ),
+                  cursorColor: const Color(0xFF0D0D0D),
+                  decoration: _inputDecoration(
+                    hint: 'Enter your password',
+                    icon: Icons.lock_outline_rounded,
+                    suffix: IconButton(
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      icon: Icon(
+                        _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                        color: const Color(0xFF94A3B8),
+                        size: 20,
+                      ),
                     ),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your password';
-                    }
-                    if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
-                    }
+                    if (value == null || value.isEmpty) return 'Password is required';
+                    if (value.length < 6) return 'Must be at least 6 characters';
                     return null;
                   },
                 ),
-                const SizedBox(height: 24),
-                // Forgot password
+
+                // Forgot password — flush right, minimal gap
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () {
-                      // TODO: Implement forgot password
-                    },
+                    onPressed: () {},
+                    style: TextButton.styleFrom(
+                      foregroundColor: _roleColor,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      textStyle: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     child: const Text('Forgot Password?'),
                   ),
                 ),
-                const SizedBox(height: 24),
-                // Sign in button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _signIn,
+
+                const SizedBox(height: 8),
+
+                // ── 3. SIGN IN BUTTON ───────────────────────────
+                GestureDetector(
+                  onTap: _isLoading ? null : _signIn,
+                  child: Container(
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0D0D0D),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF0D0D0D).withValues(alpha: 0.15),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    alignment: Alignment.center,
                     child: _isLoading
                         ? const SizedBox(
                             height: 20,
                             width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
-                        : const Text('Sign In'),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // Biometric login section
-                Consumer(
-                  builder: (context, ref, child) {
-                    final biometricAvailable = ref.watch(biometricAvailableProvider);
-                    final biometricEnabled = ref.watch(biometricEnabledProvider);
-                    final biometricTypeName = ref.watch(biometricTypeNameProvider);
-
-                    // Only show if both conditions are met
-                    final shouldShow = (biometricAvailable.valueOrNull ?? false) &&
-                                       (biometricEnabled.valueOrNull ?? false);
-
-                    if (!shouldShow) return const SizedBox.shrink();
-
-                    final typeName = biometricTypeName.valueOrNull ?? 'Biometric';
-                    final isFaceId = typeName.toLowerCase().contains('face');
-
-                    return Column(
-                      children: [
-                        // Divider with "OR"
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Divider(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withValues(alpha: 0.2),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              child: Text(
-                                'OR',
-                                style: TextStyle(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurface
-                                      .withValues(alpha: 0.5),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: Divider(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withValues(alpha: 0.2),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        // Biometric button
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: (_isBiometricLoading || _isLoading) ? null : _signInWithBiometric,
-                            icon: _isBiometricLoading
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : Icon(
-                                    isFaceId ? Icons.face_rounded : Icons.fingerprint_rounded,
-                                    size: 24,
-                                  ),
-                            label: Text('Sign in with $typeName'),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              side: BorderSide(
-                                color: _roleColor.withValues(alpha: 0.5),
-                                width: 2,
-                              ),
-                              foregroundColor: _roleColor,
+                        : Text(
+                            'SIGN IN',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: 1.5,
                             ),
                           ),
-                        ),
-                      ],
-                    );
-                  },
+                  ),
                 ),
-                const SizedBox(height: 24),
-                // Sign up link
+
+                const SizedBox(height: 32),
+
+                // ── 4. SIGN UP PROMPT ───────────────────────────
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      "Don't have an account? ",
-                      style: TextStyle(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.6),
+                      "Don't have an account?  ",
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13,
+                        color: const Color(0xFF94A3B8),
                       ),
                     ),
-                    TextButton(
-                      onPressed: () {
-                        context.push(RouteNames.signUp, extra: widget.role);
-                      },
-                      child: const Text('Sign Up'),
+                    GestureDetector(
+                      onTap: () => context.push(RouteNames.signUp, extra: widget.role),
+                      child: Text(
+                        'Sign Up',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: _roleColor,
+                        ),
+                      ),
                     ),
                   ],
                 ),
+
+                const SizedBox(height: 32),
+
+                // ── 5. SECURITY NOTE ────────────────────────────
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.shield_outlined, size: 13, color: const Color(0xFF9CA3AF)),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Secured with end-to-end encryption',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        color: const Color(0xFF9CA3AF),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+
+                SizedBox(height: size.height * 0.02),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildLabel(String text) {
+    return Text(
+      text.toUpperCase(),
+      style: GoogleFonts.plusJakartaSans(
+        fontSize: 10,
+        fontWeight: FontWeight.w800,
+        color: const Color(0xFF374151),
+        letterSpacing: 1,
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration({
+    required String hint,
+    required IconData icon,
+    Widget? suffix,
+  }) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: GoogleFonts.plusJakartaSans(
+        color: const Color(0xFF9CA3AF),
+        fontSize: 14,
+        fontWeight: FontWeight.w400,
+      ),
+      prefixIcon: Icon(icon, color: const Color(0xFF6B7280), size: 18),
+      suffixIcon: suffix,
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFD1D5DB), width: 1),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFD1D5DB), width: 1),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF0D0D0D), width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
       ),
     );
   }

@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart'; // Ensure intl package is in pubspec.yaml
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_spacing.dart';
 import '../../../../routing/route_names.dart';
 import '../../providers/auth_provider.dart';
-import '../widgets/auth_text_field.dart';
 
 class SignUpScreen extends ConsumerStatefulWidget {
   final String role;
@@ -28,7 +27,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final _weightController = TextEditingController();
   String? _selectedGender;
   DateTime? _selectedDateOfBirth;
-  final _dobController = TextEditingController(); // To show text in field
+  final _dobController = TextEditingController();
 
   // Doctor Specific Controllers
   final _hospitalController = TextEditingController();
@@ -90,14 +89,14 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().subtract(const Duration(days: 365 * 18)), // Default to 18 years ago
+      initialDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
       firstDate: DateTime(1900),
       lastDate: DateTime.now(),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: AppColors.primary,
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF0D0D0D),
               onPrimary: Colors.white,
               onSurface: Colors.black,
             ),
@@ -126,15 +125,12 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         fullName: _fullNameController.text.trim(),
         phone: _phoneController.text.trim(),
         role: widget.role,
-        // Pass doctor fields if role is doctor
         hospitalName: widget.role == 'doctor' ? _hospitalController.text.trim() : null,
         specialization: widget.role == 'doctor' ? _specializationController.text.trim() : null,
         medicalRegNumber: widget.role == 'doctor' ? _medRegController.text.trim() : null,
-        // Pass pharmacist fields if role is pharmacist
         pharmacyName: widget.role == 'pharmacist' ? _pharmacyNameController.text.trim() : null,
         pharmacyAddress: widget.role == 'pharmacist' ? _pharmacyAddressController.text.trim() : null,
         pharmacistLicenseNumber: widget.role == 'pharmacist' ? _pharmacistLicenseController.text.trim() : null,
-        // Pass patient fields if role is patient
         gender: widget.role == 'patient' ? _selectedGender : null,
         dateOfBirth: widget.role == 'patient' ? _selectedDateOfBirth : null,
         weight: widget.role == 'patient' && _weightController.text.isNotEmpty
@@ -192,361 +188,560 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
     final isDoctor = widget.role == 'doctor';
     final isPatient = widget.role == 'patient';
+    final isPharmacist = widget.role == 'pharmacist';
 
     return Scaffold(
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: AppSpacing.screenPadding,
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 16),
-                IconButton(
-                  onPressed: () => context.pop(),
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  style: IconButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.surface,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                // Role Badge
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _roleColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    _roleTitle,
-                    style: TextStyle(
-                      color: _roleColor,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
+          physics: const BouncingScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Back button
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: IconButton(
+                        onPressed: () => context.pop(),
+                        icon: const Icon(Icons.arrow_back_rounded),
+                        style: IconButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(36, 36),
+                          alignment: Alignment.centerLeft,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Create Account',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isDoctor
-                      ? 'Enter your professional details to register'
-                      : 'Fill in your details to get started',
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.6),
-                  ),
-                ),
-                const SizedBox(height: 32),
 
-                // Common Fields
-                AuthTextField(
-                  controller: _fullNameController,
-                  label: 'Full Name',
-                  hint: 'Enter your full name',
-                  prefixIcon: Icons.person_outline_rounded,
-                  textCapitalization: TextCapitalization.words,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your full name';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                AuthTextField(
-                  controller: _emailController,
-                  label: 'Email',
-                  hint: 'Enter your email',
-                  keyboardType: TextInputType.emailAddress,
-                  prefixIcon: Icons.email_outlined,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your email';
-                    }
-                    if (!value.contains('@')) {
-                      return 'Please enter a valid email';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                AuthTextField(
-                  controller: _phoneController,
-                  label: 'Phone Number',
-                  hint: 'Enter your phone number',
-                  keyboardType: TextInputType.phone,
-                  prefixIcon: Icons.phone_outlined,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your phone number';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
+                  SizedBox(height: size.height * 0.015),
 
-                // PATIENT SPECIFIC FIELDS
-                if (isPatient) ...[
-                  const Divider(height: 32),
-                  const Text(
-                    'Personal Details',
-                    style: TextStyle(
+                  // ── 1. LOGO & BRANDING ──────────────────────────
+                  Center(
+                    child: Image.asset(
+                      'assets/logo_foreground.png',
+                      height: 120,
+                      width: 120,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  const SizedBox(height: 0),
+                  Text(
+                    'CARESYNC',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.plusJakartaSans(
+                      color: const Color(0xFF0D0D0D),
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 5,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0D0D0D),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${_roleTitle.toUpperCase()} PORTAL',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Create your healthcare account',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13,
+                      color: const Color(0xFF6B7280),
+                      letterSpacing: 0.1,
+                    ),
+                  ),
+
+                  SizedBox(height: size.height * 0.04),
+
+                  // ── 2. INPUT FIELDS ─────────────────────────────
+                  _buildLabel('Full Name'),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _fullNameController,
+                    textCapitalization: TextCapitalization.words,
+                    style: GoogleFonts.plusJakartaSans(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Colors.grey,
+                      color: const Color(0xFF0D0D0D),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Gender Dropdown
-                  DropdownButtonFormField<String>(
-                    decoration: InputDecoration(
-                      labelText: 'Gender',
-                      prefixIcon: const Icon(Icons.people_outline),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                    cursorColor: const Color(0xFF0D0D0D),
+                    decoration: _inputDecoration(
+                      hint: 'Enter your full name',
+                      icon: Icons.person_outline_rounded,
                     ),
-                    value: _selectedGender,
-                    items: const [
-                      DropdownMenuItem(value: 'Male', child: Text('Male')),
-                      DropdownMenuItem(value: 'Female', child: Text('Female')),
-                      DropdownMenuItem(value: 'Other', child: Text('Other')),
-                    ],
-                    onChanged: (val) => setState(() => _selectedGender = val),
-                    validator: (val) => val == null ? 'Please select gender' : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Date of Birth Picker
-                  GestureDetector(
-                    onTap: () => _selectDate(context),
-                    child: AbsorbPointer(
-                      child: AuthTextField(
-                        controller: _dobController,
-                        label: 'Date of Birth',
-                        hint: 'YYYY-MM-DD',
-                        prefixIcon: Icons.calendar_today_outlined,
-                        validator: (value) => value!.isEmpty ? 'Please enter date of birth' : null,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Weight Input
-                  AuthTextField(
-                    controller: _weightController,
-                    label: 'Weight (kg)',
-                    hint: 'e.g. 70.5',
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    prefixIcon: Icons.monitor_weight_outlined,
                     validator: (value) {
-                      if (value != null && value.isNotEmpty) {
-                        if (double.tryParse(value) == null) {
-                          return 'Invalid weight';
-                        }
-                      }
+                      if (value == null || value.isEmpty) return 'Full name is required';
                       return null;
                     },
                   ),
-                  const Divider(height: 32),
-                ],
+                  const SizedBox(height: 20),
 
-                // DOCTOR SPECIFIC FIELDS
-                if (isDoctor) ...[
-                  const Divider(height: 32),
-                  const Text(
-                    'Professional Details',
-                    style: TextStyle(
+                  _buildLabel('Email Address'),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    style: GoogleFonts.plusJakartaSans(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Colors.grey,
+                      color: const Color(0xFF0D0D0D),
                     ),
+                    cursorColor: const Color(0xFF0D0D0D),
+                    decoration: _inputDecoration(
+                      hint: 'Enter your email address',
+                      icon: Icons.email_outlined,
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return 'Email is required';
+                      if (!value.contains('@')) return 'Enter a valid email';
+                      return null;
+                    },
                   ),
-                  const SizedBox(height: 16),
-                  AuthTextField(
-                    controller: _hospitalController,
-                    label: 'Hospital / Clinic Name',
-                    hint: 'Where do you practice?',
-                    prefixIcon: Icons.local_hospital_outlined,
-                    textCapitalization: TextCapitalization.words,
-                    validator: (value) => value!.isEmpty ? 'Required for doctors' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  AuthTextField(
-                    controller: _specializationController,
-                    label: 'Specialization',
-                    hint: 'e.g. Cardiologist, General Physician',
-                    prefixIcon: Icons.school_outlined,
-                    textCapitalization: TextCapitalization.words,
-                    validator: (value) => value!.isEmpty ? 'Required for doctors' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  AuthTextField(
-                    controller: _medRegController,
-                    label: 'Medical Registration No. (Optional)',
-                    hint: 'Registration ID',
-                    prefixIcon: Icons.badge_outlined,
-                  ),
-                  const Divider(height: 32),
-                ],
+                  const SizedBox(height: 20),
 
-                // PHARMACIST SPECIFIC FIELDS
-                if (widget.role == 'pharmacist') ...[
-                  const Divider(height: 32),
-                  const Text(
-                    'Pharmacy Details',
-                    style: TextStyle(
+                  _buildLabel('Phone Number'),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    style: GoogleFonts.plusJakartaSans(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Colors.grey,
+                      color: const Color(0xFF0D0D0D),
                     ),
+                    cursorColor: const Color(0xFF0D0D0D),
+                    decoration: _inputDecoration(
+                      hint: 'Enter your phone number',
+                      icon: Icons.phone_outlined,
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return 'Phone number is required';
+                      return null;
+                    },
                   ),
-                  const SizedBox(height: 16),
-                  AuthTextField(
-                    controller: _pharmacyNameController,
-                    label: 'Pharmacy Name',
-                    hint: 'e.g. CareSync Pharmacy, Walgreens',
-                    prefixIcon: Icons.local_pharmacy_outlined,
-                    textCapitalization: TextCapitalization.words,
-                    validator: (value) => value!.isEmpty ? 'Required for pharmacists' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  AuthTextField(
-                    controller: _pharmacyAddressController,
-                    label: 'Pharmacy Address',
-                    hint: 'Where is the pharmacy located?',
-                    prefixIcon: Icons.location_on_outlined,
-                    textCapitalization: TextCapitalization.words,
-                    validator: (value) => value!.isEmpty ? 'Required for pharmacists' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  AuthTextField(
-                    controller: _pharmacistLicenseController,
-                    label: 'Pharmacist License Number',
-                    hint: 'Enter your license ID',
-                    prefixIcon: Icons.badge_outlined,
-                    validator: (value) => value!.isEmpty ? 'Required for pharmacists' : null,
-                  ),
-                  const Divider(height: 32),
-                ],
+                  const SizedBox(height: 20),
 
-                // Password Fields
-                AuthTextField(
-                  controller: _passwordController,
-                  label: 'Password',
-                  hint: 'Create a password',
-                  obscureText: _obscurePassword,
-                  prefixIcon: Icons.lock_outline_rounded,
-                  suffixIcon: IconButton(
-                    onPressed: () {
-                      setState(() => _obscurePassword = !_obscurePassword);
-                    },
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please create a password';
-                    }
-                    if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                AuthTextField(
-                  controller: _confirmPasswordController,
-                  label: 'Confirm Password',
-                  hint: 'Confirm your password',
-                  obscureText: _obscureConfirmPassword,
-                  prefixIcon: Icons.lock_outline_rounded,
-                  suffixIcon: IconButton(
-                    onPressed: () {
-                      setState(() =>
-                      _obscureConfirmPassword = !_obscureConfirmPassword);
-                    },
-                    icon: Icon(
-                      _obscureConfirmPassword
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please confirm your password';
-                    }
-                    if (value != _passwordController.text) {
-                      return 'Passwords do not match';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 32),
-                // Sign up button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _signUp,
-                    child: _isLoading
-                        ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
+                  // PATIENT SPECIFIC FIELDS
+                  if (isPatient) ...[
+                    _buildLabel('Gender'),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF0D0D0D),
                       ),
-                    )
-                        : const Text('Create Account'),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // Sign in link
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      "Already have an account? ",
-                      style: TextStyle(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.6),
+                      decoration: _inputDecoration(
+                        hint: 'Select your gender',
+                        icon: Icons.people_outline_rounded,
+                      ),
+                      value: _selectedGender,
+                      dropdownColor: Colors.white,
+                      items: const [
+                        DropdownMenuItem(value: 'Male', child: Text('Male')),
+                        DropdownMenuItem(value: 'Female', child: Text('Female')),
+                        DropdownMenuItem(value: 'Other', child: Text('Other')),
+                      ],
+                      onChanged: (val) => setState(() => _selectedGender = val),
+                      validator: (val) => val == null ? 'Gender selection is required' : null,
+                    ),
+                    const SizedBox(height: 20),
+
+                    _buildLabel('Date of Birth'),
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap: () => _selectDate(context),
+                      child: AbsorbPointer(
+                        child: TextFormField(
+                          controller: _dobController,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF0D0D0D),
+                          ),
+                          decoration: _inputDecoration(
+                            hint: 'YYYY-MM-DD',
+                            icon: Icons.calendar_today_outlined,
+                          ),
+                          validator: (value) => (value == null || value.isEmpty) ? 'Date of birth is required' : null,
+                        ),
                       ),
                     ),
-                    TextButton(
-                      onPressed: () => context.pop(),
-                      child: const Text('Sign In'),
+                    const SizedBox(height: 20),
+
+                    _buildLabel('Weight (kg)'),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _weightController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF0D0D0D),
+                      ),
+                      cursorColor: const Color(0xFF0D0D0D),
+                      decoration: _inputDecoration(
+                        hint: 'e.g. 70.5',
+                        icon: Icons.monitor_weight_outlined,
+                      ),
+                      validator: (value) {
+                        if (value != null && value.isNotEmpty) {
+                          if (double.tryParse(value) == null) {
+                            return 'Enter a valid weight';
+                          }
+                        }
+                        return null;
+                      },
                     ),
+                    const SizedBox(height: 20),
                   ],
-                ),
-                const SizedBox(height: 24),
-              ],
+
+                  // DOCTOR SPECIFIC FIELDS
+                  if (isDoctor) ...[
+                    _buildLabel('Hospital / Clinic Name'),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _hospitalController,
+                      textCapitalization: TextCapitalization.words,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF0D0D0D),
+                      ),
+                      cursorColor: const Color(0xFF0D0D0D),
+                      decoration: _inputDecoration(
+                        hint: 'Where do you practice?',
+                        icon: Icons.local_hospital_outlined,
+                      ),
+                      validator: (value) => (value == null || value.isEmpty) ? 'Hospital name is required' : null,
+                    ),
+                    const SizedBox(height: 20),
+
+                    _buildLabel('Specialization'),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _specializationController,
+                      textCapitalization: TextCapitalization.words,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF0D0D0D),
+                      ),
+                      cursorColor: const Color(0xFF0D0D0D),
+                      decoration: _inputDecoration(
+                        hint: 'e.g. Cardiologist, General Physician',
+                        icon: Icons.school_outlined,
+                      ),
+                      validator: (value) => (value == null || value.isEmpty) ? 'Specialization is required' : null,
+                    ),
+                    const SizedBox(height: 20),
+
+                    _buildLabel('Medical Registration No. (Optional)'),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _medRegController,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF0D0D0D),
+                      ),
+                      cursorColor: const Color(0xFF0D0D0D),
+                      decoration: _inputDecoration(
+                        hint: 'Enter medical registration ID',
+                        icon: Icons.badge_outlined,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // PHARMACIST SPECIFIC FIELDS
+                  if (isPharmacist) ...[
+                    _buildLabel('Pharmacy Name'),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _pharmacyNameController,
+                      textCapitalization: TextCapitalization.words,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF0D0D0D),
+                      ),
+                      cursorColor: const Color(0xFF0D0D0D),
+                      decoration: _inputDecoration(
+                        hint: 'e.g. CareSync Pharmacy, Walgreens',
+                        icon: Icons.local_pharmacy_outlined,
+                      ),
+                      validator: (value) => (value == null || value.isEmpty) ? 'Pharmacy name is required' : null,
+                    ),
+                    const SizedBox(height: 20),
+
+                    _buildLabel('Pharmacy Address'),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _pharmacyAddressController,
+                      textCapitalization: TextCapitalization.words,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF0D0D0D),
+                      ),
+                      cursorColor: const Color(0xFF0D0D0D),
+                      decoration: _inputDecoration(
+                        hint: 'Where is the pharmacy located?',
+                        icon: Icons.location_on_outlined,
+                      ),
+                      validator: (value) => (value == null || value.isEmpty) ? 'Pharmacy address is required' : null,
+                    ),
+                    const SizedBox(height: 20),
+
+                    _buildLabel('Pharmacist License Number'),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _pharmacistLicenseController,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF0D0D0D),
+                      ),
+                      cursorColor: const Color(0xFF0D0D0D),
+                      decoration: _inputDecoration(
+                        hint: 'Enter your license ID',
+                        icon: Icons.badge_outlined,
+                      ),
+                      validator: (value) => (value == null || value.isEmpty) ? 'License number is required' : null,
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  _buildLabel('Password'),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: _obscurePassword,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF0D0D0D),
+                    ),
+                    cursorColor: const Color(0xFF0D0D0D),
+                    decoration: _inputDecoration(
+                      hint: 'Create a password',
+                      icon: Icons.lock_outline_rounded,
+                      suffix: IconButton(
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                        icon: Icon(
+                          _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          color: const Color(0xFF9CA3AF),
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return 'Password is required';
+                      if (value.length < 6) return 'Password must be at least 6 characters';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+
+                  _buildLabel('Confirm Password'),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _confirmPasswordController,
+                    obscureText: _obscureConfirmPassword,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF0D0D0D),
+                    ),
+                    cursorColor: const Color(0xFF0D0D0D),
+                    decoration: _inputDecoration(
+                      hint: 'Confirm your password',
+                      icon: Icons.lock_outline_rounded,
+                      suffix: IconButton(
+                        onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                        icon: Icon(
+                          _obscureConfirmPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          color: const Color(0xFF9CA3AF),
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return 'Password confirmation is required';
+                      if (value != _passwordController.text) return 'Passwords do not match';
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // ── 3. BUTTON ───────────────────────────────────
+                  GestureDetector(
+                    onTap: _isLoading ? null : _signUp,
+                    child: Container(
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0D0D0D),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.15),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: _isLoading
+                          ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                          : Text(
+                        'CREATE ACCOUNT',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  // ── 4. SIGN IN ROUTE LINK ───────────────────────
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        "Already have an account? ",
+                        style: GoogleFonts.plusJakartaSans(
+                          color: const Color(0xFF6B7280),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => context.pop(),
+                        child: Text(
+                          'Sign In',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: const Color(0xFF0D0D0D),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 48),
+
+                  // ── 5. SECURITY NOTE ────────────────────────────
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.shield_outlined, size: 13, color: Color(0xFF9CA3AF)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Secured with end-to-end encryption',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          color: const Color(0xFF9CA3AF),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  SizedBox(height: size.height * 0.04),
+                ],
+              ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildLabel(String text) {
+    return Text(
+      text.toUpperCase(),
+      style: GoogleFonts.plusJakartaSans(
+        fontSize: 10,
+        fontWeight: FontWeight.w800,
+        color: const Color(0xFF374151),
+        letterSpacing: 1,
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration({
+    required String hint,
+    required IconData icon,
+    Widget? suffix,
+  }) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: GoogleFonts.plusJakartaSans(
+        color: const Color(0xFF9CA3AF),
+        fontSize: 14,
+        fontWeight: FontWeight.w400,
+      ),
+      prefixIcon: Icon(icon, color: const Color(0xFF6B7280), size: 18),
+      suffixIcon: suffix,
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFD1D5DB), width: 1),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFD1D5DB), width: 1),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF0D0D0D), width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
       ),
     );
   }

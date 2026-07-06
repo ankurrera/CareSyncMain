@@ -37,7 +37,7 @@ class AuthTextField extends StatelessWidget {
             color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         TextFormField(
           controller: controller,
           obscureText: obscureText,

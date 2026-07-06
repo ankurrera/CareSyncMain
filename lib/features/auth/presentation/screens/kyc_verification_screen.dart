@@ -488,7 +488,7 @@ class _KYCVerificationScreenState extends ConsumerState<KYCVerificationScreen> {
                   clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
                   child: Row(
@@ -549,17 +549,17 @@ class _KYCVerificationScreenState extends ConsumerState<KYCVerificationScreen> {
                   prefixIcon: const Icon(Icons.person_outline_rounded, color: Color(0xFF64748B), size: 20),
                   filled: true,
                   fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: Color(0xFF121212), width: 1.5),
                   ),
                 ),
@@ -575,7 +575,7 @@ class _KYCVerificationScreenState extends ConsumerState<KYCVerificationScreen> {
               // Date of Birth Input
               InkWell(
                 onTap: _selectDate,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(12),
                 child: InputDecorator(
                   decoration: InputDecoration(
                     labelText: 'Date of Birth',
@@ -583,13 +583,13 @@ class _KYCVerificationScreenState extends ConsumerState<KYCVerificationScreen> {
                     prefixIcon: const Icon(Icons.calendar_today_rounded, color: Color(0xFF64748B), size: 18),
                     filled: true,
                     fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(12),
                       borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                     ),
                     enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(12),
                       borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                     ),
                   ),
@@ -725,35 +725,35 @@ class _KYCVerificationScreenState extends ConsumerState<KYCVerificationScreen> {
         color: Colors.white,
         border: Border.all(
           color: hasDocument ? const Color(0xFF22C55E) : const Color(0xFFE2E8F0),
-          width: hasDocument ? 1.5 : 1,
+          width: 1.0,
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             child: Row(
               children: [
                 Container(
-                  width: 52,
-                  height: 52,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
                     color: hasDocument
                         ? const Color(0xFFDCFCE7)
                         : const Color(0xFFFAFAFA),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
                     hasDocument ? Icons.check_circle_rounded : icon,
                     color: hasDocument ? const Color(0xFF22C55E) : const Color(0xFF64748B),
-                    size: 24,
+                    size: 20,
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

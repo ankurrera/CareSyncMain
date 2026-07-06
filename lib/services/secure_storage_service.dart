@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
 
@@ -146,6 +147,28 @@ class SecureStorageService {
     await _storage.delete(key: _refreshTokenKey);
     await _storage.delete(key: _accessTokenKey);
     await _storage.delete(key: _lastActivityKey);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // OFFLINE AUDIT LOG QUEUE
+  // ─────────────────────────────────────────────────────────────────────────
+  static const String _queuedLogsKey = 'caresync_queued_emergency_logs';
+
+  /// Fetch queued offline logs
+  Future<List<Map<String, dynamic>>> getQueuedLogs() async {
+    final raw = await _storage.read(key: _queuedLogsKey);
+    if (raw == null) return [];
+    try {
+      final list = jsonDecode(raw) as List;
+      return list.map((e) => Map<String, dynamic>.from(e)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Save queued offline logs
+  Future<void> saveQueuedLogs(List<Map<String, dynamic>> logs) async {
+    await _storage.write(key: _queuedLogsKey, value: jsonEncode(logs));
   }
 }
 

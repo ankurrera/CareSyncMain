@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/chat.dart';
 import '../../../services/chat_service.dart';
@@ -28,8 +29,18 @@ class ChatController extends _$ChatController {
   @override
   FutureOr<void> build() {}
 
-  Future<void> sendMessage(String roomId, String content) async {
-    await ref.read(chatServiceProvider).sendMessage(roomId, content);
+  Future<void> sendMessage(String roomId, String content, {String? attachmentUrl}) async {
+    await ref.read(chatServiceProvider).sendMessage(roomId, content, attachmentUrl: attachmentUrl);
+  }
+
+  Future<void> markMessagesAsRead(String roomId) async {
+    final currentUserId = SupabaseService.instance.currentUserId;
+    if (currentUserId == null) return;
+    await ref.read(chatServiceProvider).markMessagesAsRead(roomId, currentUserId);
+  }
+
+  Future<String?> uploadChatAttachment(String roomId, String filePath, Uint8List fileBytes) async {
+    return ref.read(chatServiceProvider).uploadChatAttachment(roomId, filePath, fileBytes);
   }
 
   Future<ChatRoom> getOrCreateRoom(String otherId) async {

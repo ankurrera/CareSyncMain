@@ -28,6 +28,8 @@ class Message with _$Message {
     @JsonKey(name: 'room_id') required String roomId,
     @JsonKey(name: 'sender_id') required String senderId,
     required String content, // Encrypted Base64 string
+    @JsonKey(name: 'is_read') @Default(false) bool isRead,
+    @JsonKey(name: 'attachment_url') String? attachmentUrl,
     @JsonKey(name: 'created_at') required DateTime createdAt,
   }) = _Message;
 

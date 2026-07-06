@@ -18,8 +18,6 @@ class _CareSyncState extends ConsumerState<CareSync> {
   void initState() {
     super.initState();
     AppLifecycleService.instance.initialize();
-    // Check for biometric lock immediately on startup
-    AppLifecycleService.instance.checkLockOnStartup();
   }
 
   @override
@@ -41,120 +39,44 @@ class _CareSyncState extends ConsumerState<CareSync> {
       routerConfig: router,
       builder: (context, child) {
         final mediaQueryData = MediaQuery.of(context);
+        final double screenWidth = mediaQueryData.size.width;
+        final bool isWideScreen = screenWidth > 480;
+
+        Widget appContent = child ?? const SizedBox();
+
+        if (isWideScreen) {
+          appContent = Center(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 480),
+              decoration: BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 24,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: child,
+            ),
+          );
+        }
+
         return MediaQuery(
           data: mediaQueryData.copyWith(
+            // Prevent text size scaling from breaking standard layouts
             textScaler: TextScaler.noScaling,
+            // Normalize layout boundaries on wide screens
+            size: isWideScreen
+                ? Size(480, mediaQueryData.size.height)
+                : mediaQueryData.size,
           ),
-          child: Stack(
-            children: [
-              if (child != null) child,
-              const _GlobalBiometricLock(),
-            ],
+          child: Container(
+            color: isWideScreen ? const Color(0xFFF8FAFC) : null,
+            child: appContent,
           ),
         );
       },
-    );
-  }
-}
-
-/// Overlay widget that shows/hides based on stream events
-class _GlobalBiometricLock extends StatefulWidget {
-  const _GlobalBiometricLock();
-
-  @override
-  State<_GlobalBiometricLock> createState() => _GlobalBiometricLockState();
-}
-
-class _GlobalBiometricLockState extends State<_GlobalBiometricLock> {
-  bool _isLocked = false;
-  StreamSubscription? _subscription;
-
-  @override
-  void initState() {
-    super.initState();
-    _subscription = AppLifecycleService.instance.authStatusStream.listen((locked) {
-      if (mounted) {
-        setState(() => _isLocked = locked);
-        if (locked) _triggerAuth();
-      }
-    });
-  }
-
-  Future<void> _triggerAuth() async {
-    // Wait for UI to render
-    await Future.delayed(const Duration(milliseconds: 200));
-    await AppLifecycleService.instance.authenticate();
-  }
-
-  @override
-  void dispose() {
-    _subscription?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_isLocked) return const SizedBox.shrink();
-
-    return Material(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.fingerprint_rounded,
-                size: 80,
-                color: Theme.of(context).primaryColor,
-              ),
-            ),
-            const SizedBox(height: 32),
-            const Text(
-              'App Locked',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                letterSpacing: -0.5,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Please authenticate to access CareSync',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 48),
-            SizedBox(
-              width: 200,
-              height: 56,
-              child: ElevatedButton.icon(
-                onPressed: () => AppLifecycleService.instance.authenticate(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).primaryColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  elevation: 0,
-                ),
-                icon: const Icon(Icons.lock_open_rounded),
-                label: const Text(
-                  'Unlock App',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

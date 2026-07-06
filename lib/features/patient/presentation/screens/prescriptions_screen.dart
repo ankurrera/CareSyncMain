@@ -146,43 +146,43 @@ class PrescriptionCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.015),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.012),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: InkWell(
         onTap: () => _showDetails(context),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. Header: Doctor Info + Status Badge
+                  // 1. Header: Doctor Info + Status Badge + Type Badge
                   Row(
                     children: [
                       CircleAvatar(
-                        radius: 20,
+                        radius: 18,
                         backgroundColor: const Color(0xFFF1F5F9),
                         child: Text(
                           doctorInitial,
                           style: GoogleFonts.plusJakartaSans(
-                            color: const Color(0xFF64748B),
+                            color: const Color(0xFF475569),
                             fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                            fontSize: 12,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,112 +190,262 @@ class PrescriptionCard extends StatelessWidget {
                             Text(
                               doctorName,
                               style: GoogleFonts.plusJakartaSans(
-                                fontSize: 14,
+                                fontSize: 13,
                                 fontWeight: FontWeight.bold,
-                                color: const Color(0xFF121212),
+                                color: const Color(0xFF1E293B),
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 1),
                             Text(
-                              dateFormat.format(prescription.prescriptionDate ?? prescription.createdAt),
+                              [
+                                dateFormat.format(prescription.prescriptionDate ?? prescription.createdAt),
+                                if (prescription.displayClinicName != null && prescription.displayClinicName!.trim().isNotEmpty)
+                                  prescription.displayClinicName!.trim(),
+                              ].join(' • '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.plusJakartaSans(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                color: const Color(0xFF64748B),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF94A3B8),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      _StatusBadge(status: status),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          _StatusBadge(status: status),
+                          if (prescription.prescriptionType != null && prescription.prescriptionType!.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              prescription.prescriptionType!.replaceAll('_', ' ').toUpperCase(),
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 7.5,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF94A3B8),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
 
-                  // 2. Diagnosis Box
+                  // 2. Diagnosis Box (Clean accent card style with Valid Until date)
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFAFAFA),
-                      borderRadius: BorderRadius.circular(14),
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text(
-                          'DIAGNOSIS',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFF94A3B8),
-                            letterSpacing: 0.5,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'DIAGNOSIS',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF94A3B8),
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                prescription.displayDiagnosis,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF1E293B),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          prescription.displayDiagnosis,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFF121212),
+                        if (prescription.validUntil != null)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                'VALID UNTIL',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF94A3B8),
+                                  letterSpacing: 0.8,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                dateFormat.format(prescription.validUntil!),
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF475569),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
                       ],
                     ),
                   ),
 
-                  // 3. Medications (Chips)
+                  // 3. Medications (Detailed specs list)
                   if (prescription.items.isNotEmpty) ...[
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     Text(
-                      'Prescribed Medications',
+                      'PRESCRIBED MEDICATIONS',
                       style: GoogleFonts.plusJakartaSans(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
                         color: const Color(0xFF64748B),
+                        letterSpacing: 0.5,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: prescription.items.take(3).map((item) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFAFAFA),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                          ),
-                          child: Text(
-                            '${item.medicineName} ${item.dosage}',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: const Color(0xFF64748B),
-                            ),
+                        final instructionLine = [
+                          if (item.frequency.isNotEmpty) item.frequency,
+                          if (item.duration != null && item.duration!.trim().isNotEmpty) item.duration!.trim(),
+                          if (item.foodTiming != null && item.foodTiming!.trim().isNotEmpty) item.foodTiming!.trim(),
+                        ].join(' • ');
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                margin: const EdgeInsets.only(top: 6),
+                                width: 5,
+                                height: 5,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFFF5200),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    RichText(
+                                      text: TextSpan(
+                                        text: item.medicineName,
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: const Color(0xFF1E293B),
+                                        ),
+                                        children: [
+                                          TextSpan(
+                                            text: ' (${item.dosage})',
+                                            style: GoogleFonts.plusJakartaSans(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: const Color(0xFF64748B),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (instructionLine.isNotEmpty || (item.instructions != null && item.instructions!.trim().isNotEmpty))
+                                      const SizedBox(height: 2),
+                                    if (instructionLine.isNotEmpty)
+                                      Text(
+                                        instructionLine,
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: const Color(0xFF64748B),
+                                        ),
+                                      ),
+                                    if (item.instructions != null && item.instructions!.trim().isNotEmpty)
+                                      Text(
+                                        'Directives: ${item.instructions!.trim()}',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.w500,
+                                          color: const Color(0xFF94A3B8),
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         );
                       }).toList(),
                     ),
                     if (prescription.items.length > 3)
                       Padding(
-                        padding: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.only(top: 2),
                         child: Text(
                           '+ ${prescription.items.length - 3} more',
-                          style: GoogleFonts.plusJakartaSans(fontSize: 12, color: const Color(0xFFFF5200), fontWeight: FontWeight.bold),
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            color: const Color(0xFFFF5200),
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                   ],
+
+                  // 4. Clinical Notes (Patient/Doctor notes)
+                  () {
+                    final notes = prescription.doctorNotes ?? prescription.patientNotes ?? prescription.notes;
+                    if (notes == null || notes.trim().isEmpty) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.notes_rounded, size: 12, color: Color(0xFF94A3B8)),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                notes,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 10,
+                                  color: const Color(0xFF64748B),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }(),
                 ],
               ),
             ),
             
-            // 4. Footer Row
+            // 5. Footer Row
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: const BoxDecoration(
                 border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
               ),
@@ -308,10 +458,27 @@ class PrescriptionCard extends StatelessWidget {
                       const SizedBox(width: 6),
                       Text(
                         prescription.items.length.toString(),
-                        style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 12, color: const Color(0xFF121212)),
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: const Color(0xFF1E293B),
+                        ),
                       ),
                       const SizedBox(width: 4),
-                      Text('items', style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.w500)),
+                      Text(
+                        'items',
+                        style: GoogleFonts.plusJakartaSans(
+                          color: const Color(0xFF64748B),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Icon(
+                        prescription.isPublic ? Iconsax.global : Iconsax.security_user,
+                        size: 12,
+                        color: const Color(0xFF94A3B8),
+                      ),
                     ],
                   ),
                   Row(
@@ -489,13 +656,26 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
                         subtitle: prescription.displayClinicName,
                         icon: Iconsax.user,
                       ),
-                      if (prescription.doctorDetails?.specialization != null) ...[
+                      if (prescription.doctorDetails?.specialization != null || prescription.doctorDetails?.medicalRegistrationNumber != null) ...[
                         const SizedBox(height: 8),
                         Padding(
                           padding: const EdgeInsets.only(left: 32),
-                          child: Text(
-                            prescription.doctorDetails!.specialization!,
-                            style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.w500),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (prescription.doctorDetails?.specialization != null && prescription.doctorDetails!.specialization!.trim().isNotEmpty)
+                                Text(
+                                  prescription.doctorDetails!.specialization!.trim(),
+                                  style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.w600),
+                                ),
+                              if (prescription.doctorDetails?.medicalRegistrationNumber != null && prescription.doctorDetails!.medicalRegistrationNumber!.trim().isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Registration No: ${prescription.doctorDetails!.medicalRegistrationNumber!.trim()}',
+                                  style: GoogleFonts.plusJakartaSans(color: const Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w500),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                       ],
@@ -715,6 +895,18 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
   }
 
   Widget _buildMedicationTile(PrescriptionItem item, int index) {
+    final typeAndRoute = [
+      if (item.displayMedicineType != null) item.displayMedicineType!,
+      if (item.displayRoute != null) item.displayRoute!,
+    ].join(' • ');
+
+    final subtitleParts = [
+      item.dosage,
+      if (typeAndRoute.isNotEmpty) typeAndRoute,
+      item.frequency,
+      if (item.foodTiming != null && item.foodTiming!.trim().isNotEmpty) item.foodTiming!.trim(),
+    ].join(' • ');
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -734,10 +926,16 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.medicineName, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14, color: const Color(0xFF121212))),
-                const SizedBox(height: 2),
-                Text('${item.dosage} • ${item.frequency}', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
-
+                Text(item.medicineName, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14, color: const Color(0xFF1E293B))),
+                const SizedBox(height: 4),
+                Text(
+                  subtitleParts,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    color: const Color(0xFF64748B),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
                 if (item.displayInstructions != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
@@ -745,8 +943,8 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
                       padding: const EdgeInsets.all(10),
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFAFAFA),
-                        borderRadius: BorderRadius.circular(10),
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
                       child: Text(
@@ -758,10 +956,37 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
               ],
             ),
           ),
-          if (item.duration != null)
-            Text(
-                '${item.duration} days',
-                style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFFFF5200))
+          const SizedBox(width: 12),
+          if ((item.duration != null && item.duration!.trim().isNotEmpty) || (item.quantity != null && item.quantity! > 0))
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (item.duration != null && item.duration!.trim().isNotEmpty)
+                  Text(
+                    item.duration!.toLowerCase().contains('day')
+                        ? item.duration!.trim()
+                        : '${item.duration!.trim()} days',
+                    style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFFFF5200)),
+                  ),
+                if (item.quantity != null && item.quantity! > 0) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'QTY: ${item.quantity}',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF475569),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
         ],
       ),

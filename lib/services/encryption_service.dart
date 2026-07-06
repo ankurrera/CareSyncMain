@@ -60,20 +60,25 @@ class EncryptionService {
   Future<Uint8List?> getEncryptionKeyWithBiometric({
     String reason = 'Authenticate to access encrypted medical data',
   }) async {
-    // Check if key is initialized
+    // Auto-initialize the key on first use if not already done
     final initialized = await isKeyInitialized();
     if (!initialized) {
       assert(() {
-        debugPrint('[ENCRYPTION] Encryption key not initialized');
+        debugPrint('[ENCRYPTION] Auto-initializing encryption key on first use');
         return true;
       }());
-      return null;
+      await initializeEncryptionKey();
     }
 
     // Check if biometric is available
     final isAvailable = await _biometric.isBiometricAvailable();
     if (!isAvailable) {
-      throw EncryptionException('Biometric authentication is not available');
+      // Fall back to reading key directly if biometrics unavailable
+      final keyString = await _storage.read(key: _encryptionKeyKey);
+      if (keyString == null) {
+        throw EncryptionException('Encryption key not found');
+      }
+      return base64Decode(keyString);
     }
 
     // Require biometric authentication

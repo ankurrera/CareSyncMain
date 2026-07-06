@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:iconsax/iconsax.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../routing/route_names.dart';
 
 class RoleSelectionScreen extends StatelessWidget {
@@ -11,160 +9,205 @@ class RoleSelectionScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: const Color(0xFFF9FAFB),
       body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 24),
-              // Branding
-              Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── TOP HERO SECTION (white card feel) ───────────────
+            Container(
+              color: Colors.white,
+              padding: EdgeInsets.fromLTRB(28, size.height * 0.06, 28, size.height * 0.05),
+              child: Column(
                 children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF121212),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(
-                      Iconsax.health,
-                      color: Colors.white,
-                      size: 22,
+                  Image.asset(
+                    'assets/logo_foreground.png',
+                    width: 120,
+                    height: 120,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'CARESYNC',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF0D0D0D),
+                      letterSpacing: 5,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(height: 6),
                   Text(
-                    'CareSync',
+                    'Your unified healthcare companion',
                     style: GoogleFonts.plusJakartaSans(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF121212),
-                      letterSpacing: -0.5,
+                      fontSize: 13,
+                      color: const Color(0xFF9CA3AF),
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 54),
-              // Headings
-              Text(
-                'Welcome to CareSync',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF121212),
-                  letterSpacing: -1,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Select your role to get started with the healthcare portal',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 15,
-                  color: const Color(0xFF64748B),
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 40),
+            ),
 
-              // Role options
-              _buildRoleItem(
-                context,
-                title: 'Patient Portal',
-                description: 'Manage your medical records, check appointments, and view emergency pass.',
-                icon: Iconsax.user,
-                color: AppColors.patient,
-                role: 'patient',
+            // ── DIVIDER ──────────────────────────────────────────
+            Container(height: 1, color: const Color(0xFFE5E7EB)),
+
+            // ── LABEL ────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(28, 28, 28, 14),
+              child: Text(
+                'CHOOSE YOUR PORTAL',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF374151),
+                  letterSpacing: 1.5,
+                ),
               ),
-              const SizedBox(height: 16),
-              _buildRoleItem(
-                context,
-                title: 'Doctor Portal',
-                description: 'Consult patients, write digital prescriptions, and check history.',
-                icon: Iconsax.teacher,
-                color: AppColors.doctor,
-                role: 'doctor',
+            ),
+
+            // ── PORTAL CARDS ─────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                children: [
+                  _buildOption(
+                    context,
+                    role: 'patient',
+                    title: 'Patient',
+                    subtitle: 'Medical records, appointments & emergency pass',
+                    icon: Icons.person_outline_rounded,
+                    badgeLabel: 'PERSONAL',
+                  ),
+                  const SizedBox(height: 10),
+                  _buildOption(
+                    context,
+                    role: 'doctor',
+                    title: 'Doctor',
+                    subtitle: 'Consultations, prescriptions & patient history',
+                    icon: Icons.medical_services_outlined,
+                    badgeLabel: 'CLINICAL',
+                  ),
+                  const SizedBox(height: 10),
+                  _buildOption(
+                    context,
+                    role: 'pharmacist',
+                    title: 'Pharmacist',
+                    subtitle: 'Dispense medicines & verify patient records',
+                    icon: Icons.local_pharmacy_outlined,
+                    badgeLabel: 'PHARMACY',
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              _buildRoleItem(
-                context,
-                title: 'Pharmacist Portal',
-                description: 'Dispense prescribed medicines, verify patients, and log details.',
-                icon: Icons.medication_rounded,
-                color: AppColors.pharmacist,
-                role: 'pharmacist',
+            ),
+
+            const Spacer(),
+
+            // ── FOOTER ───────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.only(bottom: 28),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.lock_outline_rounded,
+                      size: 12, color: Color(0xFFD1D5DB)),
+                  const SizedBox(width: 5),
+                  Text(
+                    'Protected by end-to-end encryption',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      color: const Color(0xFFD1D5DB),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildRoleItem(
+  Widget _buildOption(
     BuildContext context, {
-    required String title,
-    required String description,
-    required IconData icon,
-    required Color color,
     required String role,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required String badgeLabel,
   }) {
-    return InkWell(
+    return GestureDetector(
       onTap: () => context.push(RouteNames.signIn, extra: role),
-      borderRadius: BorderRadius.circular(20),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.015),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 8,
-              offset: const Offset(0, 4),
+              offset: const Offset(0, 2),
             ),
           ],
         ),
         child: Row(
           children: [
-            // Icon
             Container(
-              padding: const EdgeInsets.all(12),
+              width: 46,
+              height: 46,
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
+                color: const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(
-                icon,
-                color: color,
-                size: 26,
-              ),
+              child: Icon(icon, size: 22, color: const Color(0xFF1F2937)),
             ),
-            const SizedBox(width: 18),
-            // Text Info
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF121212),
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        title,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF111827),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3F4F6),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          badgeLabel,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 8,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF6B7280),
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   Text(
-                    description,
+                    subtitle,
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 12,
-                      color: const Color(0xFF64748B),
+                      color: const Color(0xFF9CA3AF),
                       height: 1.4,
                     ),
                   ),
@@ -172,11 +215,10 @@ class RoleSelectionScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            // Arrow indicator
             const Icon(
-              Iconsax.arrow_right_1,
-              color: Color(0xFF64748B),
-              size: 20,
+              Icons.chevron_right_rounded,
+              color: Color(0xFFD1D5DB),
+              size: 22,
             ),
           ],
         ),

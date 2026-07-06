@@ -3,8 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
-import '../../../../core/theme/app_colors.dart';
-import '../../../../core/widgets/adaptive_card_container.dart';
 import '../../../../core/widgets/loading_skeleton.dart';
 import '../../providers/patient_provider.dart';
 import '../../models/prescription.dart';
@@ -32,47 +30,51 @@ class _DailyMedicationScheduleState extends ConsumerState<DailyMedicationSchedul
         // Limit to top 3 items to prevent layout bloat on Dashboard
         final displayItems = items.take(3).toList();
 
-        return AdaptiveCardContainer(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            children: List.generate(displayItems.length, (index) {
-              final item = displayItems[index];
-              final isChecked = _checkedItems.contains(item.id);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(displayItems.length, (index) {
+            final item = displayItems[index];
+            final isChecked = _checkedItems.contains(item.id);
 
-              return Column(
-                children: [
-                  _buildMedicationRow(item, isChecked),
-                  if (index < displayItems.length - 1)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 10.0),
-                      child: Divider(height: 1, color: Color(0xFFE2E8F0)),
-                    ),
-                ],
-              );
-            }),
-          ),
+            return _buildMedicationCard(item, isChecked);
+          }),
         );
       },
-      loading: () => const AdaptiveCardContainer(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          children: [
-            LoadingSkeleton(height: 20, width: double.infinity),
-            SizedBox(height: 12),
-            LoadingSkeleton(height: 20, width: double.infinity),
-            SizedBox(height: 12),
-            LoadingSkeleton(height: 20, width: double.infinity),
-          ],
-        ),
+      loading: () => const Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          LoadingSkeleton(height: 72, radius: 20),
+          SizedBox(height: 12),
+          LoadingSkeleton(height: 72, radius: 20),
+        ],
       ),
       error: (err, _) => _buildEmptyState(),
     );
   }
 
-  Widget _buildMedicationRow(PrescriptionItem item, bool isChecked) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
+  Widget _buildMedicationCard(PrescriptionItem item, bool isChecked) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: isChecked ? const Color(0xFFFAFAFA) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isChecked ? const Color(0xFFE2E8F0) : const Color(0xFFF1F5F9),
+          width: 1.5,
+        ),
+        boxShadow: [
+          if (!isChecked)
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+        ],
+      ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Premium Interactive Checkbox with Haptics
           GestureDetector(
@@ -94,55 +96,67 @@ class _DailyMedicationScheduleState extends ConsumerState<DailyMedicationSchedul
                 shape: BoxShape.circle,
                 color: isChecked ? const Color(0xFF10B981) : Colors.white,
                 border: Border.all(
-                  color: isChecked ? const Color(0xFF10B981) : const Color(0xFF94A3B8),
+                  color: isChecked ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
                   width: 1.5,
                 ),
               ),
               child: isChecked
-                  ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+                  ? const Icon(Icons.check_rounded, size: 13, color: Colors.white)
                   : null,
             ),
           ),
           const SizedBox(width: 14),
+          // Medicine Info
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   item.medicineName,
                   style: GoogleFonts.plusJakartaSans(
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w800,
                     fontSize: 14,
-                    color: isChecked ? const Color(0xFF94A3B8) : const Color(0xFF121212),
+                    color: isChecked ? const Color(0xFF94A3B8) : const Color(0xFF0F172A),
                     decoration: isChecked ? TextDecoration.lineThrough : null,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  '${item.dosage} • ${item.frequency}',
-                  style: GoogleFonts.plusJakartaSans(
-                    color: const Color(0xFF64748B),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                  ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(
+                      Iconsax.info_circle,
+                      size: 11,
+                      color: isChecked ? const Color(0xFFCBD5E1) : const Color(0xFF64748B),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${item.dosage} • ${item.frequency}',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: isChecked ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-          // Dispensed status badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          const SizedBox(width: 12),
+          // Status Pill Badge
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: isChecked
-                  ? const Color(0xFFD1FAE5)
-                  : const Color(0xFFFFF4F0),
+              color: isChecked ? const Color(0xFFECFDF5) : const Color(0xFFFFF4F0),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               isChecked ? 'Taken' : 'Due',
               style: GoogleFonts.plusJakartaSans(
-                color: isChecked ? const Color(0xFF065F46) : const Color(0xFFFF5200),
-                fontWeight: FontWeight.bold,
+                color: isChecked ? const Color(0xFF10B981) : const Color(0xFFFF5200),
+                fontWeight: FontWeight.w800,
                 fontSize: 10,
               ),
             ),
@@ -159,7 +173,14 @@ class _DailyMedicationScheduleState extends ConsumerState<DailyMedicationSchedul
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Center(
         child: Column(

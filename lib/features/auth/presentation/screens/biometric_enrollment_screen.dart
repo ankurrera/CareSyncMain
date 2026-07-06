@@ -241,12 +241,12 @@ class _BiometricEnrollmentScreenState
               const SizedBox(height: 16),
               // Benefits list
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
                   ),
                 ),
                 child: Column(
@@ -378,15 +378,15 @@ class _BiometricEnrollmentScreenState
           height: 44,
           decoration: BoxDecoration(
             color: AppColors.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(
             icon,
             color: AppColors.primary,
-            size: 22,
+            size: 20,
           ),
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

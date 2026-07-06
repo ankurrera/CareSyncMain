@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../routing/route_names.dart';
 import '../../../../services/custom_biometric_service.dart';
+import '../../../../services/emergency_audit_service.dart';
 import '../../../auth/providers/auth_provider.dart';
 
 class PatientEmergencyScreen extends ConsumerStatefulWidget {
@@ -87,7 +89,15 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
         final qrCodeId = matchResult['qr_code_id'] as String;
         final fullName = matchResult['full_name'] as String;
         final confidence = matchResult['confidence'] as num? ?? 100.0;
+        final patientId = matchResult['patient_id'] as String?;
         final pose = matchResult['pose_matched'] as String? ?? 'neutral';
+
+        // Log successful face scan
+        await EmergencyAuditService.instance.logFaceScan(
+          patientId: patientId,
+          status: 'Success',
+          confidence: confidence.toDouble(),
+        );
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -101,6 +111,14 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
 
         context.push('${RouteNames.patientEmergencyView}/$qrCodeId');
       } else {
+        // Log failed face scan
+        await EmergencyAuditService.instance.logFaceScan(
+          patientId: null,
+          status: 'Failed',
+          confidence: 0.0,
+          reason: 'Unknown Patient',
+        );
+
         _showNoMatchDialog(context);
       }
     } catch (e) {
@@ -110,6 +128,15 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
         });
       }
       debugPrint('[Emergency] Face scan identification error: $e');
+
+      // Log errored face scan
+      await EmergencyAuditService.instance.logFaceScan(
+        patientId: null,
+        status: 'Failed',
+        confidence: 0.0,
+        reason: 'Unknown Patient',
+      );
+
       _showErrorDialog(context, e.toString());
     }
   }
@@ -190,18 +217,19 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF121212),
+        backgroundColor: const Color(0xFFFAFAFA),
         elevation: 0,
+        scrolledUnderElevation: 0,
         title: Text(
           'Emergency Center',
           style: GoogleFonts.plusJakartaSans(
-            color: Colors.white,
+            color: const Color(0xFF121212),
             fontWeight: FontWeight.bold,
             fontSize: 18,
           ),
         ),
         centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: Color(0xFF121212)),
       ),
       body: Stack(
         children: [
@@ -211,28 +239,68 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // ── Hero Banner ──────────────────────────────────────────────
-                Container(
-                  width: double.infinity,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF121212),
-                    borderRadius: BorderRadius.only(
-                      bottomLeft: Radius.circular(32),
-                      bottomRight: Radius.circular(32),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFFF5F0), Color(0xFFFFEBE3)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFFFD4C2), width: 1),
                     ),
-                  ),
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
-                  child: Text(
-                    'Access critical patient medical information instantly during health crises.',
-                    style: GoogleFonts.plusJakartaSans(
-                      color: Colors.white.withValues(alpha: 0.6),
-                      fontSize: 14,
-                      height: 1.5,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFFE3D6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Iconsax.danger,
+                            color: Color(0xFFFF5200),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'First Responder Mode',
+                                style: GoogleFonts.plusJakartaSans(
+                                  color: const Color(0xFFD43D00),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Access critical patient medical information instantly during health crises.',
+                                style: GoogleFonts.plusJakartaSans(
+                                  color: const Color(0xFF8C3814),
+                                  fontSize: 12.5,
+                                  height: 1.45,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
 
                 Padding(
-                  padding: const EdgeInsets.all(24),
+                  padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).padding.bottom),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -316,85 +384,107 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
           ),
 
           // ── Biometric search scanning overlay ──────────────────────────────
+          // ── Biometric search scanning overlay ──────────────────────────────
           if (_isIdentifying)
             Positioned.fill(
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.85),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Viewfinder Frame
-                      Container(
-                        width: 260,
-                        height: 260,
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: Container(
+                    color: Colors.black.withOpacity(0.55),
+                    child: Center(
+                      child: Container(
+                        width: 240,
+                        height: 240,
                         decoration: BoxDecoration(
+                          color: const Color(0xFF18181B).withOpacity(0.85), // Premium zinc/graphite
+                          borderRadius: BorderRadius.circular(32),
                           border: Border.all(
-                            color: Colors.cyan.shade400.withValues(alpha: 0.3),
-                            width: 1.5,
+                            color: Colors.white.withOpacity(0.08),
+                            width: 0.8,
                           ),
-                          borderRadius: BorderRadius.circular(28),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.35),
+                              blurRadius: 24,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
                         ),
-                        child: Stack(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            _buildScannerCorners(),
+                            // Apple Face ID style breathing brackets and icon
                             AnimatedBuilder(
                               animation: _scannerController,
                               builder: (context, child) {
-                                return Positioned(
-                                  top: _scannerController.value * 252,
-                                  left: 12,
-                                  right: 12,
-                                  child: Container(
-                                    height: 4,
-                                    decoration: BoxDecoration(
-                                      color: Colors.cyanAccent.shade400,
-                                      borderRadius: BorderRadius.circular(2),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.cyanAccent.shade400
-                                              .withValues(alpha: 0.7),
-                                          blurRadius: 12,
-                                          spreadRadius: 2.5,
+                                return Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    SizedBox(
+                                      width: 84,
+                                      height: 84,
+                                      child: CustomPaint(
+                                        painter: _FaceBracketPainter(
+                                          color: AppColors.primary,
+                                          animationValue: _scannerController.value,
                                         ),
-                                      ],
+                                      ),
                                     ),
-                                  ),
+                                    Icon(
+                                      Icons.face_unlock_rounded, // Professional biometric lock silhouette
+                                      color: Colors.white.withOpacity(0.4 + (_scannerController.value * 0.5)),
+                                      size: 46,
+                                    ),
+                                  ],
                                 );
                               },
                             ),
-                            Center(
-                              child: Icon(
-                                Icons.face_rounded,
-                                size: 120,
-                                color:
-                                    Colors.cyan.shade100.withValues(alpha: 0.1),
+                            const SizedBox(height: 24),
+                            Text(
+                              'FACE ID SCAN',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.plusJakartaSans(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.5,
                               ),
+                            ),
+                            const SizedBox(height: 16),
+                            // Inline loader and status text (highly compact and clinical)
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const SizedBox(
+                                  width: 11,
+                                  height: 11,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 1.2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white54),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _scanningStatus.toUpperCase(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      color: Colors.white54,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.6,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 36),
-                      Text(
-                        _scanningStatus,
-                        style: GoogleFonts.plusJakartaSans(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        "MATCHING BIOMETRIC REGISTRY",
-                        style: TextStyle(
-                          color: Colors.white54,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -520,70 +610,44 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
     );
   }
 
-  Widget _buildScannerCorners() {
-    const double size = 28;
-    const double thickness = 4;
-    final Color color = Colors.cyanAccent.shade400;
+}
 
-    return Stack(
-      children: [
-        Positioned(
-          top: 10,
-          left: 10,
-          child: Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(color: color, width: thickness),
-                left: BorderSide(color: color, width: thickness),
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          top: 10,
-          right: 10,
-          child: Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(color: color, width: thickness),
-                right: BorderSide(color: color, width: thickness),
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          bottom: 10,
-          left: 10,
-          child: Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: color, width: thickness),
-                left: BorderSide(color: color, width: thickness),
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          bottom: 10,
-          right: 10,
-          child: Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: color, width: thickness),
-                right: BorderSide(color: color, width: thickness),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
+// Apple Face ID-inspired camera corner brackets custom painter
+class _FaceBracketPainter extends CustomPainter {
+  final Color color;
+  final double animationValue;
+
+  _FaceBracketPainter({required this.color, required this.animationValue});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color.withOpacity(0.3 + (animationValue * 0.7))
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round;
+
+    final length = 12.0;
+
+    // Top Left Corner
+    canvas.drawLine(const Offset(0, 0), Offset(0, length), paint);
+    canvas.drawLine(const Offset(0, 0), Offset(length, 0), paint);
+
+    // Top Right Corner
+    canvas.drawLine(Offset(size.width, 0), Offset(size.width, length), paint);
+    canvas.drawLine(Offset(size.width, 0), Offset(size.width - length, 0), paint);
+
+    // Bottom Left Corner
+    canvas.drawLine(Offset(0, size.height), Offset(0, size.height - length), paint);
+    canvas.drawLine(Offset(0, size.height), Offset(length, size.height), paint);
+
+    // Bottom Right Corner
+    canvas.drawLine(Offset(size.width, size.height), Offset(size.width, size.height - length), paint);
+    canvas.drawLine(Offset(size.width, size.height), Offset(size.width - length, size.height), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _FaceBracketPainter oldDelegate) {
+    return oldDelegate.animationValue != animationValue || oldDelegate.color != color;
   }
 }

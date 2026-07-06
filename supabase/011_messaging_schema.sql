@@ -30,6 +30,12 @@ CREATE TABLE IF NOT EXISTS messages (
 ALTER TABLE chat_rooms ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist to avoid duplication errors
+DROP POLICY IF EXISTS "Participants can view their chat rooms" ON chat_rooms;
+DROP POLICY IF EXISTS "Participants can create chat rooms" ON chat_rooms;
+DROP POLICY IF EXISTS "Participants can view room messages" ON messages;
+DROP POLICY IF EXISTS "Participants can send messages" ON messages;
+
 -- CHAT ROOMS POLICIES
 CREATE POLICY "Participants can view their chat rooms"
     ON chat_rooms FOR SELECT

@@ -1,4 +1,7 @@
+import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../features/shared/models/chat.dart';
 import 'supabase_service.dart';
 import 'encryption_service.dart';
@@ -32,7 +35,7 @@ class ChatService {
     return (response as List).map((json) => Message.fromJson(json)).toList();
   }
 
-  Future<void> sendMessage(String roomId, String content) async {
+  Future<void> sendMessage(String roomId, String content, {String? attachmentUrl}) async {
     final userId = _supabase.currentUserId;
     if (userId == null) return;
 
@@ -46,6 +49,8 @@ class ChatService {
       'room_id': roomId,
       'sender_id': userId,
       'content': encryptedContent,
+      'is_read': false,
+      'attachment_url': attachmentUrl,
     });
 
     // Update last_message_at in chat_room
@@ -55,12 +60,77 @@ class ChatService {
         .eq('id', roomId);
   }
 
-  Stream<List<Map<String, dynamic>>> subscribeToMessages(String roomId) {
-    return _supabase.client
+  Future<void> markMessagesAsRead(String roomId, String currentUserId) async {
+    await _supabase.client
         .from('messages')
-        .stream(primaryKey: ['id'])
+        .update({'is_read': true})
         .eq('room_id', roomId)
-        .order('created_at', ascending: true);
+        .neq('sender_id', currentUserId)
+        .eq('is_read', false);
+  }
+
+  Future<String?> uploadChatAttachment(String roomId, String filePath, Uint8List fileBytes) async {
+    try {
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${filePath.split('/').last}';
+      final path = 'rooms/$roomId/$fileName';
+      
+      await _supabase.client.storage
+          .from('chat_attachments')
+          .uploadBinary(path, fileBytes);
+          
+      return _supabase.client.storage.from('chat_attachments').getPublicUrl(path);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Stream<List<Map<String, dynamic>>> subscribeToMessages(String roomId) {
+    late StreamController<List<Map<String, dynamic>>> controller;
+    dynamic channel; // RealtimeChannel
+
+    Future<void> _fetchAndEmit() async {
+      try {
+        final response = await _supabase.client
+            .from('messages')
+            .select()
+            .eq('room_id', roomId)
+            .order('created_at', ascending: true);
+        if (!controller.isClosed) {
+          controller.add(List<Map<String, dynamic>>.from(response as List));
+        }
+      } catch (e) {
+        if (!controller.isClosed) controller.addError(e);
+      }
+    }
+
+    controller = StreamController<List<Map<String, dynamic>>>(
+      onListen: () async {
+        // 1. Emit current messages immediately
+        await _fetchAndEmit();
+
+        // 2. Subscribe to real-time ALL events via Postgres Changes (so updates/reads sync instantly)
+        channel = _supabase.client
+            .channel('room-$roomId-messages')
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'messages',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'room_id',
+                value: roomId,
+              ),
+              callback: (_) => _fetchAndEmit(),
+            )
+            .subscribe();
+      },
+      onCancel: () {
+        channel?.unsubscribe();
+        controller.close();
+      },
+    );
+
+    return controller.stream;
   }
 
   Future<ChatRoom> getOrCreateRoom(String otherId) async {

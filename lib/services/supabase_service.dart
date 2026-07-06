@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'emergency_audit_service.dart';
 
 /// Singleton service for Supabase database operations
 class SupabaseService {
@@ -356,15 +357,32 @@ class SupabaseService {
         .select('''
           id,
           blood_type,
+          date_of_birth,
+          weight,
+          height,
           emergency_contact,
-          profiles!inner(full_name)
+          profiles!inner(full_name, gender)
         ''')
         .eq('qr_code_id', qrCodeId)
         .maybeSingle();
 
-    if (patientData == null) return null;
+    if (patientData == null) {
+      try {
+        await EmergencyAuditService.instance.logQrScan(
+          patientId: '',
+          status: 'Failed',
+        );
+      } catch (_) {}
+      return null;
+    }
 
     final patientId = patientData['id'];
+    try {
+      await EmergencyAuditService.instance.logQrScan(
+        patientId: patientId,
+        status: 'Success',
+      );
+    } catch (_) {}
     final profile = patientData['profiles'] as Map<String, dynamic>?;
 
     final conditions = await client
@@ -394,8 +412,13 @@ class SupabaseService {
 
     return {
       'patient': {
+        'id': patientId,
         'full_name': profile?['full_name'],
+        'gender': profile?['gender'],
         'blood_type': patientData['blood_type'],
+        'date_of_birth': patientData['date_of_birth'],
+        'weight': patientData['weight'],
+        'height': patientData['height'],
         'emergency_contact': patientData['emergency_contact'],
       },
       'conditions': List<Map<String, dynamic>>.from(conditions).map((c) => {

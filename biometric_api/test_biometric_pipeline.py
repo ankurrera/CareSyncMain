@@ -116,9 +116,6 @@ def test_enroll_success(mock_get, mock_supabase, mock_represent, mock_quality):
 @patch("main.DeepFace.represent")
 @patch("main.supabase")
 def test_identify_success(mock_supabase, mock_represent, mock_quality):
-    # Mocking Supabase storage scan download
-    mock_supabase.storage.from_.return_value.download.return_value = b"mockscanbytes"
-
     # Mocking quality assessment
     mock_quality.return_value = {"success": True, "quality_score": 0.9}
 
@@ -137,9 +134,11 @@ def test_identify_success(mock_supabase, mock_represent, mock_quality):
         }
     ]
 
-    response = client.post("/identify", json={
-        "scanPath": "scans/temp-scan-123.jpg"
-    })
+    # Send direct multipart file upload in test
+    response = client.post(
+        "/identify",
+        files={"file": ("scan.jpg", b"mockscanbytes", "image/jpeg")}
+    )
 
     assert response.status_code == 200
     assert response.json()["success"] is True

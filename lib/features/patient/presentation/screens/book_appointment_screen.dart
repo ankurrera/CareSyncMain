@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:iconsax/iconsax.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../shared/models/user_profile.dart';
 import '../../providers/appointment_provider.dart';
@@ -24,182 +23,254 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
     final doctorsAsync = ref.watch(availableDoctorsProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
         title: Text(
           'Book Appointment',
-          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 18, color: const Color(0xFF121212)),
+          style: GoogleFonts.plusJakartaSans(
+            fontWeight: FontWeight.w700,
+            fontSize: 17,
+            color: const Color(0xFF111827),
+          ),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF121212)),
+          icon: const Icon(Icons.arrow_back_rounded, size: 22, color: Color(0xFF111827)),
           onPressed: () => Navigator.pop(context),
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1.0),
-          child: Container(color: const Color(0xFFE2E8F0), height: 1.0),
+          child: Container(color: const Color(0xFFE5E7EB), height: 1.0),
         ),
       ),
-      body: SingleChildScrollView(
-        physics: const ClampingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Select Doctor',
-              style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF121212)),
-            ),
-            const SizedBox(height: 16),
-            doctorsAsync.when(
-              data: (doctors) => SizedBox(
-                height: 124,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  clipBehavior: Clip.none,
-                  itemCount: doctors.length,
-                  itemBuilder: (context, index) {
-                    final doctor = doctors[index];
-                    final isSelected = _selectedDoctor?.id == doctor.id;
-                    return GestureDetector(
-                      onTap: () => setState(() => _selectedDoctor = doctor),
-                      child: Container(
-                        width: 104,
-                        margin: const EdgeInsets.only(right: 12),
-                        decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFFFFF4F0) : Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: isSelected ? const Color(0xFFFF5200) : const Color(0xFFE2E8F0),
-                            width: isSelected ? 1.5 : 1.0,
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── SECTION: SELECT DOCTOR ─────────────────────
+                  _sectionLabel('SELECT DOCTOR'),
+                  const SizedBox(height: 12),
+                  doctorsAsync.when(
+                    data: (doctors) => Column(
+                      children: doctors.map((doctor) {
+                        final isSelected = _selectedDoctor?.id == doctor.id;
+                        return GestureDetector(
+                          onTap: () => setState(() {
+                            _selectedDoctor = doctor;
+                            _selectedSlot = null;
+                          }),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: isSelected
+                                    ? const Color(0xFF0D0D0D)
+                                    : const Color(0xFFE5E7EB),
+                                width: isSelected ? 1.5 : 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.03),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                // Avatar
+                                Container(
+                                  width: 46,
+                                  height: 46,
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? const Color(0xFF0D0D0D)
+                                        : const Color(0xFFF3F4F6),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      doctor.fullName.isNotEmpty
+                                          ? doctor.fullName[0].toUpperCase()
+                                          : 'D',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        color: isSelected
+                                            ? Colors.white
+                                            : const Color(0xFF374151),
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 18,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                // Info
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Dr. ${doctor.fullName}',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: const Color(0xFF111827),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'General Practitioner',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 12,
+                                          color: const Color(0xFF9CA3AF),
+                                          fontWeight: FontWeight.w400,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // Check indicator
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: isSelected
+                                        ? const Color(0xFF0D0D0D)
+                                        : Colors.transparent,
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? const Color(0xFF0D0D0D)
+                                          : const Color(0xFFD1D5DB),
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: isSelected
+                                      ? const Icon(Icons.check_rounded,
+                                          size: 13, color: Colors.white)
+                                      : null,
+                                ),
+                              ],
+                            ),
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.015),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
+                        );
+                      }).toList(),
+                    ),
+                    loading: () => const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2)),
+                    error: (err, _) => Text('Error: $err',
+                        style: GoogleFonts.plusJakartaSans()),
+                  ),
+
+                  if (_selectedDoctor != null) ...[
+                    const SizedBox(height: 28),
+                    // ── SECTION: SELECT DATE ─────────────────────
+                    _sectionLabel('SELECT DATE'),
+                    const SizedBox(height: 12),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.03),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Theme(
+                        data: Theme.of(context).copyWith(
+                          colorScheme: const ColorScheme.light(
+                            primary: Color(0xFF0D0D0D),
+                            onPrimary: Colors.white,
+                            onSurface: Color(0xFF111827),
+                          ),
                         ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            CircleAvatar(
-                              radius: 22,
-                              backgroundColor: isSelected ? const Color(0xFFFF5200) : const Color(0xFFF1F5F9),
-                              child: Text(
-                                doctor.fullName.isNotEmpty ? doctor.fullName[0].toUpperCase() : 'D',
-                                style: GoogleFonts.plusJakartaSans(
-                                  color: isSelected ? Colors.white : const Color(0xFF64748B),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                              child: Text(
-                                doctor.fullName.split(' ').last,
-                                style: GoogleFonts.plusJakartaSans(
-                                  color: const Color(0xFF121212),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
+                        child: CalendarDatePicker(
+                          initialDate: _selectedDate,
+                          firstDate: DateTime.now(),
+                          lastDate:
+                              DateTime.now().add(const Duration(days: 30)),
+                          onDateChanged: (date) {
+                            setState(() {
+                              _selectedDate = date;
+                              _selectedSlot = null;
+                            });
+                          },
                         ),
                       ),
-                    );
-                  },
-                ),
+                    ),
+
+                    const SizedBox(height: 24),
+                    // ── SECTION: TIME SLOTS ──────────────────────
+                    _sectionLabel('AVAILABLE SLOTS'),
+                    const SizedBox(height: 12),
+                    _buildTimeSlots(),
+                    const SizedBox(height: 110),
+                  ],
+                ],
               ),
-              loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFFFF5200))),
-              error: (err, _) => Text('Error loading doctors: $err', style: GoogleFonts.plusJakartaSans()),
             ),
+          ),
 
-            if (_selectedDoctor != null) ...[
-              const SizedBox(height: 28),
-              Text(
-                'Select Date',
-                style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF121212)),
-              ),
-              const SizedBox(height: 16),
-              _buildDatePicker(),
-              
-              const SizedBox(height: 28),
-              Text(
-                'Available Slots',
-                style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF121212)),
-              ),
-              const SizedBox(height: 16),
-              _buildTimeSlots(),
-
-              const SizedBox(height: 40),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _selectedSlot != null ? _confirmBooking : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF121212),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    elevation: 0,
+          // ── STICKY CONFIRM BUTTON ───────────────────────────────
+          if (_selectedDoctor != null)
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+              child: GestureDetector(
+                onTap: _selectedSlot != null ? _confirmBooking : null,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: _selectedSlot != null
+                        ? const Color(0xFF0D0D0D)
+                        : const Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.circular(14),
                   ),
+                  alignment: Alignment.center,
                   child: Text(
-                    'Confirm Booking', 
-                    style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+                    'CONFIRM BOOKING',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1,
+                      color: _selectedSlot != null
+                          ? Colors.white
+                          : const Color(0xFF9CA3AF),
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: 40),
-            ],
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
 
-  Widget _buildDatePicker() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.015),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: Color(0xFFFF5200),
-            onPrimary: Colors.white,
-            onSurface: Color(0xFF121212),
-          ),
-        ),
-        child: CalendarDatePicker(
-          initialDate: _selectedDate,
-          firstDate: DateTime.now(),
-          lastDate: DateTime.now().add(const Duration(days: 30)),
-          onDateChanged: (date) {
-            setState(() {
-              _selectedDate = date;
-              _selectedSlot = null;
-            });
-          },
-        ),
+  Widget _sectionLabel(String text) {
+    return Text(
+      text,
+      style: GoogleFonts.plusJakartaSans(
+        fontSize: 10,
+        fontWeight: FontWeight.w800,
+        color: const Color(0xFF374151),
+        letterSpacing: 1.5,
       ),
     );
   }
@@ -207,21 +278,38 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
   Widget _buildTimeSlots() {
     if (_selectedDoctor == null) return const SizedBox.shrink();
 
-    final availabilityAsync = ref.watch(doctorAvailabilityProvider(_selectedDoctor!.id));
+    final availabilityAsync =
+        ref.watch(doctorAvailabilityProvider(_selectedDoctor!.id));
 
     return availabilityAsync.when(
       data: (availabilities) {
         final supabaseDay = _selectedDate.weekday % 7;
-        final dayAvailability = availabilities.where((a) => a.dayOfWeek == supabaseDay).toList();
+        final dayAvailability =
+            availabilities.where((a) => a.dayOfWeek == supabaseDay).toList();
 
         if (dayAvailability.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Text(
-                'No availability on this day', 
-                style: GoogleFonts.plusJakartaSans(color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500, fontSize: 13),
-              ),
+          return Container(
+            padding: const EdgeInsets.symmetric(vertical: 28),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+            ),
+            child: Column(
+              children: [
+                const Icon(Icons.calendar_today_outlined,
+                    size: 28, color: Color(0xFFD1D5DB)),
+                const SizedBox(height: 10),
+                Text(
+                  'No slots available on this day',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: const Color(0xFF9CA3AF),
+                    fontWeight: FontWeight.w500,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
             ),
           );
         }
@@ -230,55 +318,78 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
         for (final avail in dayAvailability) {
           final start = DateFormat('HH:mm:ss').parse(avail.startTime);
           final end = DateFormat('HH:mm:ss').parse(avail.endTime);
-          
           var current = DateTime(2000, 1, 1, start.hour, start.minute);
           final endTime = DateTime(2000, 1, 1, end.hour, end.minute);
-
           while (current.isBefore(endTime)) {
             slots.add(DateFormat('hh:mm a').format(current));
             current = current.add(const Duration(minutes: 30));
           }
         }
 
-        return Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: slots.map((slot) {
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 2.4,
+          ),
+          itemCount: slots.length,
+          itemBuilder: (context, index) {
+            final slot = slots[index];
             final isSelected = _selectedSlot == slot;
+            // Split into time and am/pm
+            final parts = slot.split(' ');
+            final time = parts[0];
+            final period = parts.length > 1 ? parts[1] : '';
             return GestureDetector(
               onTap: () => setState(() => _selectedSlot = slot),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
                 decoration: BoxDecoration(
-                  color: isSelected ? const Color(0xFFFF5200) : Colors.white,
-                  borderRadius: BorderRadius.circular(14),
+                  color: isSelected ? const Color(0xFF0D0D0D) : Colors.white,
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: isSelected ? const Color(0xFFFF5200) : const Color(0xFFE2E8F0),
-                    width: 1.0,
+                    color: isSelected
+                        ? const Color(0xFF0D0D0D)
+                        : const Color(0xFFE5E7EB),
+                    width: 1,
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.01),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      time,
+                      style: GoogleFonts.plusJakartaSans(
+                        color: isSelected ? Colors.white : const Color(0xFF111827),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                    Text(
+                      period,
+                      style: GoogleFonts.plusJakartaSans(
+                        color: isSelected
+                            ? Colors.white.withValues(alpha: 0.7)
+                            : const Color(0xFF9CA3AF),
+                        fontWeight: FontWeight.w500,
+                        fontSize: 10,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ],
                 ),
-                child: Text(
-                  slot,
-                  style: GoogleFonts.plusJakartaSans(
-                    color: isSelected ? Colors.white : const Color(0xFF121212),
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
               ),
             );
-          }).toList(),
+          },
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFFFF5200))),
-      error: (err, _) => Text('Error loading availability: $err', style: GoogleFonts.plusJakartaSans()),
+      loading: () => const Center(
+          child: CircularProgressIndicator(strokeWidth: 2)),
+      error: (err, _) =>
+          Text('Error: $err', style: GoogleFonts.plusJakartaSans()),
     );
   }
 
@@ -288,7 +399,8 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator(color: Color(0xFFFF5200))),
+      builder: (context) =>
+          const Center(child: CircularProgressIndicator(strokeWidth: 2)),
     );
 
     try {
@@ -296,16 +408,13 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
       final hourMin = timeParts[0].split(':');
       var hour = int.parse(hourMin[0]);
       final minute = int.parse(hourMin[1]);
-      
+
       if (timeParts[1] == 'PM' && hour < 12) hour += 12;
       if (timeParts[1] == 'AM' && hour == 12) hour = 0;
 
       final startTime = DateTime(
-        _selectedDate.year,
-        _selectedDate.month,
-        _selectedDate.day,
-        hour,
-        minute,
+        _selectedDate.year, _selectedDate.month, _selectedDate.day,
+        hour, minute,
       );
 
       await ref.read(appointmentsProvider.notifier).book(
@@ -314,49 +423,86 @@ class _BookAppointmentScreenState extends ConsumerState<BookAppointmentScreen> {
       );
 
       if (mounted) {
-        Navigator.pop(context); // Pop loading dialog
-        
+        Navigator.pop(context);
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Row(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16)),
+            contentPadding: const EdgeInsets.all(24),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 24),
-                const SizedBox(width: 10),
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0D0D0D),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.check_rounded,
+                      color: Colors.white, size: 28),
+                ),
+                const SizedBox(height: 16),
                 Text(
                   'Booking Confirmed',
-                  style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 16, color: const Color(0xFF121212)),
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                    color: const Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Appointment with Dr. ${_selectedDoctor!.fullName}\n${DateFormat('MMM d, yyyy · hh:mm a').format(startTime)}',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    color: const Color(0xFF6B7280),
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pop(context);
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0D0D0D),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      'DONE',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
-            content: Text(
-              'Your appointment with ${_selectedDoctor!.fullName} is scheduled for ${DateFormat('MMM d, hh:mm a').format(startTime)}.',
-              style: GoogleFonts.plusJakartaSans(fontSize: 13, color: const Color(0xFF64748B), height: 1.4),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context); // Pop success dialog
-                  Navigator.pop(context); // Back to home
-                },
-                child: Text(
-                  'Great!',
-                  style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, color: const Color(0xFFFF5200)),
-                ),
-              ),
-            ],
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        Navigator.pop(context); // Pop loading dialog
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Booking failed: $e', style: GoogleFonts.plusJakartaSans()),
+            content: Text('Booking failed: $e',
+                style: GoogleFonts.plusJakartaSans()),
             backgroundColor: const Color(0xFFEF4444),
             behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
       }

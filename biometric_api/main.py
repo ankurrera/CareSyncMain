@@ -5,7 +5,7 @@ import logging
 import cv2
 import numpy as np
 from typing import Dict, Any, List
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, File, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -35,6 +35,34 @@ app = FastAPI(
     description="Production-grade biometric face processing microservice with ArcFace, RetinaFace, OpenCV and pgvector.",
     version="2.0.0"
 )
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Pre-loading biometric models on startup...")
+    try:
+        # Pre-load ArcFace model
+        DeepFace.build_model("ArcFace")
+        logger.info("ArcFace model loaded successfully.")
+        
+        # Pre-load RetinaFace and MediaPipe detectors by extracting a dummy face
+        dummy_img = np.zeros((112, 112, 3), dtype=np.uint8)
+        # MediaPipe
+        try:
+            DeepFace.extract_faces(dummy_img, detector_backend="mediapipe", enforce_detection=False)
+            logger.info("MediaPipe detector loaded successfully.")
+        except Exception as me:
+            logger.warning(f"Failed to pre-load MediaPipe detector: {me}")
+            
+        # RetinaFace
+        try:
+            DeepFace.extract_faces(dummy_img, detector_backend="retinaface", enforce_detection=False)
+            logger.info("RetinaFace detector loaded successfully.")
+        except Exception as re:
+            logger.warning(f"Failed to pre-load RetinaFace detector: {re}")
+            
+        logger.info("All biometric models pre-loaded successfully.")
+    except Exception as e:
+        logger.exception(f"Failed to pre-load models during startup: {e}")
 
 def l2_normalize(vector: List[float]) -> List[float]:
     """
@@ -122,14 +150,19 @@ class VerifyIDRequest(BaseModel):
 # IMAGE PROCESSING & QUALITY EVALUATION ENGINE
 # ============================================================================
 
-def evaluate_image_quality(img_path: str) -> Dict[str, Any]:
+def evaluate_image_quality(img_input: Any) -> Dict[str, Any]:
     """
     Evaluates image quality using OpenCV metrics before face embedding.
     Checks: Resolution, Brightness, Blur/Sharpness, Contrast, and Occlusion/Faces.
+    Supports either string filepath or decoded numpy ndarray image.
     """
-    img = cv2.imread(img_path)
+    if isinstance(img_input, str):
+        img = cv2.imread(img_input)
+    else:
+        img = img_input
+
     if img is None:
-        raise HTTPException(status_code=400, detail="Cannot read image. File may be corrupted.")
+        raise HTTPException(status_code=400, detail="Cannot read image. File may be corrupted or empty.")
 
     h, w, c = img.shape
     
@@ -165,20 +198,41 @@ def evaluate_image_quality(img_path: str) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Image contrast too low. Background and subject must contrast.")
 
     # 5. Face Detection, Alignment, and Quantity checks
+    # Implementing Hybrid Cascade: try MediaPipe first for speed, fallback to RetinaFace for accuracy
     try:
-        # RetinaFace is highly accurate and does not require opencv.dnn dependencies
+        # Try MediaPipe first (extremely fast on CPU)
         faces = DeepFace.extract_faces(
-            img_path=img_path, 
-            detector_backend="retinaface", 
+            img_path=img, 
+            detector_backend="mediapipe", 
             align=True,
             enforce_detection=True
         )
-    except ValueError as ve:
-        logger.warning(f"No face detected in image: {ve}")
-        raise HTTPException(
-            status_code=400, 
-            detail="No face detected. Please position the camera directly in front of the face."
-        )
+        if len(faces) == 1 and faces[0].get("confidence", 0.0) >= 0.90:
+            logger.info(f"Fast face detection (MediaPipe) succeeded with confidence: {faces[0].get('confidence')}")
+        else:
+            # Fallback to RetinaFace if MediaPipe detected multiple faces or has low confidence
+            logger.info("MediaPipe detection ambiguous. Falling back to RetinaFace...")
+            faces = DeepFace.extract_faces(
+                img_path=img, 
+                detector_backend="retinaface", 
+                align=True,
+                enforce_detection=True
+            )
+    except Exception as e:
+        logger.info(f"MediaPipe detection failed/errored: {e}. Falling back to RetinaFace...")
+        try:
+            faces = DeepFace.extract_faces(
+                img_path=img, 
+                detector_backend="retinaface", 
+                align=True,
+                enforce_detection=True
+            )
+        except ValueError as ve:
+            logger.warning(f"No face detected in image (RetinaFace fallback): {ve}")
+            raise HTTPException(
+                status_code=400, 
+                detail="No face detected. Please position the camera directly in front of the face."
+            )
 
     if len(faces) == 0:
         raise HTTPException(status_code=400, detail="No face detected in image.")
@@ -264,27 +318,29 @@ async def enroll(payload: EnrollRequest):
     """
     start_time = time.time()
     temp_img_path = None
-    enhanced_path = None
     try:
         logger.info(f"Enrolling pose '{payload.poseLabel}' for user: {payload.userId}")
         
         # 1. Fetch image from Supabase Storage via service-role client
-        # Works with any URL format (public /object/public/ or signed /object/sign/)
         temp_img_path = await run_in_threadpool(download_supabase_file, payload.selfieUrl, ".jpg")
 
-        # 2. Quality Evaluation
-        quality_metrics = evaluate_image_quality(temp_img_path)
+        # Read image from file into memory
+        img = cv2.imread(temp_img_path)
+        if img is None:
+            raise HTTPException(status_code=400, detail="Downloaded image is empty or corrupted.")
 
-        # Save cropped face back to temp_img_path (overwriting full original image to save CPU)
+        # 2. Quality Evaluation (In-Memory)
+        quality_metrics = evaluate_image_quality(img)
+
+        # Save cropped face to memory buffer
         cropped_rgb = (quality_metrics["cropped_face"] * 255).astype(np.uint8)
         cropped_bgr = cv2.cvtColor(cropped_rgb, cv2.COLOR_RGB2BGR)
-        cv2.imwrite(temp_img_path, cropped_bgr)
         quality_metrics.pop("cropped_face", None)
         logger.info(f"Quality validation passed: {quality_metrics}")
 
-        # 3. Generate ArcFace embedding (skip second detector pass & bypass color-shifting enhancement)
+        # 3. Generate ArcFace embedding (skip second detector pass and run entirely in RAM)
         embeddings = DeepFace.represent(
-            img_path=temp_img_path,
+            img_path=cropped_bgr,
             model_name="ArcFace",
             detector_backend="skip",
             enforce_detection=False
@@ -344,8 +400,6 @@ async def enroll(payload: EnrollRequest):
         # File Cleanup
         if temp_img_path and os.path.exists(temp_img_path):
             os.remove(temp_img_path)
-        if enhanced_path and os.path.exists(enhanced_path):
-            os.remove(enhanced_path)
 
 @app.post("/verify_id")
 async def verify_id(payload: VerifyIDRequest):
@@ -390,71 +444,54 @@ async def verify_id(payload: VerifyIDRequest):
             os.remove(temp_id_path)
 
 @app.post("/identify")
-async def identify(payload: IdentifyRequest):
+async def identify(file: UploadFile = File(...)):
     """
-    Identifies a patient by downloading a scanned face from the temporary
-    'emergency-scans' bucket, executing quality checks, extracting its embedding,
+    Identifies a patient by receiving a direct multipart file stream of the face crop,
+    decoding it in memory, executing quality checks, extracting its embedding,
     and searching the pgvector database using the match_patient_by_face_multi RPC.
     """
     start_time = time.time()
-    temp_img_path = None
-    enhanced_path = None
     try:
-        logger.info(f"Received identification scan request: {payload.scanPath}")
+        logger.info("Received identification direct stream request")
         
-        # 1. Download image bytes from Supabase private storage
-        download_start = time.time()
-        try:
-            file_bytes = await run_in_threadpool(
-                supabase.storage.from_("emergency-scans").download, 
-                payload.scanPath
-            )
-        except Exception as se:
-            logger.error(f"Failed to retrieve scan file from Supabase storage: {se}")
-            raise HTTPException(
-                status_code=400, 
-                detail="Scanned file could not be downloaded from backend storage."
-            )
-        download_latency = time.time() - download_start
+        # 1. Read bytes from multipart upload directly in RAM (Zero-Disk)
+        read_start = time.time()
+        file_bytes = await file.read()
+        if not file_bytes:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+        read_latency = time.time() - read_start
 
-        # 2. Save bytes locally
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
-            temp_file.write(file_bytes)
-            temp_img_path = temp_file.name
+        # 2. Decode image bytes in memory
+        nparr = np.frombuffer(file_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None:
+            raise HTTPException(status_code=400, detail="Uploaded file is not a valid image.")
 
         # Downscale scan image to max 640px to speed up face detection on CPU
-        try:
-            img = cv2.imread(temp_img_path)
-            if img is not None:
-                h, w = img.shape[:2]
-                max_dim = 640
-                if max(h, w) > max_dim:
-                    scale = max_dim / max(h, w)
-                    new_w = int(w * scale)
-                    new_h = int(h * scale)
-                    resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
-                    cv2.imwrite(temp_img_path, resized)
-                    logger.info(f"Resized scan image from {w}x{h} to {new_w}x{new_h} to speed up CPU face detection")
-        except Exception as re:
-            logger.warning(f"Failed to resize scan image to optimize CPU processing: {re}")
+        h, w = img.shape[:2]
+        max_dim = 640
+        if max(h, w) > max_dim:
+            scale = max_dim / max(h, w)
+            new_w = int(w * scale)
+            new_h = int(h * scale)
+            img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+            logger.info(f"Resized scan image in memory from {w}x{h} to {new_w}x{new_h} to speed up CPU face detection")
 
-        # 3. Quality Evaluation
+        # 3. Quality Evaluation (In-Memory)
         quality_start = time.time()
-        quality_metrics = evaluate_image_quality(temp_img_path)
+        quality_metrics = evaluate_image_quality(img)
         quality_latency = time.time() - quality_start
 
-        # Save cropped face back to temp_img_path (overwriting full original image to save CPU)
+        # Crop face directly in memory
         cropped_rgb = (quality_metrics["cropped_face"] * 255).astype(np.uint8)
         cropped_bgr = cv2.cvtColor(cropped_rgb, cv2.COLOR_RGB2BGR)
-        cv2.imwrite(temp_img_path, cropped_bgr)
         quality_metrics.pop("cropped_face", None)
         logger.info(f"Quality evaluation passed: {quality_metrics}")
 
-        # 4. Extract ArcFace embedding (skip second detector pass and skip color-shifting enhancement)
-        enhancement_latency = 0.0
+        # 4. Extract ArcFace embedding (skip second detector pass and run entirely in RAM)
         inference_start = time.time()
         embeddings = DeepFace.represent(
-            img_path=temp_img_path,
+            img_path=cropped_bgr,
             model_name="ArcFace",
             detector_backend="skip",
             enforce_detection=False
@@ -469,11 +506,8 @@ async def identify(payload: IdentifyRequest):
         embedding_vector = l2_normalize(embeddings[0]["embedding"])
         inference_latency = time.time() - inference_start
 
-        # 6. Database pgvector Match
+        # 5. Database pgvector Match
         db_start = time.time()
-        # Cosine distance limit of 0.40 equates to >= 60% similarity.
-        # Widened from 0.35 to reduce false negatives: successful matches land at 0.30-0.336 distance,
-        # but minor angle/lighting variation was pushing borderline-correct scans just above 0.35.
         rpc_res = supabase.rpc("match_patient_by_face_multi", {
             "query_embedding": embedding_vector,
             "max_distance": 0.40,
@@ -489,7 +523,7 @@ async def identify(payload: IdentifyRequest):
                 detail="No matching patient profile found in database."
             )
 
-        # 7. False Positive Reduction (Compare best match against secondary candidate)
+        # 6. False Positive Reduction (Compare best match against secondary candidate)
         best_match = match_data[0]
         confidence = best_match["similarity"] * 100
         
@@ -498,8 +532,6 @@ async def identify(payload: IdentifyRequest):
         if len(match_data) > 1:
             second_match = match_data[1]
             margin = best_match["similarity"] - second_match["similarity"]
-            # If the best match is extremely close to the second match (less than 3% margin),
-            # and the overall similarity is low, we trigger duplicate suppression to avoid false matching.
             if margin < 0.03 and best_match["similarity"] < 0.72:
                 logger.warning(f"Ambiguous match margin: {margin:.4f}. Candidates: {best_match['full_name']} vs {second_match['full_name']}")
                 raise HTTPException(
@@ -521,9 +553,9 @@ async def identify(payload: IdentifyRequest):
             "match_margin": margin,
             "quality_metrics": quality_metrics,
             "benchmarks": {
-                "download_time": download_latency,
+                "download_time": read_latency,
                 "quality_time": quality_latency,
-                "enhancement_time": enhancement_latency,
+                "enhancement_time": 0.0,
                 "inference_time": inference_latency,
                 "database_search_time": db_latency,
                 "total_time": total_latency
@@ -535,9 +567,3 @@ async def identify(payload: IdentifyRequest):
     except Exception as e:
         logger.exception("Identification process failed")
         raise HTTPException(status_code=500, detail=f"Biometric matching failed: {str(e)}")
-    finally:
-        # File Cleanup
-        if temp_img_path and os.path.exists(temp_img_path):
-            os.remove(temp_img_path)
-        if enhanced_path and os.path.exists(enhanced_path):
-            os.remove(enhanced_path)

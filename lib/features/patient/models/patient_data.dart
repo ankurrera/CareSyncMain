@@ -11,6 +11,8 @@ class PatientData {
   final DateTime createdAt;
   final DateTime? updatedAt;
 
+  final String? faceScanUrl;
+
   const PatientData({
     required this.id,
     required this.userId,
@@ -20,6 +22,7 @@ class PatientData {
     this.height, // Added height
     this.emergencyContact,
     required this.qrCodeId,
+    this.faceScanUrl,
     required this.createdAt,
     this.updatedAt,
   });
@@ -43,6 +46,7 @@ class PatientData {
           json['emergency_contact'] as Map<String, dynamic>)
           : null,
       qrCodeId: json['qr_code_id'] as String,
+      faceScanUrl: json['face_scan_url'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'] as String)
@@ -60,6 +64,7 @@ class PatientData {
       'height': height, // Added height
       'emergency_contact': emergencyContact?.toJson(),
       'qr_code_id': qrCodeId,
+      'face_scan_url': faceScanUrl,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
     };

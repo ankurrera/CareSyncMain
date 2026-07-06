@@ -89,6 +89,21 @@ class NotificationsNotifier extends StateNotifier<List<AppNotification>> {
     state = [];
   }
 
+  void addNotification({
+    required String title,
+    required String message,
+    required String type,
+  }) {
+    final newNotif = AppNotification(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: title,
+      message: message,
+      type: type,
+      createdAt: DateTime.now(),
+    );
+    state = [newNotif, ...state];
+  }
+
   int get unreadCount => state.where((n) => !n.isRead).length;
 }
 

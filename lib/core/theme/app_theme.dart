@@ -45,25 +45,25 @@ class AppTheme {
         elevation: 0,
         color: AppColors.surfaceLight,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           side: const BorderSide(color: AppColors.cardBorder, width: 1.0),
         ),
       ),
 
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.surfaceVariant,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          borderSide: const BorderSide(color: AppColors.cardBorder, width: 1.0),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          borderSide: const BorderSide(color: AppColors.cardBorder, width: 1.0),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
         hintStyle: GoogleFonts.plusJakartaSans(color: AppColors.textLight),
@@ -75,7 +75,7 @@ class AppTheme {
           backgroundColor: AppColors.brandBlack,
           foregroundColor: Colors.white,
           minimumSize: const Size(0, 56),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusCard)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
           textStyle: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ),
@@ -86,7 +86,7 @@ class AppTheme {
           foregroundColor: AppColors.primary,
           minimumSize: const Size(0, 56),
           side: const BorderSide(color: AppColors.primary, width: 1.5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusCard)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppSpacing.radiusMd)),
           textStyle: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ),
@@ -125,21 +125,25 @@ class AppTheme {
         elevation: 0,
         color: const Color(0xFF1E293B), // Slate 800
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(12),
           side: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
         ),
       ),
 
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFF334155), // Slate 700
-        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        fillColor: const Color(0xFF1E293B), // Slate 800
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.primaryLight, width: 1.5),
         ),
       ),
@@ -149,7 +153,7 @@ class AppTheme {
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           minimumSize: const Size(0, 56),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
     );

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/theme/app_colors.dart';
-import '../../../shared/models/user_profile.dart';
-import '../../../patient/providers/appointment_provider.dart';
+import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
+
+import '../../../../routing/route_names.dart';
+import '../../../../services/appointment_service.dart';
 import '../../../../services/supabase_service.dart';
+import '../../../patient/providers/appointment_provider.dart';
 
 class ManageAvailabilityScreen extends ConsumerStatefulWidget {
   const ManageAvailabilityScreen({super.key});
@@ -16,6 +20,7 @@ class _ManageAvailabilityScreenState extends ConsumerState<ManageAvailabilityScr
   final Map<int, List<TimeOfDay>> _availability = {
     0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []
   };
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -24,81 +29,187 @@ class _ManageAvailabilityScreenState extends ConsumerState<ManageAvailabilityScr
   }
 
   Future<void> _loadCurrentAvailability() async {
+    setState(() => _isLoading = true);
     final doctorId = SupabaseService.instance.currentUserId;
-    if (doctorId == null) return;
+    if (doctorId == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
     
-    final current = await ref.read(doctorAvailabilityProvider(doctorId).future);
-    if (current.isNotEmpty) {
-      setState(() {
-        for (var slot in current) {
-          final timeParts = slot.startTime.split(':');
-          _availability[slot.dayOfWeek]?.add(
-            TimeOfDay(hour: int.parse(timeParts[0]), minute: int.parse(timeParts[1])),
-          );
-        }
-      });
+    try {
+      final current = await ref.read(doctorAvailabilityProvider(doctorId).future);
+      if (current.isNotEmpty) {
+        setState(() {
+          for (var slot in current) {
+            final timeParts = slot.startTime.split(':');
+            final time = TimeOfDay(hour: int.parse(timeParts[0]), minute: int.parse(timeParts[1]));
+            if (!_availability[slot.dayOfWeek]!.contains(time)) {
+              _availability[slot.dayOfWeek]?.add(time);
+            }
+          }
+          // Sort slots for each day
+          for (var i = 0; i < 7; i++) {
+            _availability[i]!.sort((a, b) => a.hour.compareTo(b.hour));
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('[DOC] Error loading availability: $e');
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Colors
+    const Color kBgColor = Color(0xFFF7F8FA);
+    const Color kSurfaceColor = Color(0xFFFFFFFF);
+    const Color kPrimaryColor = Color(0xFF6366F1);
+    const Color kTextPrimary = Color(0xFF111827);
+    const Color kTextSecondary = Color(0xFF6B7280);
+    const Color kBorderColor = Color(0xFFE2E8F0);
+
     return Scaffold(
-      backgroundColor: AppColors.softBackground,
+      backgroundColor: kBgColor,
       appBar: AppBar(
-        title: const Text('Manage Availability'),
+        backgroundColor: kSurfaceColor,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: kTextPrimary, size: 18),
+          onPressed: () => context.pop(),
+        ),
+        title: Text(
+          'Manage Availability',
+          style: GoogleFonts.manrope(
+            color: kTextPrimary,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: true,
         actions: [
           TextButton(
             onPressed: _saveAvailability,
-            child: const Text('SAVE', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.softPrimary)),
+            child: Text(
+              'SAVE',
+              style: GoogleFonts.manrope(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+                color: kPrimaryColor,
+                letterSpacing: 0.2,
+              ),
+            ),
           ),
+          const SizedBox(width: 12),
         ],
+        shape: const Border(
+          bottom: BorderSide(color: kBorderColor, width: 1),
+        ),
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(24),
-        itemCount: 7,
-        itemBuilder: (context, index) {
-          final dayName = _getDayName(index);
-          final slots = _availability[index]!;
-          
-          return Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(strokeWidth: 2, color: kPrimaryColor))
+          : ListView.builder(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              itemCount: 7,
+              itemBuilder: (context, index) {
+                final dayName = _getDayName(index);
+                final slots = _availability[index]!;
+                
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: kSurfaceColor,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: kBorderColor, width: 1),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            dayName,
+                            style: GoogleFonts.manrope(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: kTextPrimary,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => _addSlot(index),
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: kPrimaryColor.withOpacity(0.08),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Iconsax.add,
+                                color: kPrimaryColor,
+                                size: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      if (slots.isEmpty)
+                        Text(
+                          'Unavailable',
+                          style: GoogleFonts.manrope(
+                            color: kTextSecondary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        )
+                      else
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: slots.map((slot) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: kBorderColor),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    slot.format(context),
+                                    style: GoogleFonts.manrope(
+                                      fontSize: 11,
+                                      color: kTextPrimary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  GestureDetector(
+                                    onTap: () => setState(() => slots.remove(slot)),
+                                    child: const Icon(
+                                      Iconsax.close_circle,
+                                      color: kTextSecondary,
+                                      size: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                    ],
+                  ),
+                );
+              },
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      dayName,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                    ),
-                    IconButton(
-                      onPressed: () => _addSlot(index),
-                      icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.softPrimary),
-                    ),
-                  ],
-                ),
-                if (slots.isEmpty)
-                  const Text('Unavailable', style: TextStyle(color: Colors.grey, fontSize: 13)),
-                Wrap(
-                  spacing: 8,
-                  children: slots.map((slot) => Chip(
-                    label: Text(slot.format(context)),
-                    onDeleted: () => setState(() => slots.remove(slot)),
-                    backgroundColor: AppColors.softPrimary.withValues(alpha: 0.1),
-                    deleteIconColor: AppColors.softPrimary,
-                  )).toList(),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
     );
   }
 
@@ -123,6 +234,11 @@ class _ManageAvailabilityScreenState extends ConsumerState<ManageAvailabilityScr
   }
 
   Future<void> _saveAvailability() async {
+    final doctorId = SupabaseService.instance.currentUserId;
+    if (doctorId == null) return;
+
+    setState(() => _isLoading = true);
+
     // Generate UPSERT data for Supabase
     final data = <Map<String, dynamic>>[];
     _availability.forEach((day, slots) {
@@ -137,11 +253,44 @@ class _ManageAvailabilityScreenState extends ConsumerState<ManageAvailabilityScr
     });
 
     try {
-      // Add logic to service layer if needed or use direct client
-      // For now, I'll assume we update the service
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Availability saved!')));
+      // 1. Delete old slots to sync deletions
+      await SupabaseService.instance.client
+          .from('doctor_availability')
+          .delete()
+          .eq('doctor_id', doctorId);
+
+      // 2. Insert new slots list
+      if (data.isNotEmpty) {
+        await ref.read(appointmentServiceProvider).setAvailability(data);
+      }
+
+      // 3. Sync riverpod cache
+      ref.invalidate(doctorAvailabilityProvider(doctorId));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Availability slots updated successfully!'),
+            backgroundColor: Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        context.pop();
+      }
     } catch (e) {
-       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving availability: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 }

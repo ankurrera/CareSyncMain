@@ -10,6 +10,7 @@ import '../features/auth/presentation/screens/kyc_verification_screen.dart';
 import '../features/auth/presentation/screens/device_management_screen.dart';
 import '../features/auth/providers/auth_provider.dart';
 import '../features/patient/presentation/screens/patient_dashboard_screen.dart';
+import '../features/patient/presentation/screens/patient_shell_screen.dart';
 import '../features/patient/presentation/screens/add_prescription_screen.dart';
 import '../features/patient/presentation/screens/prescriptions_screen.dart';
 import '../features/patient/presentation/screens/qr_code_screen.dart';
@@ -27,6 +28,7 @@ import '../features/pharmacist/presentation/screens/pharmacist_search_screen.dar
 import '../features/emergency/presentation/screens/patient_emergency_screen.dart';
 import '../features/emergency/presentation/screens/qr_scanner_screen.dart';
 import '../features/emergency/presentation/screens/emergency_data_screen.dart';
+import '../features/emergency/presentation/screens/emergency_access_history_screen.dart';
 import '../features/patient/presentation/screens/vitals_history_screen.dart';
 import '../features/patient/presentation/screens/book_appointment_screen.dart';
 import '../features/shared/presentation/screens/chat_list_screen.dart';
@@ -35,16 +37,17 @@ import '../features/doctor/presentation/screens/manage_availability_screen.dart'
 import '../features/shared/presentation/screens/splash_screen.dart';
 import '../features/shared/presentation/screens/profile_screen.dart';
 import '../features/shared/presentation/screens/notifications_screen.dart';
+import '../features/shared/models/user_profile.dart';
 import 'route_names.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
-  final profile = ref.read(currentProfileProvider).valueOrNull;
+  final profileAsync = ref.watch(currentProfileProvider);
+  final profile = profileAsync.valueOrNull;
 
   return GoRouter(
     initialLocation: RouteNames.splash,
     debugLogDiagnostics: true,
-    refreshListenable: GoRouterRefreshStream(authState),
     redirect: (context, state) {
       final isAuthenticated = authState.valueOrNull != null;
       final isAuthRoute = state.matchedLocation == RouteNames.signIn ||
@@ -70,7 +73,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // Authenticated but on auth route - redirect to appropriate dashboard
       if (isAuthenticated && isAuthRoute) {
-        return _getDashboardRoute(ref);
+        if (profile == null) {
+          return null; // wait for profile to load
+        }
+        return _getDashboardRoute(profile);
       }
 
       // Enforce role-specific paths
@@ -81,12 +87,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path == RouteNames.notifications ||
             path == RouteNames.biometricEnrollment ||
             path == RouteNames.kycVerification ||
-            path == RouteNames.deviceManagement;
+            path == RouteNames.deviceManagement ||
+            path == '/chat-list' ||
+            path.startsWith('/chat/');
 
         if (!isCommonRoute &&
             expectedPrefix != null &&
             !path.startsWith(expectedPrefix)) {
-          return _getDashboardRoute(ref);
+          return _getDashboardRoute(profile);
         }
       }
 
@@ -141,7 +149,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const DeviceManagementScreen(),
       ),
 
-      // Common Routes
+      // Common Routes (shared across all roles)
       GoRoute(
         path: RouteNames.profile,
         name: 'profile',
@@ -152,13 +160,54 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'notifications',
         builder: (context, state) => const NotificationsScreen(),
       ),
-
-      // Patient Routes
+      // Chat routes — shared across patient, doctor, pharmacist
       GoRoute(
-        path: RouteNames.patientDashboard,
-        name: 'patientDashboard',
-        builder: (context, state) => const PatientDashboardScreen(),
+        path: '/chat-list',
+        name: 'chatList',
+        builder: (context, state) => const ChatListScreen(),
       ),
+      GoRoute(
+        path: '/chat/:roomId',
+        name: 'chatRoom',
+        builder: (context, state) {
+          final roomId = state.pathParameters['roomId']!;
+          final otherName = state.extra as String? ?? 'Secure Chat';
+          return ChatRoomScreen(roomId: roomId, otherName: otherName);
+        },
+      ),
+
+      // ── Patient Shell (persistent floating nav bar across 4 main tabs) ──
+      ShellRoute(
+        builder: (context, state, child) => PatientShellScreen(child: child),
+        routes: [
+          // Tab 0 – Home
+          GoRoute(
+            path: RouteNames.patientDashboard,
+            name: 'patientDashboard',
+            builder: (context, state) => const PatientDashboardScreen(),
+          ),
+          // Tab 1 – Records
+          GoRoute(
+            path: RouteNames.patientMedicalHistory,
+            name: 'patientMedicalHistory',
+            builder: (context, state) => const MedicalHistoryScreen(),
+          ),
+          // Tab 2 – Profile (patient shell tab)
+          GoRoute(
+            path: RouteNames.patientProfile,
+            name: 'patientProfileShell',
+            builder: (context, state) => const ProfileScreen(),
+          ),
+          // Tab 3 – Emergency
+          GoRoute(
+            path: RouteNames.patientEmergency,
+            name: 'patientEmergency',
+            builder: (context, state) => const PatientEmergencyScreen(),
+          ),
+        ],
+      ),
+
+      // Patient sub-routes (pushed on top, no nav bar — intentional)
       GoRoute(
         path: RouteNames.patientPrescriptions,
         name: 'patientPrescriptions',
@@ -173,11 +222,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RouteNames.patientQrCode,
         name: 'patientQrCode',
         builder: (context, state) => const QrCodeScreen(),
-      ),
-      GoRoute(
-        path: RouteNames.patientMedicalHistory,
-        name: 'patientMedicalHistory',
-        builder: (context, state) => const MedicalHistoryScreen(),
       ),
       GoRoute(
         path: '/patient/vitals-history',
@@ -199,20 +243,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'patientAddPrescription',
         builder: (context, state) => const AddPrescriptionScreen(),
       ),
-      GoRoute(
-        path: '/chat-list',
-        name: 'chatList',
-        builder: (context, state) => const ChatListScreen(),
-      ),
-      GoRoute(
-        path: '/chat/:roomId',
-        name: 'chatRoom',
-        builder: (context, state) {
-          final roomId = state.pathParameters['roomId']!;
-          final otherName = state.extra as String? ?? 'Secure Chat';
-          return ChatRoomScreen(roomId: roomId, otherName: otherName);
-        },
-      ),
+
 
       // Doctor Routes
       GoRoute(
@@ -282,12 +313,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const PharmacistSearchScreen(),
       ),
 
-      // Patient Emergency Routes
-      GoRoute(
-        path: RouteNames.patientEmergency,
-        name: 'patientEmergency',
-        builder: (context, state) => const PatientEmergencyScreen(),
-      ),
+      // Patient Emergency sub-routes (pushed on top — no nav bar)
       GoRoute(
         path: RouteNames.patientEmergencyScan,
         name: 'patientEmergencyScan',
@@ -301,6 +327,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return EmergencyDataScreen(qrCodeId: qrCodeId);
         },
       ),
+      GoRoute(
+        path: RouteNames.patientEmergencyAudit,
+        name: 'patientEmergencyAudit',
+        builder: (context, state) => const EmergencyAccessHistoryScreen(),
+      ),
     ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(
@@ -310,8 +341,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
 });
 
-String _getDashboardRoute(Ref ref) {
-  final profile = ref.read(currentProfileProvider).valueOrNull;
+String _getDashboardRoute(UserProfile? profile) {
   switch (profile?.role) {
     case 'doctor':
       return RouteNames.doctorDashboard;
@@ -323,12 +353,6 @@ String _getDashboardRoute(Ref ref) {
   }
 }
 
-/// Helper class to convert a stream to a listenable for GoRouter
-class GoRouterRefreshStream extends ChangeNotifier {
-  GoRouterRefreshStream(AsyncValue<dynamic> stream) {
-    notifyListeners();
-  }
-}
 
 String? _rolePrefix(String role) {
   switch (role) {
