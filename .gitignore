@@ -220,3 +220,42 @@ supabase/config.toml
 node_modules/
 package-lock.json
 yarn.lock
+
+# ============================================================================
+# Python, FastAPI & Machine Learning (biometric_api)
+# ============================================================================
+# Virtual Environments
+venv/
+.venv/
+ENV/
+env/
+python_env/
+*env/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Caches and logs
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+*.log
+*.tmp
+*.temp
+
+# AI/ML Model downloads & weights (InsightFace / DeepFace caches)
+.insightface/
+.deepface/
+models/
+weights/
+*.h5
+*.onnx
+*.pb
+*.tflite
+*.pt
+*.pth
+
