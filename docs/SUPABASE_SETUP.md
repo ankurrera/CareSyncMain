@@ -19,13 +19,12 @@ This guide walks you through setting up Supabase for the CareSync medical loggin
    - **Project URL** (looks like `https://xxxxx.supabase.co`)
    - **anon public** key (under "Project API keys")
 
-3. Open `lib/core/config/env_config.dart` in your Flutter project and update:
+3. Create a `.env` file in the root of your Flutter project and add:
 
-```dart
-abstract class EnvConfig {
-  static const String supabaseUrl = 'https://YOUR_PROJECT_ID.supabase.co';
-  static const String supabaseAnonKey = 'YOUR_ANON_KEY_HERE';
-}
+```env
+SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
+SUPABASE_ANON_KEY=YOUR_ANON_KEY_HERE
+BIOMETRIC_API_URL=http://localhost:8000
 ```
 
 ## Step 3: Run the Database Schema

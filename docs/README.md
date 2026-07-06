@@ -1,110 +1,49 @@
-# CareSync
+# CareSync — Documentation Directory 📂
 
-A biometric-authenticated medical logging application built with Flutter, Riverpod, and Supabase.
+Welcome to the CareSync design, setup, and implementation directory. These files outline key features, architecture, database schemas, and workflows implemented across the mobile client and biometric recognition server.
 
-## Features
+---
 
-- **Multi-role Support**: Patient, Doctor, Pharmacist, and First Responder roles
-- **Biometric Authentication**: Face ID / Fingerprint for secure, quick sign-in
-- **Prescription Management**: Create, view, and dispense prescriptions
-- **Emergency QR Code**: Scannable QR for first responders to access critical medical data
-- **Privacy Controls**: Patients can mark data as public or private
+## 🏗️ Core Setup Guides
 
-## Tech Stack
+* **[Supabase Setup Guide](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/SUPABASE_SETUP.md):** Detailed guide to set up Supabase Auth, PostgreSQL schema, RLS policies, Realtime settings, and storage buckets.
 
-- **Flutter 3.7+** - Cross-platform framework
-- **Riverpod** - State management
-- **Supabase** - Backend (Auth, Database, Storage)
-- **local_auth** - Biometric authentication
-- **go_router** - Navigation
+---
 
-## Getting Started
+## 🔒 Biometrics & Authentication
 
-### Prerequisites
+* **[Biometric Authorization Implementation](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/BIOMETRIC_AUTHORIZATION_IMPLEMENTATION.md):** Architectural design of local and cloud biometrics (Face ID/RetinaFace/ArcFace).
+* **[Biometric Flow Diagram](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/BIOMETRIC_FLOW_DIAGRAM.md):** Mermaid diagrams detailing verification, identification, and enrollment API requests.
+* **[Biometric & KYC Refactoring](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/BIOMETRIC_KYC_REFACTORING.md):** Refactoring of the Know Your Customer (KYC) flow.
+* **[KYC & 2FA Implementation](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/KYC_2FA_IMPLEMENTATION.md):** Multi-factor (2FA) device verification flows and session lock controls.
 
-- Flutter SDK 3.7+
-- A Supabase project
+---
 
-### 1. Clone and Install Dependencies
+## 📝 Prescription Management
 
-```bash
-flutter pub get
-```
+* **[Prescription Implementation Guide](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/PRESCRIPTION_IMPLEMENTATION_GUIDE.md):** Complete guide to the digital signature, verification, and PDF prescription rendering system.
+* **[Prescription Screen Implementation](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/PRESCRIPTION_SCREEN_IMPLEMENTATION.md):** Design structure of the doctor prescription issue forms and pharmacist dispensation UI.
+* **[Medication Form Flow](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/MEDICATION_FORM_FLOW.md):** Steps involved in dosage auto-calculations and frequency validation.
 
-### 2. Set Up Supabase
+---
 
-1. Create a new project at [supabase.com](https://supabase.com)
-2. Go to **SQL Editor** and run the contents of `supabase/schema.sql`
-3. Copy your project URL and anon key
+## 📐 Screen Layouts & Structure
 
-### 3. Configure Environment
+* **[Screen Structure Directory](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/SCREEN_STRUCTURE.md):** Complete routing mapping, shell navigation, and role-based screen structures.
+* **[Visual Explanation & Design Tokens](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/VISUAL_EXPLANATION.md):** Design system components, brand color guidelines, and interactive widgets.
 
-Edit `lib/core/config/env_config.dart`:
+---
 
-```dart
-abstract class EnvConfig {
-  static const String supabaseUrl = 'YOUR_SUPABASE_URL';
-  static const String supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
-}
-```
+## 📋 Summaries & Fix Notes
 
-### 4. Download Fonts (Optional)
+* **[Biometric Fix Summary](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/BIOMETRIC_FIX_SUMMARY.md):** Summarized notes on model preloading optimizations.
+* **[Biometric Fix Testing](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/BIOMETRIC_FIX_TESTING.md):** Test scenarios for face recognition accuracy and speed.
+* **[Input Field Fix Summary](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/INPUT_FIELD_FIX_SUMMARY.md):** Keyboard handling and input box alignment summaries.
+* **[RenderFlex Overflow Fix](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/RENDERFLEX_OVERFLOW_FIX.md):** Structural layout corrections for small screen devices.
+* **[Implementation Complete Overview](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/IMPLEMENTATION_COMPLETE.md):** High-level summary of the end-to-end integration status.
 
-Download the Outfit font family and place in `assets/fonts/`:
-- Outfit-Regular.ttf
-- Outfit-Medium.ttf
-- Outfit-SemiBold.ttf
-- Outfit-Bold.ttf
+---
 
-Or remove the fonts section from `pubspec.yaml` to use system fonts.
+## 📊 Audit Reports
 
-### 5. Run the App
-
-```bash
-flutter run
-```
-
-## Project Structure
-
-```
-lib/
-├── main.dart                 # Entry point
-├── app.dart                  # App configuration
-├── core/
-│   ├── config/               # Environment configuration
-│   └── theme/                # App theme, colors, spacing
-├── features/
-│   ├── auth/                 # Authentication flow
-│   ├── patient/              # Patient dashboard & features
-│   ├── doctor/               # Doctor dashboard & features
-│   ├── pharmacist/           # Pharmacist dashboard & features
-│   ├── first_responder/      # First responder features
-│   └── shared/               # Shared widgets & models
-├── routing/                  # Navigation routes
-└── services/                 # Supabase, biometric, storage services
-```
-
-## Database Schema
-
-See `supabase/schema.sql` for the complete database schema including:
-
-- `profiles` - User profiles with roles
-- `user_devices` - Biometric device bindings
-- `patients` - Patient-specific data
-- `doctors` / `pharmacists` / `first_responders` - Role-specific data
-- `prescriptions` - Medical prescriptions
-- `prescription_items` - Individual medicines
-- `dispensing_records` - Pharmacy transactions
-- `medical_conditions` - Allergies, chronic conditions (for emergency access)
-
-## Biometric Authentication Flow
-
-1. **New User**: Sign up with email → Biometric enrollment prompt → Device UUID generated and stored
-2. **Returning User (same device)**: Biometric verification → Instant sign-in
-3. **New Device**: Email/password sign-in → Biometric enrollment for new device
-
-Each device has its own biometric binding - biometric data never leaves the device.
-
-## License
-
-MIT
+* **[Documentation Audit Report](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/DOCUMENTATION_AUDIT.md):** Complete inventory and health audit of the Markdown documentation files in this repository.
