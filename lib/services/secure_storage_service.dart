@@ -25,6 +25,8 @@ class SecureStorageService {
   static const String _refreshTokenKey = 'caresync_refresh_token';
   static const String _accessTokenKey = 'caresync_access_token';
   static const String _lastActivityKey = 'caresync_last_activity';
+  static const String _doctorSignatureKey = 'caresync_doctor_signature';
+  static const String _doctorSignatureHashKey = 'caresync_doctor_signature_hash';
 
   // ─────────────────────────────────────────────────────────────────────────
   // DEVICE ID (Biometric Binding)
@@ -169,6 +171,30 @@ class SecureStorageService {
   /// Save queued offline logs
   Future<void> saveQueuedLogs(List<Map<String, dynamic>> logs) async {
     await _storage.write(key: _queuedLogsKey, value: jsonEncode(logs));
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // DIGITAL SIGNATURE STORAGE
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Get doctor's digital signature string (Base64 PNG)
+  Future<String?> getDoctorSignature() async {
+    return await _storage.read(key: _doctorSignatureKey);
+  }
+
+  /// Store doctor's digital signature string
+  Future<void> setDoctorSignature(String signatureBase64) async {
+    await _storage.write(key: _doctorSignatureKey, value: signatureBase64);
+  }
+
+  /// Get doctor's signature hash
+  Future<String?> getDoctorSignatureHash() async {
+    return await _storage.read(key: _doctorSignatureHashKey);
+  }
+
+  /// Store doctor's signature hash
+  Future<void> setDoctorSignatureHash(String hash) async {
+    await _storage.write(key: _doctorSignatureHashKey, value: hash);
   }
 }
 

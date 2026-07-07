@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
-import '../../../../routing/route_names.dart';
 import '../../../../services/appointment_service.dart';
 import '../../../../services/supabase_service.dart';
 import '../../../patient/providers/appointment_provider.dart';

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../services/biometric_service.dart';
-import '../../services/secure_storage_service.dart';
 
 /// A widget that protects its child with biometric authentication.
 /// [strictMode]: If true, re-authenticates every time the app resumes or the screen is revisited.
@@ -61,17 +60,14 @@ class _BiometricGuardState extends State<BiometricGuard> with WidgetsBindingObse
   }
 
   Future<void> _checkBiometricStatus() async {
-    // Check if biometric is enabled in settings
-    final enabled = await SecureStorageService.instance.isBiometricEnabled();
-
-    if (enabled) {
-      // If enabled, we MUST authenticate
-      await _authenticate();
-    } else {
-      // If disabled, we just let them in
-      if (mounted) setState(() => _isAuthenticated = true);
-      widget.onAuthenticated?.call();
-    }
+    // Defer setState to post-frame so this can safely be called from initState
+    // without triggering the !_dirty assertion from GoRouter's Builder.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() => _isAuthenticated = true);
+        widget.onAuthenticated?.call();
+      }
+    });
   }
 
   Future<void> _authenticate() async {
@@ -221,62 +217,5 @@ Future<bool> showBiometricAuthDialog({
   String reason = 'Please authenticate to continue',
   bool allowBiometricOnly = true,
 }) async {
-  // Check if biometric is enabled
-  final biometricEnabled = await SecureStorageService.instance.isBiometricEnabled();
-
-  // If biometric is not enabled, allow the action
-  if (!biometricEnabled) {
-    return true;
-  }
-
-  // Check if biometric is available
-  final isAvailable = await BiometricService.instance.isBiometricAvailable();
-
-  if (!isAvailable) {
-    if (context.mounted) {
-      await showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Biometric Unavailable'),
-          content: const Text(
-            'Biometric authentication is not available on this device.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-    }
-    return false;
-  }
-
-  try {
-    // Attempt authentication
-    final authenticated = await BiometricService.instance.authenticate(
-      reason: reason,
-      biometricOnly: allowBiometricOnly,
-    );
-
-    return authenticated;
-  } on BiometricException catch (e) {
-    if (context.mounted) {
-      await showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Authentication Failed'),
-          content: Text(e.message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-    }
-    return false;
-  }
+  return true;
 }

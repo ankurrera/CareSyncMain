@@ -11,13 +11,11 @@ import 'dart:io';
 import '../../../../features/shared/services/ocr_service.dart';
 
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_spacing.dart';
 import '../../../family/providers/family_provider.dart';
 import '../../models/prescription_input_models.dart';
 import '../../providers/patient_provider.dart';
 import '../widgets/doctor_info_card_widget.dart';
 import '../widgets/medication_card_widget.dart';
-import '../widgets/prescription_upload_widget.dart';
 import '../../../../services/supabase_service.dart';
 
 /// Comprehensive Add Prescription screen for patient input

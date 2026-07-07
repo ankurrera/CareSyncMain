@@ -30,13 +30,16 @@ class RoleSelectionScreen extends StatelessWidget {
                     fit: BoxFit.contain,
                   ),
                   const SizedBox(height: 10),
-                  Text(
-                    'CARESYNC',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF0D0D0D),
-                      letterSpacing: 5,
+                  Padding(
+                    padding: const EdgeInsets.only(left: 5),
+                    child: Text(
+                      'CARESYNC',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF0D0D0D),
+                        letterSpacing: 5,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 6),

@@ -9,4 +9,6 @@ requests
 tf-keras
 python-dotenv
 scipy
-mediapipe
+mediapipe==0.10.14
+torch>=2.0.0
+protobuf==4.25.3

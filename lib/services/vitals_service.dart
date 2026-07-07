@@ -29,6 +29,7 @@ class VitalsService {
     // Encrypt the value before storing
     final encryptedValue = await _encryption.encryptMedicalRecord(
       data: value,
+      patientId: patientId,
       biometricReason: 'Authenticate to log your health vitals',
     );
 

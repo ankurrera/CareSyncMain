@@ -95,7 +95,7 @@ class EmergencyAuditService {
 
   /// Logs a QR Code scan
   Future<void> logQrScan({
-    required String patientId,
+    String? patientId,
     required String status, // 'Success', 'Failed'
     String? viewScope,
   }) async {
@@ -137,7 +137,7 @@ class EmergencyAuditService {
 
     final logPayload = {
       'id': logId,
-      'patient_id': patientId,
+      'patient_id': (patientId != null && patientId.isNotEmpty) ? patientId : null,
       'accessed_by_user_id': currentUser?.id,
       'accessed_by_name': accessedByName,
       'accessed_by_role': accessedByRole,

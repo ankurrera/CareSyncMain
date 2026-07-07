@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'custom_biometric_service.dart';
-import '../features/shared/services/ocr_service.dart';
 
 /// Service for handling KYC (Know Your Customer) verification
 class KYCService {
@@ -107,115 +106,18 @@ class KYCService {
         throw KYCException('User not authenticated');
       }
 
-      // --- OPTION A: AUTOMATED OCR VERIFICATION GATE ---
-      if (idDocumentFile != null) {
-        debugPrint('[KYC-GATE] Step 1: Performing OCR on Government ID document...');
-        final ocrText = await OcrService().extractPlainText(idDocumentFile);
-        debugPrint('[KYC-GATE] Extracted text from ID:\n$ocrText');
 
-        // Fuzzy match Name: Check if at least one name part (length > 2) is present in the document
-        final fullNameLower = fullName.toLowerCase();
-        final nameParts = fullNameLower.split(RegExp(r'\s+')).where((part) => part.length > 2).toList();
-        
-        bool nameMatches = false;
-        for (var part in nameParts) {
-          if (ocrText.toLowerCase().contains(part)) {
-            nameMatches = true;
-            break;
-          }
-        }
 
-        // Fuzzy match Birth Year: check if the document contains the year of birth
-        final birthYear = dateOfBirth.year.toString();
-        final dobMatches = ocrText.contains(birthYear);
+      // --- OPTION A: BIOMETRIC 1:1 FACE MATCHING GATE REMOVED (Bypassed per request) ---
 
-        if (!nameMatches || !dobMatches) {
-          debugPrint('[KYC-GATE] OCR mismatch: nameMatches=$nameMatches, dobMatches=$dobMatches');
-          
-          // Persist the attempt in Supabase as rejected
-          await _supabase.from('kyc_verifications').upsert({
-            'user_id': userId,
-            'full_name': fullName,
-            'date_of_birth': dateOfBirth.toIso8601String().split('T')[0],
-            'id_document_url': idDocumentUrl,
-            'selfie_url': selfieUrl,
-            'additional_documents': additionalDocuments,
-            'kyc_status': 'rejected',
-            'created_at': DateTime.now().toIso8601String(),
-            'updated_at': DateTime.now().toIso8601String(),
-          }, onConflict: 'user_id');
-          
-          throw KYCException(
-            'Government ID Verification Failed: The name or birth year on the ID document does not match the entered profile details. Please make sure the photo is clear and matches the input.'
-          );
-        }
-        debugPrint('[KYC-GATE] OCR Validation passed successfully.');
-      }
-
-      // --- OPTION A: BIOMETRIC 1:1 FACE MATCHING GATE ---
-      if (idDocumentUrl.isNotEmpty && selfieUrl.isNotEmpty) {
-        debugPrint('[KYC-GATE] Step 2: Executing 1:1 Biometric Face Match between Selfie and Government ID...');
-        bool faceMatches = false;
-        try {
-          faceMatches = await CustomBiometricService.instance.verifyIDFace(
-            selfieUrl: selfieUrl,
-            idDocumentUrl: idDocumentUrl,
-          );
-        } catch (faceErr) {
-          debugPrint('[KYC-GATE] Biometric check threw error: $faceErr');
-          
-          // Persist the failure
-          await _supabase.from('kyc_verifications').upsert({
-            'user_id': userId,
-            'full_name': fullName,
-            'date_of_birth': dateOfBirth.toIso8601String().split('T')[0],
-            'id_document_url': idDocumentUrl,
-            'selfie_url': selfieUrl,
-            'additional_documents': additionalDocuments,
-            'kyc_status': 'rejected',
-            'created_at': DateTime.now().toIso8601String(),
-            'updated_at': DateTime.now().toIso8601String(),
-          }, onConflict: 'user_id');
-          
-          throw KYCException('Facial Biometric Matching Failed: $faceErr');
-        }
-
-        if (!faceMatches) {
-          debugPrint('[KYC-GATE] Face similarity check failed (mismatch).');
-          
-          await _supabase.from('kyc_verifications').upsert({
-            'user_id': userId,
-            'full_name': fullName,
-            'date_of_birth': dateOfBirth.toIso8601String().split('T')[0],
-            'id_document_url': idDocumentUrl,
-            'selfie_url': selfieUrl,
-            'additional_documents': additionalDocuments,
-            'kyc_status': 'rejected',
-            'created_at': DateTime.now().toIso8601String(),
-            'updated_at': DateTime.now().toIso8601String(),
-          }, onConflict: 'user_id');
-
-          throw KYCException(
-            'Facial Verification Failed: The face visible on the Government ID card does not match the live captured selfie. Please check lighting and verify the ID belongs to you.'
-          );
-        }
-        debugPrint('[KYC-GATE] Biometric Face Matching passed successfully.');
-      }
-
-      // If all gates passed, verify the KYC status directly!
-      final data = {
-        'user_id': userId,
-        'full_name': fullName,
-        'date_of_birth': dateOfBirth.toIso8601String().split('T')[0],
-        'id_document_url': idDocumentUrl,
-        'selfie_url': selfieUrl,
-        'additional_documents': additionalDocuments,
-        'kyc_status': 'verified',
-        'created_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      };
-
-      await _supabase.from('kyc_verifications').upsert(data, onConflict: 'user_id');
+      // Call secure submit RPC instead of direct client-side update/upsert of kyc_status
+      await _supabase.rpc('submit_kyc_secure', params: {
+        'p_full_name': fullName,
+        'p_date_of_birth': dateOfBirth.toIso8601String().split('T')[0],
+        'p_id_document_url': idDocumentUrl,
+        'p_selfie_url': selfieUrl,
+        'p_additional_documents': additionalDocuments ?? [],
+      });
 
       // Ensure the patient record exists in the 'patients' table
       try {

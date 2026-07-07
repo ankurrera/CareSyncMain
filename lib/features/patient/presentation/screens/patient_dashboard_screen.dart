@@ -29,6 +29,7 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       showModalBottomSheet(
         context: context,
+        useRootNavigator: true,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
         builder: (context) => Container(

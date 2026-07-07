@@ -17,11 +17,12 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download models to cache directory to avoid long cold starts in Hugging Face
-# DeepFace downloads RetinaFace and ArcFace weights to ~/.deepface/weights/
-# Let's create the folder and we can download them on container start or build time
-RUN mkdir -p /root/.deepface/weights && \
-    python -c "import urllib.request; urllib.request.urlretrieve('https://github.com/serengil/deepface_models/releases/download/v1.0/retinaface.h5', '/root/.deepface/weights/retinaface.h5'); urllib.request.urlretrieve('https://github.com/serengil/deepface_models/releases/download/v1.0/arcface_weights.h5', '/root/.deepface/weights/arcface_weights.h5')"
+# Copy model downloader script and execute pre-downloads
+ENV DEEPFACE_HOME=/app
+COPY download_models.py .
+RUN python download_models.py && \
+    rm download_models.py && \
+    chmod -R 777 /app/.deepface
 
 COPY . .
 

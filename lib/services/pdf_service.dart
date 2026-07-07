@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:convert';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:intl/intl.dart';
@@ -12,8 +13,10 @@ class PdfService {
     required DateTime date,
     required String diagnosis,
     required List<Map<String, dynamic>> medications,
-    List<String>? tests, // NEW PARAMETER
+    List<String>? tests,
     String? notes,
+    String? signatureBase64,
+    String? signatureHash,
   }) async {
     final pdf = pw.Document();
 
@@ -213,13 +216,35 @@ class PdfService {
                   children: [
                     // Digital Signature Stamp
                     pw.Container(
-                      padding: const pw.EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: pw.BoxDecoration(
-                        border: pw.Border.all(color: baseColor, width: 2),
-                        borderRadius: pw.BorderRadius.circular(4),
+                        border: pw.Border.all(color: baseColor, width: 1.5),
+                        borderRadius: pw.BorderRadius.circular(6),
                       ),
-                      child: pw.Text('DIGITALLY SIGNED',
-                          style: pw.TextStyle(color: baseColor, fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.center,
+                        children: [
+                          if (signatureBase64 != null)
+                            pw.Container(
+                              height: 36,
+                              width: 90,
+                              child: pw.Image(
+                                pw.MemoryImage(base64Decode(signatureBase64)),
+                                fit: pw.BoxFit.contain,
+                              ),
+                            )
+                          else
+                            pw.Text('DIGITALLY SIGNED',
+                                style: pw.TextStyle(color: baseColor, fontWeight: pw.FontWeight.bold, fontSize: 8)),
+                          pw.SizedBox(height: 2),
+                          if (signatureHash != null)
+                            pw.Text('SHA-256: ${signatureHash.substring(0, 12).toUpperCase()}...',
+                                style: const pw.TextStyle(color: PdfColors.grey500, fontSize: 6))
+                          else
+                            pw.Text('VERIFIED PHYSICIAN',
+                                style: const pw.TextStyle(color: PdfColors.grey500, fontSize: 6)),
+                        ],
+                      ),
                     ),
                     pw.SizedBox(height: 8),
                     pw.Text('Dr. ${doctor.fullName}',

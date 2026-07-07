@@ -4,11 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_spacing.dart';
 import '../../../../routing/route_names.dart';
 import '../../../../services/two_factor_service.dart';
 import '../../providers/auth_provider.dart';
-import '../widgets/auth_text_field.dart';
 import 'two_factor_verification_screen.dart';
 
 class SignInScreen extends ConsumerStatefulWidget {
@@ -26,7 +24,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
-  bool _isBiometricLoading = false;
 
   @override
   void dispose() {
@@ -57,16 +54,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     }
   }
 
-  IconData get _roleIcon {
-    switch (widget.role) {
-      case 'doctor':
-        return Icons.medical_services_rounded;
-      case 'pharmacist':
-        return Icons.local_pharmacy_rounded;
-      default:
-        return Icons.person_rounded;
-    }
-  }
+
 
   Future<void> _signIn() async {
     if (!_formKey.currentState!.validate()) return;
@@ -132,81 +120,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _signInWithBiometric() async {
-    setState(() => _isBiometricLoading = true);
-
-    try {
-      // Attempt biometric authentication
-      final success = await ref.read(authNotifierProvider.notifier).signInWithBiometric();
-
-      if (!success) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Biometric authentication failed or session expired. Please sign in with your credentials.'),
-              backgroundColor: AppColors.error,
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        }
-        return;
-      }
-
-      if (mounted) {
-        // Refresh profile to get user data
-        ref.invalidate(currentProfileProvider);
-        final profile = await ref.read(currentProfileProvider.future);
-
-        if (profile == null) {
-          throw Exception('Could not load profile');
-        }
-
-        // Validate role matches
-        if (profile.role != widget.role) {
-          // Sign out first
-          await ref.read(authNotifierProvider.notifier).signOut();
-
-          if (mounted) {
-            // Show a dialog with the correct role info
-            await _showRoleMismatchDialog(profile.role);
-          }
-          return;
-        }
-
-        // Navigate to dashboard
-        _navigateToDashboard(profile.role);
-      }
-    } catch (e) {
-      if (mounted) {
-        String errorMessage = 'Biometric authentication failed. Please try again or sign in with your credentials.';
-        
-        // Handle specific error cases
-        final errorStr = e.toString();
-        if (errorStr.contains('session expired') || errorStr.contains('timed out')) {
-          errorMessage = 'Session expired. Please sign in with your credentials.';
-        } else if (errorStr.contains('canceled')) {
-          errorMessage = 'Authentication canceled. Please try again or sign in with your credentials.';
-        } else if (errorStr.contains('not enrolled')) {
-          errorMessage = 'No biometrics enrolled. Please set up biometric authentication in your device settings.';
-        } else if (errorStr.contains('not available')) {
-          errorMessage = 'Biometric authentication is not available on this device.';
-        } else if (errorStr.contains('locked')) {
-          errorMessage = 'Too many failed attempts. Please try again later or sign in with your credentials.';
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: AppColors.error,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isBiometricLoading = false);
     }
   }
 
@@ -428,14 +341,17 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   ),
                 ),
                 const SizedBox(height: 0),
-                Text(
-                  'CARESYNC',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.plusJakartaSans(
-                    color: const Color(0xFF0D0D0D),
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 5,
-                    fontSize: 15,
+                Padding(
+                  padding: const EdgeInsets.only(left: 5),
+                  child: Text(
+                    'CARESYNC',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.plusJakartaSans(
+                      color: const Color(0xFF0D0D0D),
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 5,
+                      fontSize: 15,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),

@@ -13,41 +13,31 @@ The platform features a custom, self-hosted facial recognition API powered by Ar
 ---
 
 ## 📖 Table of Contents
-
-- [Overview](#-overview)
-- [System Architecture](#-system-architecture)
-- [Roles & Workflows](#-roles--workflows)
-- [Tech Stack](#-tech-stack)
-- [Repository Structure](#-repository-structure)
-- [Installation & Setup](#-installation--setup)
-- [Environment Variables](#-environment-variables)
-- [Database Configuration](#-database-configuration)
-- [Authentication & Device Security](#-authentication--device-security)
-- [API Reference](#-api-reference)
-- [Security & Compliance](#-security--compliance)
-- [Performance Optimizations](#-performance-optimizations)
-- [Testing & Quality Assurance](#-testing--quality-assurance)
-- [Troubleshooting](#-troubleshooting)
-- [Contributing](#-contributing)
-- [License](#-license)
+* [System Overview](#-system-overview)
+* [Core Features](#-core-features)
+* [Technology Stack](#-technology-stack)
+* [Documentation Directory](#-documentation-directory)
+* [Quick Start & Installation](#-quick-start--installation)
+* [Environment Setup](#-environment-setup)
+* [Testing & Quality Assurance](#-testing--quality-assurance)
+* [Security & Compliance](#-security--compliance)
+* [License](#-license)
 
 ---
 
-## 🔍 Overview
+## 🔍 System Overview
 
-CareSync was built to bridge the gap between patient confidentiality and emergency medical responsiveness. 
+CareSync bridges patient confidentiality with immediate emergency medical responsiveness. 
 
 In a medical crisis, seconds save lives. If a patient is unconscious or incapacitated, first responders need immediate access to critical medical history (allergies, chronic conditions, emergency contacts) without violating privacy regulations during normal operations. 
 
 CareSync achieves this through a **dual-layer biometric verification system**:
-1. **Local Biometrics (`local_auth`)** for quick, secure user login.
-2. **Cloud Biometrics (ArcFace + Supabase pgvector)** for secure, real-time emergency identification of patients.
+1. **Local Biometrics (`local_auth`)**: Handles local authentication and session lock management.
+2. **Cloud Biometrics (ArcFace + Supabase pgvector)**: Compiles 512-dimension vector representations from multi-pose face scans to identify patients in emergency settings.
 
 ---
 
 ## 🏗️ System Architecture
-
-The following diagram illustrates the CareSync architecture, tracing request flows from the Flutter mobile client and biometric API down to the PostgreSQL database and storage layers:
 
 ```mermaid
 graph TD
@@ -103,7 +93,7 @@ graph TD
 
 ## 👥 Roles & Workflows
 
-CareSync enforces strict Role-Based Access Controls (RBAC) to segment workflows across four distinct user groups:
+CareSync enforces Role-Based Access Controls (RBAC) to segment workflows across four user groups:
 
 ```mermaid
 flowchart TD
@@ -142,88 +132,37 @@ flowchart TD
     end
 ```
 
-### 1. Patient App
-* **Biometric Enrollment & Verification:** Uploads identity document scans and a selfie to verify KYC status. Subsequently registers a custom face scan for emergency lookup.
-* **Vitals Tracking:** Log and visualize blood pressure, heart rate, weight, blood sugar, and oxygen levels.
-* **Prescription Management:** Upload self-entered prescriptions parsed via OCR.
-* **Emergency QR Generation:** Generates a secure, encrypted QR code containing critical medical data that first responders can scan offline.
+---
 
-### 2. Doctor Dashboard
-* **Patient Lookup:** Securely search for registered patients to view their medical history.
-* **Smart E-Prescriptions:** Create digital prescriptions with:
-  * Auto-calculated quantities based on dosage and frequency.
-  * Autocomplete search for medicines and lab tests.
-  * Validation rules ensuring dosage durations are correct.
-* **Chat Integration:** Chat in real-time with patients with support for image attachments.
+## 💻 Technology Stack
 
-### 3. Pharmacist Portal
-* **Verification & Dispensation:** Access patient prescription databases, view doctor signatures, check safety alerts, and mark medications as dispensed.
-* **Dispensing History:** Monitor audit trails of past pharmacy transactions for audit compliance.
-
-### 4. First Responder Interface
-* **Emergency QR Scanning:** Scan a patient's QR code using the in-app scanner to bypass normal authentication and instantly view vital emergency charts (allergies, chronic conditions, emergency contacts).
-* **Offline Fallback Decryption:** In dead zones without cellular coverage, the in-app scanner decodes the encrypted payload directly from the QR code using symmetric keys.
+* **Frontend**: [Flutter 3.7+](https://flutter.dev) (Dart client), [Riverpod](https://riverpod.dev) (state management), and [GoRouter](https://pub.dev/packages/go_router) (routing).
+* **Backend BaaS**: [Supabase](https://supabase.com) (Auth, PostgreSQL DB, Realtime messaging, and Storage).
+* **Biometrics API**: [FastAPI](https://fastapi.tiangolo.com) + [Uvicorn](https://www.uvicorn.org) (Python microservice).
+* **AI Models**: ArcFace (via DeepFace) for facial embedding vectors and Google MediaPipe Face Mesh for pose landmarks.
 
 ---
 
-## 💻 Tech Stack
+## 📂 Documentation Directory
 
-| Category | Technology |
-| :--- | :--- |
-| **Frontend Framework** | [Flutter 3.7+](https://flutter.dev) (iOS / Android / Web / macOS) |
-| **State Management** | [Flutter Riverpod](https://riverpod.dev) |
-| **Navigation** | [GoRouter](https://pub.dev/packages/go_router) |
-| **Backend & Auth** | [Supabase](https://supabase.com) (Auth, PostgreSQL DB, Realtime, Storage) |
-| **Database Extensions** | `pgvector` (512-dimension HNSW cosine distance vector index) |
-| **Local Cryptography** | `flutter_secure_storage` (symmetric key storage) |
-| **Biometric SDK** | `local_auth` (Fingerprint/Face ID Integration) |
-| **Biometrics API** | Python ([FastAPI](https://fastapi.tiangolo.com) + [Uvicorn](https://www.uvicorn.org)) |
-| **Facial Recognition** | ArcFace Model (via deepface & retinaface backends) |
+For detailed documentation, refer to the specialized sub-guides in the `docs/` folder:
 
----
-
-## 📂 Repository Structure
-
-```text
-.
-├── docs/                           # Detailed design documents, summaries & guides
-├── android/                        # Android native build configurations
-├── ios/                            # iOS native build configurations
-├── lib/                            # Flutter Client Application Source
-│   ├── app.dart                    # Application setup & theme initialization
-│   ├── main.dart                   # Application entry point & dotenv loading
-│   ├── core/                       # Shared design system, utils, and environment config
-│   │   ├── config/                 # EnvConfig API mapping
-│   │   ├── theme/                  # Brand styles, colors, and layout spacing
-│   │   └── widgets/                # Reusable widgets (BiometricGuard, skeletons)
-│   ├── routing/                    # GoRouter paths, nested shells & route guards
-│   ├── services/                   # Business logic APIs (Supabase, local biometrics, encryption)
-│   └── features/                   # Feature modules
-│       ├── auth/                   # Identity signup, signin, KYC & 2FA
-│       ├── patient/                # Patient dashboard, vital charts, QR generators
-│       ├── doctor/                 # Patient search & smart prescription forms
-│       ├── pharmacist/             # Prescription dispensing workflows
-│       ├── first_responder/        # Offline-first QR code scanner
-│       └── shared/                 # Chat screens, profile details, notifications
-├── supabase/                       # Database migrations and Edge Functions
-│   ├── migrations/                 # PostgreSQL migrations (001 to 031)
-│   └── functions/                  # Supabase Edge Functions (emergency page rendering)
-├── biometric_api/                  # Custom Biometric Python API (ArcFace + FastAPI)
-├── assets/                         # Splash icons, fonts, and vector assets
-├── test/                           # Unit and widget testing suite
-└── pubspec.yaml                    # Flutter project configuration & assets
-```
+* **[Documentation Index](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/DOCUMENTATION_INDEX.md)**: Main Table of Contents mapping all guides.
+* **[System Architecture](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/SYSTEM_ARCHITECTURE.md)**: Ecosystem maps and cross-subsystem workflows.
+* **[Flutter Client Architecture](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/FLUTTER_ARCHITECTURE.md)**: Feature folder structure, Riverpod states, and routing.
+* **[Backend Microservice Architecture](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/BACKEND_ARCHITECTURE.md)**: FastAPI design, model preloading, and endpoints.
+* **[Biometric Engine Deep-Dive](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/BIOMETRIC_SYSTEM.md)**: Embedding generation math, MediaPipe pose calculation, and consensus scoring.
+* **[Database Schema Audit](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/DATABASE.md)**: ER diagrams, table schemas, triggers, indexes, and RPCs.
+* **[API Reference](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/API_REFERENCE.md)**: Request/Response payloads, headers, and Edge Functions parameters.
+* **[Security & HIPAA Compliance](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/SECURITY.md)**: JWTs, RLS rules, offline QR symmetric keys, and audit log immutability.
+* **[Deployment & Infrastructure](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/DEPLOYMENT.md)**: Dockerfiles, env var checklists, and Hugging Face space setups.
+* **[Developer Onboarding Guide](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/DEVELOPER_GUIDE.md)**: Local machine setup instructions, databases setup, and run scripts.
+* **[Testing & Verification Plan](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/TESTING.md)**: Running Flutter unit/widget tests and python validation suites.
+* **[Troubleshooting Handbook](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/TROUBLESHOOTING.md)**: Common build errors, database recursion fixes, and camera issues.
 
 ---
 
-## 🚀 Installation & Setup
-
-### Prerequisites
-* Flutter SDK (3.7+)
-* Python 3.8+ (for biometric server)
-* Supabase Account & CLI installed
-
----
+## 🚀 Quick Start & Installation
 
 ### Step 1: Clone the Repository
 ```bash
@@ -231,10 +170,8 @@ git clone https://github.com/ankurrera/CareSyncMain.git
 cd CareSyncMain
 ```
 
----
-
 ### Step 2: Configure Environment Variables
-Create a `.env` file in the root directory:
+Create a `.env` file in the project root:
 ```env
 SUPABASE_URL=https://your-project-id.supabase.co
 SUPABASE_ANON_KEY=your-anon-public-key
@@ -242,98 +179,48 @@ BIOMETRIC_API_URL=http://localhost:8000
 HF_TOKEN=your-optional-huggingface-token
 ```
 
----
-
-### Step 3: Set Up Database (Supabase)
-Run the migration scripts in the SQL Editor of your Supabase dashboard or deploy via the Supabase CLI. The migrations should be executed in chronological order from `supabase/001_schema.sql` through `supabase/031_fix_doctors_rls.sql`.
-
-Create the following storage buckets:
-1. `kyc-documents` (private bucket for user identity cards and selfies).
-2. `emergency-scans` (public bucket for scanned faces to compare against).
-3. `chat-attachments` (public bucket for inline chat images and attachments).
-
-Deploy the emergency edge function:
-```bash
-supabase link --project-ref YOUR_PROJECT_ID
-supabase functions deploy emergency
-```
-
----
-
-### Step 4: Run the Biometric API
-1. Navigate to the `biometric_api` directory:
+### Step 3: Run the Biometric API
+1. Navigate to the `biometric_api` folder and activate a virtual environment:
    ```bash
    cd biometric_api
+   python3 -m venv venv
+   source venv/bin/activate
    ```
-2. Install Python dependencies:
+2. Install Python dependencies and run the server:
    ```bash
    pip install -r requirements.txt
-   ```
-3. Run the server locally on port 8000:
-   ```bash
+   python download_models.py
    uvicorn main:app --reload --port 8000
    ```
 
----
-
-### Step 5: Run the Flutter Client
-Install package dependencies:
+### Step 4: Run the Flutter Client
 ```bash
 flutter pub get
-```
-Run the application on a target device or emulator:
-```bash
 flutter run
 ```
 
 ---
 
-## ⚙️ Environment Variables
-
-| Variable | Description | Required | Default |
-| :--- | :--- | :--- | :--- |
-| `SUPABASE_URL` | Your Supabase Project API endpoint | Yes | None |
-| `SUPABASE_ANON_KEY` | Public anonymous key for database transactions | Yes | None |
-| `BIOMETRIC_API_URL` | Endpoint of the custom FastAPI biometric server | Yes | `http://localhost:8000` |
-| `HF_TOKEN` | Hugging Face space access token (if hosted on HF) | No | None |
-
----
-
-## 🛡️ Security & Compliance
-
-* **HIPAA Compliance:** Sensitive patient data (medical conditions, allergies, vitals) is isolated, protected by Row-Level Security (RLS) policies, and encrypted when exported via emergency QR codes.
-* **Immutable Auditing:** PostgreSQL triggers block any modifications or deletions on `biometric_access_logs`, guaranteeing tamper-proof access tracking.
-* **15-Minute Auto-Lock:** A background timer monitors user interactions and automatically locks the app session after 15 minutes of inactivity, requiring biometric re-authentication.
-* **2FA Registration:** Logging in from a new device triggers an OTP verification code. Only verified devices are stored in `user_devices` with active cryptographic sessions.
-
----
-
-## ⚡ Performance Optimizations
-
-* **Biometric Model Preloading:** The FastAPI server pre-installs and runs MTCNN/RetinaFace models at startup, saving up to 3 seconds on initial requests.
-* **In-Memory Image Pipelines:** Captured images are processed as byte arrays directly in memory, eliminating filesystem reads and writes to maximize processing speed and device security.
-* **Realtime Connection Management:** Supabase Postgres publications are strictly mapped only on the `messages` and `chat_rooms` tables to keep database event loops clean and minimize network packet overhead.
-
----
-
 ## 🧪 Testing & Quality Assurance
 
-### Run Dart Unit Tests
-```bash
-flutter test
-```
+* **Flutter Tests**:
+  ```bash
+  flutter test
+  ```
+* **Python Biometric Pipeline Tests**:
+  ```bash
+  cd biometric_api
+  python -m unittest test_biometric_pipeline.py
+  ```
 
-### Run Biometric API Tests
-```bash
-cd biometric_api
-python -m unittest test_biometric_pipeline.py
-```
+---
+
+## 🛡️ Security & HIPAA Compliance
+* **Row-Level Security (RLS)**: Protects all tables in PostgreSQL.
+* **Tamper-Proof Audit Logging**: Database triggers block any edits or deletions on `biometric_access_logs`.
+* **15-Minute Auto-Lock**: Automatically locks the app session after 15 minutes of inactivity, requiring local biometric re-authentication.
 
 ---
 
 ## 📝 License
-This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
-
-## 🤝 Acknowledgements
-* [InsightFace Project](https://github.com/deepinsight/insightface) for ArcFace model structures.
-* [Supabase community](https://supabase.com) for authentication and PostgreSQL pgvector modules.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -48,6 +49,9 @@ class _PharmacistDashboardScreenState extends ConsumerState<PharmacistDashboardS
   bool _isIdentifying = false;
   String _scanningStatus = 'Initializing...';
   late AnimationController _scannerController;
+  BiometricCancelToken? _activeCancelToken;
+  bool _cooldownActive = false;
+  Timer? _cooldownTimer;
 
   @override
   void initState() {
@@ -60,11 +64,22 @@ class _PharmacistDashboardScreenState extends ConsumerState<PharmacistDashboardS
 
   @override
   void dispose() {
+    _cooldownTimer?.cancel();
+    _activeCancelToken?.cancel();
     _scannerController.dispose();
     super.dispose();
   }
 
   Future<void> _scanFace(BuildContext context) async {
+    if (_cooldownActive) {
+      debugPrint('[BIOMETRIC] Scan cooldown active. Ignoring duplicate request.');
+      return;
+    }
+
+    _activeCancelToken?.cancel();
+    final cancelToken = BiometricCancelToken();
+    _activeCancelToken = cancelToken;
+
     final picker = ImagePicker();
     try {
       final XFile? image = await picker.pickImage(
@@ -76,6 +91,7 @@ class _PharmacistDashboardScreenState extends ConsumerState<PharmacistDashboardS
       );
 
       if (image == null) return; // User cancelled
+      if (cancelToken.isCancelled) return;
 
       setState(() {
         _isIdentifying = true;
@@ -83,19 +99,34 @@ class _PharmacistDashboardScreenState extends ConsumerState<PharmacistDashboardS
       });
 
       // Call custom Biometric matching service
-      final matchResult = await CustomBiometricService.instance.identifyPatient(File(image.path));
+      final identifyResult = await CustomBiometricService.instance.identifyPatientDetailed(
+        File(image.path),
+        cancelToken: cancelToken,
+      );
 
+      if (cancelToken.isCancelled) return;
       if (!mounted) return;
 
       setState(() {
         _isIdentifying = false;
       });
 
-      if (matchResult != null && matchResult['qr_code_id'] != null) {
-        final qrCodeId = matchResult['qr_code_id'] as String;
-        final fullName = matchResult['full_name'] as String;
-        final confidence = matchResult['confidence'] as num? ?? 100.0;
-        final pose = matchResult['pose_matched'] as String? ?? 'neutral';
+      if (identifyResult.status == BiometricResultStatus.success && identifyResult.qrCodeId != null) {
+        setState(() {
+          _cooldownActive = true;
+        });
+        _cooldownTimer = Timer(const Duration(seconds: 4), () {
+          if (mounted) {
+            setState(() {
+              _cooldownActive = false;
+            });
+          }
+        });
+
+        final qrCodeId = identifyResult.qrCodeId!;
+        final fullName = identifyResult.fullName ?? 'Unknown';
+        final confidence = identifyResult.confidence ?? 100.0;
+        final pose = identifyResult.poseMatched ?? 'neutral';
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -108,7 +139,17 @@ class _PharmacistDashboardScreenState extends ConsumerState<PharmacistDashboardS
         // Navigate directly to dispense screen with the patient's QR ID
         context.push(RouteNames.pharmacistDispense, extra: qrCodeId);
       } else {
-        _showNoMatchDialog(context);
+        final friendlyMessage = CustomBiometricService.instance.mapStatusToErrorMessage(
+          identifyResult.status,
+          identifyResult.errorMessage,
+          errorCode: identifyResult.errorCode,
+        );
+
+        if (identifyResult.status == BiometricResultStatus.noMatch) {
+          _showNoMatchDialog(context, message: friendlyMessage);
+        } else {
+          _showErrorDialog(context, friendlyMessage);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -121,7 +162,7 @@ class _PharmacistDashboardScreenState extends ConsumerState<PharmacistDashboardS
     }
   }
 
-  void _showNoMatchDialog(BuildContext context) {
+  void _showNoMatchDialog(BuildContext context, {String message = 'No Matching Patient Found'}) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -133,8 +174,8 @@ class _PharmacistDashboardScreenState extends ConsumerState<PharmacistDashboardS
             Text('No Match Found'),
           ],
         ),
-        content: const Text(
-          'We could not find a matching patient profile in the CareSync database.\n\nPlease check lighting, ensure the face is centered, or try searching manually.',
+        content: Text(
+          '$message\n\nWe could not find a matching patient profile in the CareSync database. Please check lighting, ensure the face is centered, or try searching manually.',
         ),
         actions: [
           TextButton(

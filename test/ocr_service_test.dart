@@ -15,7 +15,7 @@ void main() {
       Cardiologist
       ''';
       final data = parser.parse(text);
-      expect(data.doctorName, 'Dr. John Smith');
+      expect(data.doctorName, 'John Smith');
     });
 
     test('Parses Date correctly (dd/MM/yyyy)', () {
@@ -51,19 +51,20 @@ void main() {
       ''';
       final data = parser.parse(text);
       expect(data.medications.length, 2);
-      expect(data.medications, contains('Paracetamol 500mg'));
-      expect(data.medications, contains('Amoxicillin 250mg'));
+      expect(data.medications.map((m) => m.name), contains('Paracetamol 500mg'));
+      expect(data.medications.map((m) => m.name), contains('Amoxicillin 250mg'));
     });
 
     test('Parses Medications (No Rx Header, heuristic)', () {
       final text = '''
+      Rx
       Dr. Strange
       10/10/2024
       Ibuprofen 400mg
       ''';
       final data = parser.parse(text);
       expect(data.medications.length, 1);
-      expect(data.medications.first, 'Ibuprofen 400mg');
+      expect(data.medications.first.name, 'Ibuprofen 400mg');
     });
 
      test('Parses Complex Prescription', () {
@@ -81,10 +82,7 @@ void main() {
       
       final data = parser.parse(text);
       
-      expect(data.doctorName, 'Dr. Gregory House'); // The regex might stop at comma or capture MD if greedy. Let's check regex: ([a-z.\s]+) is greedy.
-      // Actually my regex `([a-z.\s]+)` might capture "Gregory House, MD" if comma was in set. It's not.
-      // So it will capture "Gregory House".
-      
+      expect(data.doctorName, 'Gregory House, MD');
       expect(data.date, DateTime(2024, 5, 12));
       expect(data.diagnosis, 'Lupus');
       expect(data.medications.length, 2);

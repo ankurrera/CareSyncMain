@@ -10,8 +10,9 @@ class PatientData {
   final String qrCodeId;
   final DateTime createdAt;
   final DateTime? updatedAt;
-
   final String? faceScanUrl;
+  final String? fullName;
+  final String? gender;
 
   const PatientData({
     required this.id,
@@ -25,9 +26,13 @@ class PatientData {
     this.faceScanUrl,
     required this.createdAt,
     this.updatedAt,
+    this.fullName,
+    this.gender,
   });
 
   factory PatientData.fromJson(Map<String, dynamic> json) {
+    final profile = json['profiles'] as Map<String, dynamic>?;
+
     return PatientData(
       id: json['id'] as String,
       userId: json['user_id'] as String,
@@ -51,6 +56,8 @@ class PatientData {
       updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'] as String)
           : null,
+      fullName: profile?['full_name'] as String?,
+      gender: profile?['gender'] as String?,
     );
   }
 
@@ -67,6 +74,11 @@ class PatientData {
       'face_scan_url': faceScanUrl,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
+      if (fullName != null || gender != null)
+        'profiles': {
+          if (fullName != null) 'full_name': fullName,
+          if (gender != null) 'gender': gender,
+        },
     };
   }
 

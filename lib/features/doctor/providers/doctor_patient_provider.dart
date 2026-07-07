@@ -1,7 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../services/supabase_service.dart';
 import '../../../services/vitals_service.dart';
-import '../../../services/appointment_service.dart';
 import '../../patient/models/vital.dart';
 import '../../patient/models/prescription.dart';
 import '../../patient/models/patient_data.dart';
@@ -9,8 +8,8 @@ import '../../patient/models/patient_data.dart';
 part 'doctor_patient_provider.g.dart';
 
 @riverpod
-Future<PatientData?> doctorPatientData(DoctorPatientDataRef ref, String userId) async {
-  final data = await SupabaseService.instance.getPatientData(userId: userId);
+Future<PatientData?> doctorPatientData(DoctorPatientDataRef ref, String patientId) async {
+  final data = await SupabaseService.instance.getPatientDataByPatientId(patientId);
   if (data == null) return null;
   return PatientData.fromJson(data);
 }

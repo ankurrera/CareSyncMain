@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
+import 'package:flutter/services.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -8,9 +9,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:camera/camera.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img;
 
 import '../../../../routing/route_names.dart';
@@ -38,8 +38,6 @@ class _PatientLookupScreenState extends ConsumerState<PatientLookupScreen>
   static const Color kBgColor = Color(0xFFF8FAFC);
   static const Color kSurfaceColor = Color(0xFFFFFFFF);
   static const Color kPrimaryColor = Color(0xFF0284C7); // Clinical Blue
-  static const Color kSuccessColor = Color(0xFF16A34A);
-  static const Color kWarningColor = Color(0xFFD97706);
   static const Color kTextPrimary = Color(0xFF0F172A);
   static const Color kTextSecondary = Color(0xFF475569);
   static const Color kBorderColor = Color(0xFFE2E8F0);
@@ -428,6 +426,9 @@ class _PatientLookupScreenState extends ConsumerState<PatientLookupScreen>
 
   Widget _buildFaceScanTab() {
     return _PatientFaceScanner(
+      onCancel: () {
+        _tabController.animateTo(0);
+      },
       onPatientFound: (patientId, patientName) {
         context.push(
           RouteNames.doctorPatientRecord,
@@ -450,172 +451,300 @@ class _PatientQrScanner extends StatefulWidget {
   State<_PatientQrScanner> createState() => _PatientQrScannerState();
 }
 
-class _PatientQrScannerState extends State<_PatientQrScanner> {
+class _PatientQrScannerState extends State<_PatientQrScanner>
+    with SingleTickerProviderStateMixin {
   final MobileScannerController _controller = MobileScannerController();
   bool _isProcessing = false;
-  String? _lastScannedValue;
-  Timer? _scanCooldown;
+  String _scanningStatus = 'Initializing...';
+  late AnimationController _scannerController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scannerController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+  }
 
   @override
   void dispose() {
     _controller.dispose();
-    _scanCooldown?.cancel();
+    _scannerController.dispose();
     super.dispose();
   }
 
-  void _onDetect(BarcodeCapture capture) async {
+  Future<void> _scanQrCode() async {
     if (_isProcessing) return;
 
-    final barcode = capture.barcodes.firstOrNull;
-    if (barcode?.rawValue == null) return;
+    final picker = ImagePicker();
+    try {
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.rear,
+        maxWidth: 1080,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
 
-    final value = barcode!.rawValue!;
-    if (value == _lastScannedValue) return;
+      if (image == null) return;
 
-    _lastScannedValue = value;
-    _scanCooldown?.cancel();
-    _scanCooldown = Timer(const Duration(seconds: 3), () {
-      _lastScannedValue = null;
-    });
+      setState(() {
+        _isProcessing = true;
+        _scanningStatus = 'Scanning QR Code...';
+      });
 
-    if (value.contains('/emergency/')) {
-      setState(() => _isProcessing = true);
+      final BarcodeCapture? barcodes = await _controller.analyzeImage(image.path);
 
-      try {
+      if (!mounted) return;
+
+      final barcode = barcodes?.barcodes.firstOrNull;
+      if (barcode?.rawValue == null) {
+        setState(() => _isProcessing = false);
+        HapticFeedback.heavyImpact();
+        _showErrorSnackBar('No QR code detected in the image.');
+        return;
+      }
+
+      final value = barcode!.rawValue!;
+      
+      // Parse QR Code ID (UUID)
+      String? qrCodeId;
+      if (value.contains('/emergency/')) {
         final uri = Uri.parse(value);
-        final qrCodeId = uri.pathSegments.last;
-
-        final patient = await SupabaseService.instance.client
-            .from('patients')
-            .select('id, profiles!inner(full_name)')
-            .eq('qr_code_id', qrCodeId)
-            .maybeSingle();
-
-        if (!mounted) return;
-
-        if (patient != null) {
-          final profileData = patient['profiles'] as Map<String, dynamic>;
-          widget.onPatientFound(
-            patient['id'] as String,
-            profileData['full_name'] as String? ?? 'Unknown',
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Patient not found'),
-              backgroundColor: Color(0xFFEF4444),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error resolving QR code: $e'),
-              backgroundColor: const Color(0xFFEF4444),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isProcessing = false);
+        qrCodeId = uri.pathSegments.last;
+      } else {
+        // Basic UUID validation
+        final uuidRegex = RegExp(
+            r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+        if (uuidRegex.hasMatch(value)) {
+          qrCodeId = value;
         }
       }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Not a valid CareSync QR code'),
-          backgroundColor: Color(0xFFF59E0B),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+
+      if (qrCodeId == null) {
+        setState(() => _isProcessing = false);
+        HapticFeedback.heavyImpact();
+        _showErrorSnackBar('Not a valid CareSync QR code.');
+        return;
+      }
+
+      setState(() {
+        _scanningStatus = 'Resolving patient ID...';
+      });
+
+      final patient = await SupabaseService.instance.client
+          .from('patients')
+          .select('id, profiles!inner(full_name)')
+          .eq('qr_code_id', qrCodeId)
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      setState(() => _isProcessing = false);
+
+      if (patient != null) {
+        final profileData = patient['profiles'] as Map<String, dynamic>;
+        final patientId = patient['id'] as String;
+        final patientName = profileData['full_name'] as String? ?? 'Unknown';
+
+        HapticFeedback.mediumImpact();
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            widget.onPatientFound(patientId, patientName);
+          }
+        });
+      } else {
+        HapticFeedback.heavyImpact();
+        _showErrorSnackBar('Patient profile not found.');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        HapticFeedback.heavyImpact();
+        _showErrorSnackBar('Scanning Error: $e');
+      }
     }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFFEF4444),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        MobileScanner(
-          controller: _controller,
-          onDetect: _onDetect,
-        ),
-        ColorFiltered(
-          colorFilter: ColorFilter.mode(
-            Colors.black.withOpacity(0.5),
-            BlendMode.srcOut,
-          ),
-          child: Stack(
-            fit: StackFit.expand,
+        // Main view configuration
+        Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Container(
-                decoration: const BoxDecoration(
-                  color: Colors.black,
-                  backgroundBlendMode: BlendMode.dstOut,
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0284C7).withOpacity(0.06),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Iconsax.scan_barcode,
+                  size: 64,
+                  color: Color(0xFF0284C7),
                 ),
               ),
-              Center(
-                child: Container(
-                  width: 240,
-                  height: 240,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
+              const SizedBox(height: 32),
+              Text(
+                'QR Profile Lookup',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Point the camera at the patient\'s emergency pass QR code to instantly pull their medical record.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.plusJakartaSans(
+                  color: const Color(0xFF64748B),
+                  fontSize: 13.5,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 40),
+              ElevatedButton.icon(
+                onPressed: _isProcessing ? null : _scanQrCode,
+                icon: const Icon(Iconsax.scan, size: 20),
+                label: Text(
+                  'Scan Patient QR Code',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
                   ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0F172A),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 0,
                 ),
               ),
             ],
           ),
         ),
-        Center(
-          child: Container(
-            width: 240,
-            height: 240,
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: const Color(0xFF0284C7),
-                width: 3,
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-        ),
-        Positioned(
-          bottom: 40,
-          left: 0,
-          right: 0,
-          child: Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.7),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Iconsax.scan_barcode, color: Colors.white, size: 16),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Align QR code within frame',
-                    style: GoogleFonts.plusJakartaSans(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+        
+        // QR Scanning dialog overlay
+        if (_isProcessing)
+          Positioned.fill(
+            child: ClipRect(
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                child: Container(
+                  color: Colors.black.withOpacity(0.6),
+                  child: Center(
+                    child: Container(
+                      width: 270,
+                      height: 240,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F0F11).withOpacity(0.85),
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.12),
+                          width: 1.0,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.5),
+                            blurRadius: 32,
+                            offset: const Offset(0, 12),
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          AnimatedBuilder(
+                            animation: _scannerController,
+                            builder: (context, child) {
+                              return Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 84,
+                                    height: 84,
+                                    child: CustomPaint(
+                                      painter: _FaceBracketPainter(
+                                        color: const Color(0xFF0284C7),
+                                        animationValue: _scannerController.value,
+                                      ),
+                                    ),
+                                  ),
+                                  Icon(
+                                    Iconsax.scan_barcode,
+                                    color: Colors.white.withOpacity(0.4 + (_scannerController.value * 0.6)),
+                                    size: 36,
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 24),
+                          Text(
+                            'QR CODE SCAN',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.plusJakartaSans(
+                              color: Colors.white.withOpacity(0.9),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 1.5,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white60),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  _scanningStatus,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: Colors.white60,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
-        ),
-        if (_isProcessing)
-          Container(
-            color: Colors.black54,
-            child: const Center(
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
             ),
           ),
       ],
@@ -625,8 +754,12 @@ class _PatientQrScannerState extends State<_PatientQrScanner> {
 
 class _PatientFaceScanner extends StatefulWidget {
   final void Function(String patientId, String patientName) onPatientFound;
+  final VoidCallback? onCancel;
 
-  const _PatientFaceScanner({required this.onPatientFound});
+  const _PatientFaceScanner({
+    required this.onPatientFound,
+    this.onCancel,
+  });
 
   @override
   State<_PatientFaceScanner> createState() => _PatientFaceScannerState();
@@ -634,13 +767,12 @@ class _PatientFaceScanner extends StatefulWidget {
 
 class _PatientFaceScannerState extends State<_PatientFaceScanner>
     with SingleTickerProviderStateMixin {
-  CameraController? _cameraController;
-  List<CameraDescription>? _cameras;
-  bool _isCameraInitialized = false;
   bool _isIdentifying = false;
   String _scanningStatus = 'Initializing...';
   late AnimationController _scannerController;
-  int _currentProgressStep = 0;
+  BiometricCancelToken? _activeCancelToken;
+  bool _cooldownActive = false;
+  Timer? _cooldownTimer;
 
   @override
   void initState() {
@@ -649,261 +781,134 @@ class _PatientFaceScannerState extends State<_PatientFaceScanner>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
-    _initializeCamera();
-  }
-
-  Future<void> _initializeCamera() async {
-    try {
-      _cameras = await availableCameras();
-      if (_cameras == null || _cameras!.isEmpty) {
-        setState(() {
-          _scanningStatus = 'No cameras available';
-        });
-        return;
-      }
-
-      final rearCamera = _cameras!.firstWhere(
-        (camera) => camera.lensDirection == CameraLensDirection.back,
-        orElse: () => _cameras!.first,
-      );
-
-      _cameraController = CameraController(
-        rearCamera,
-        ResolutionPreset.medium,
-        enableAudio: false,
-      );
-
-      await _cameraController!.initialize();
-
-      if (mounted) {
-        setState(() {
-          _isCameraInitialized = true;
-          _scanningStatus = 'Align face and capture';
-        });
-      }
-    } catch (e) {
-      debugPrint('[DOC] Camera error: $e');
-      if (mounted) {
-        setState(() {
-          _scanningStatus = 'Camera unavailable';
-        });
-      }
-    }
   }
 
   @override
   void dispose() {
+    _cooldownTimer?.cancel();
+    _activeCancelToken?.cancel();
     _scannerController.dispose();
-    _cameraController?.dispose();
     super.dispose();
   }
 
-  void _switchCamera() async {
-    if (_cameras == null || _cameras!.isEmpty) return;
+  Future<void> _scanFace() async {
+    if (_cooldownActive) return;
+    _activeCancelToken?.cancel();
+    final cancelToken = BiometricCancelToken();
+    _activeCancelToken = cancelToken;
 
-    final currentLens = _cameraController!.description.lensDirection;
-    final newLens = currentLens == CameraLensDirection.back
-        ? CameraLensDirection.front
-        : CameraLensDirection.back;
-
-    final newCamera = _cameras!.firstWhere(
-      (c) => c.lensDirection == newLens,
-      orElse: () => _cameras!.first,
-    );
-
-    await _cameraController?.dispose();
-
-    _cameraController = CameraController(
-      newCamera,
-      ResolutionPreset.medium,
-      enableAudio: false,
-    );
-
-    await _cameraController!.initialize();
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  Widget _buildProgressStep({
-    required int stepIndex,
-    required String title,
-    required String subtitle,
-  }) {
-    final bool isCompleted = _currentProgressStep > stepIndex;
-    final bool isActive = _currentProgressStep == stepIndex;
-
-    Color iconColor;
-    Widget statusIcon;
-    TextStyle titleStyle;
-    TextStyle subtitleStyle;
-
-    if (isCompleted) {
-      iconColor = const Color(0xFF16A34A);
-      statusIcon = Icon(Icons.check_circle_rounded, color: iconColor, size: 16);
-      titleStyle = GoogleFonts.plusJakartaSans(
-        color: Colors.white,
-        fontSize: 12,
-        fontWeight: FontWeight.bold,
-      );
-      subtitleStyle = GoogleFonts.plusJakartaSans(
-        color: Colors.white60,
-        fontSize: 10,
-      );
-    } else if (isActive) {
-      iconColor = const Color(0xFF0284C7);
-      statusIcon = SizedBox(
-        width: 14,
-        height: 14,
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          valueColor: AlwaysStoppedAnimation<Color>(iconColor),
-        ),
-      );
-      titleStyle = GoogleFonts.plusJakartaSans(
-        color: iconColor,
-        fontSize: 12,
-        fontWeight: FontWeight.bold,
-      );
-      subtitleStyle = GoogleFonts.plusJakartaSans(
-        color: iconColor.withOpacity(0.8),
-        fontSize: 10,
-      );
-    } else {
-      iconColor = Colors.white24;
-      statusIcon = Icon(Icons.radio_button_off_rounded, color: iconColor, size: 16);
-      titleStyle = GoogleFonts.plusJakartaSans(
-        color: Colors.white30,
-        fontSize: 12,
-      );
-      subtitleStyle = GoogleFonts.plusJakartaSans(
-        color: Colors.white24,
-        fontSize: 10,
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 2.0),
-            child: statusIcon,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: titleStyle),
-                const SizedBox(height: 1),
-                Text(subtitle, style: subtitleStyle),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDivider() {
-    return Padding(
-      padding: const EdgeInsets.only(left: 7.0),
-      child: Container(
-        width: 1,
-        height: 10,
-        color: Colors.white10,
-      ),
-    );
-  }
-
-  Future<void> _captureAndIdentify() async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
-    if (_cameraController!.value.isTakingPicture) return;
-
+    final picker = ImagePicker();
     try {
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.rear,
+        maxWidth: 1080,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+
+      if (image == null) return;
+      if (cancelToken.isCancelled) return;
+
       setState(() {
         _isIdentifying = true;
-        _currentProgressStep = 0;
+        _scanningStatus = 'Uploading face scan...';
       });
 
-      final XFile rawFile = await _cameraController!.takePicture();
+      Future.delayed(const Duration(milliseconds: 1200), () {
+        if (mounted && _isIdentifying && !cancelToken.isCancelled) {
+          setState(() {
+            _scanningStatus = 'Analyzing biometric coordinates...';
+          });
+        }
+      });
 
+      Future.delayed(const Duration(milliseconds: 2500), () {
+        if (mounted && _isIdentifying && !cancelToken.isCancelled) {
+          setState(() {
+            _scanningStatus = 'Searching CareSync registry...';
+          });
+        }
+      });
+
+      final File processedFile = await _processImageForBiometrics(image.path);
+
+      if (cancelToken.isCancelled) return;
       if (!mounted) return;
-      setState(() {
-        _currentProgressStep = 1;
-      });
 
-      final File processedFile = await _processImageForBiometrics(rawFile.path);
+      final identifyResult = await CustomBiometricService.instance.identifyPatientDetailed(
+        processedFile,
+        cancelToken: cancelToken,
+      );
 
+      if (cancelToken.isCancelled) return;
       if (!mounted) return;
-      setState(() {
-        _currentProgressStep = 2;
-      });
-
-      try {
-        await File(rawFile.path).delete();
-      } catch (_) {}
-
-      await Future.delayed(const Duration(milliseconds: 300));
-      if (!mounted) return;
-      setState(() {
-        _currentProgressStep = 3;
-      });
-
-      final matchResult = await CustomBiometricService.instance.identifyPatient(processedFile);
-
-      if (!mounted) return;
-      setState(() {
-        _currentProgressStep = 4;
-      });
-
-      await Future.delayed(const Duration(milliseconds: 300));
-      if (!mounted) return;
-      setState(() {
-        _currentProgressStep = 5;
-      });
-
-      await Future.delayed(const Duration(milliseconds: 400));
-
-      try {
-        await processedFile.delete();
-      } catch (_) {}
 
       setState(() {
         _isIdentifying = false;
       });
 
-      if (matchResult != null && matchResult['patient_id'] != null) {
-        final patientId = matchResult['patient_id'] as String;
-        final fullName = matchResult['full_name'] as String;
-        final confidence = matchResult['confidence'] as num? ?? 100.0;
+      try {
+        await processedFile.delete();
+      } catch (_) {}
+
+      if (identifyResult.status == BiometricResultStatus.success && identifyResult.patientId != null) {
+        setState(() {
+          _cooldownActive = true;
+        });
+        _cooldownTimer = Timer(const Duration(seconds: 4), () {
+          if (mounted) {
+            setState(() {
+              _cooldownActive = false;
+            });
+          }
+        });
+
+        final patientId = identifyResult.patientId!;
+        final fullName = identifyResult.fullName ?? 'Unknown';
+        final confidence = identifyResult.confidence ?? 100.0;
 
         await EmergencyAuditService.instance.logFaceScan(
           patientId: patientId,
           status: 'Success',
-          confidence: confidence.toDouble(),
+          confidence: confidence,
         );
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Matched Patient: $fullName (${confidence.toStringAsFixed(1)}% confidence)'),
-            backgroundColor: const Color(0xFF16A34A),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        HapticFeedback.mediumImpact();
 
-        widget.onPatientFound(patientId, fullName);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Matched Patient: $fullName (${confidence.toStringAsFixed(1)}% confidence)'),
+                backgroundColor: const Color(0xFF16A34A),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+            widget.onPatientFound(patientId, fullName);
+          }
+        });
       } else {
+        final friendlyMessage = CustomBiometricService.instance.mapStatusToErrorMessage(
+          identifyResult.status,
+          identifyResult.errorMessage,
+          errorCode: identifyResult.errorCode,
+        );
+
         await EmergencyAuditService.instance.logFaceScan(
           patientId: null,
           status: 'Failed',
           confidence: 0.0,
-          reason: 'Unknown Patient',
+          reason: friendlyMessage,
         );
 
-        _showNoMatchDialog();
+        HapticFeedback.heavyImpact();
+
+        if (identifyResult.status == BiometricResultStatus.noMatch) {
+          _showNoMatchDialog(message: friendlyMessage);
+        } else {
+          _showErrorDialog(friendlyMessage);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -911,7 +916,7 @@ class _PatientFaceScannerState extends State<_PatientFaceScanner>
           _isIdentifying = false;
         });
       }
-      debugPrint('[DOC] Face scanning match error: $e');
+      debugPrint('[DOC] Face scan identification error: $e');
 
       await EmergencyAuditService.instance.logFaceScan(
         patientId: null,
@@ -920,11 +925,13 @@ class _PatientFaceScannerState extends State<_PatientFaceScanner>
         reason: 'Scanning Error',
       );
 
+      HapticFeedback.heavyImpact();
+
       _showErrorDialog(e.toString());
     }
   }
 
-  void _showNoMatchDialog() {
+  void _showNoMatchDialog({String message = 'No Matching Patient Found'}) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -942,7 +949,7 @@ class _PatientFaceScannerState extends State<_PatientFaceScanner>
           ],
         ),
         content: Text(
-          'We could not find a matching patient profile in the CareSync database.\n\nPlease check lighting, center the face, or search manually.',
+          '$message\n\nWe could not find a matching patient profile in the CareSync database. Please check lighting, center the face, or search manually.',
           style: GoogleFonts.plusJakartaSans(fontSize: 13, color: const Color(0xFF475569)),
         ),
         actions: [
@@ -953,7 +960,7 @@ class _PatientFaceScannerState extends State<_PatientFaceScanner>
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              _captureAndIdentify();
+              _scanFace();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF0F172A),
@@ -1001,145 +1008,87 @@ class _PatientFaceScannerState extends State<_PatientFaceScanner>
 
   @override
   Widget build(BuildContext context) {
-    if (!_isCameraInitialized) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0284C7)),
-            const SizedBox(height: 16),
-            Text(
-              _scanningStatus,
-              style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 13),
-            ),
-          ],
-        ),
-      );
-    }
-
     return Stack(
-      fit: StackFit.expand,
       children: [
-        CameraPreview(_cameraController!),
-        ColorFiltered(
-          colorFilter: ColorFilter.mode(
-            Colors.black.withOpacity(0.65),
-            BlendMode.srcOut,
-          ),
-          child: Stack(
-            fit: StackFit.expand,
+        // Main view configuration
+        Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Container(
-                decoration: const BoxDecoration(
-                  color: Colors.black,
-                  backgroundBlendMode: BlendMode.dstOut,
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0284C7).withOpacity(0.06),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Iconsax.user_search,
+                  size: 64,
+                  color: Color(0xFF0284C7),
                 ),
               ),
-              Center(
-                child: Container(
-                  width: 240,
-                  height: 240,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
+              const SizedBox(height: 32),
+              Text(
+                'Biometric Patient Lookup',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF0F172A),
                 ),
               ),
-            ],
-          ),
-        ),
-        Center(
-          child: Container(
-            width: 240,
-            height: 240,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: const Color(0xFF0284C7),
-                width: 3.5,
+              const SizedBox(height: 12),
+              Text(
+                'CareSync allows providers to scan a patient\'s face to instantly lookup and access their digital health records in emergency situations.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.plusJakartaSans(
+                  color: const Color(0xFF64748B),
+                  fontSize: 13.5,
+                  height: 1.5,
+                ),
               ),
-            ),
-          ),
-        ),
-        Positioned(
-          top: 24,
-          left: 24,
-          right: 24,
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.7),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              'Patient Face Forensic Scan',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.plusJakartaSans(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          bottom: 120,
-          left: 0,
-          right: 0,
-          child: Center(
-            child: Text(
-              'Align patient face inside the circle',
-              style: GoogleFonts.plusJakartaSans(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                shadows: const [
-                  Shadow(
-                    blurRadius: 4,
-                    color: Colors.black54,
-                    offset: Offset(0, 1),
-                  )
-                ],
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          bottom: 30,
-          left: 0,
-          right: 0,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              IconButton(
-                icon: const Icon(Iconsax.camera, color: Colors.white, size: 24),
-                onPressed: _switchCamera,
-              ),
-              GestureDetector(
-                onTap: _isIdentifying ? null : _captureAndIdentify,
-                child: Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 4),
+              const SizedBox(height: 40),
+              ElevatedButton.icon(
+                onPressed: _cooldownActive ? null : _scanFace,
+                icon: const Icon(Iconsax.scan, size: 20),
+                label: Text(
+                  _cooldownActive ? 'Cooldown Active' : 'Scan Patient Face',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
                   ),
-                  child: Center(
-                    child: Container(
-                      width: 56,
-                      height: 56,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0F172A),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 0,
+                ),
+              ),
+              if (widget.onCancel != null) ...[
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: widget.onCancel,
+                  child: Text(
+                    'Cancel',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: const Color(0xFF64748B),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13.5,
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 48),
+              ],
             ],
           ),
         ),
+        
+        // Face ID scanning dialog overlay
         if (_isIdentifying)
           Positioned.fill(
             child: ClipRect(
@@ -1149,117 +1098,95 @@ class _PatientFaceScannerState extends State<_PatientFaceScanner>
                   color: Colors.black.withOpacity(0.6),
                   child: Center(
                     child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 32),
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+                      width: 270,
+                      height: 240,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0F172A).withOpacity(0.92),
-                        borderRadius: BorderRadius.circular(20),
+                        color: const Color(0xFF0F0F11).withOpacity(0.85), // Premium slate/black frosted
+                        borderRadius: BorderRadius.circular(28),
                         border: Border.all(
-                          color: Colors.white10,
-                          width: 1,
+                          color: Colors.white.withOpacity(0.12),
+                          width: 1.0,
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.5),
+                            blurRadius: 32,
+                            offset: const Offset(0, 12),
+                          ),
+                        ],
                       ),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                       child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Center(
-                            child: AnimatedBuilder(
-                              animation: _scannerController,
-                              builder: (context, child) {
-                                return Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    SizedBox(
-                                      width: 80,
-                                      height: 80,
-                                      child: CustomPaint(
-                                        painter: _FaceBracketPainter(
-                                          color: const Color(0xFF0284C7),
-                                          animationValue: _scannerController.value,
-                                        ),
+                          // Apple Face ID style breathing brackets and abstract vector face
+                          AnimatedBuilder(
+                            animation: _scannerController,
+                            builder: (context, child) {
+                              return Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 84,
+                                    height: 84,
+                                    child: CustomPaint(
+                                      painter: _FaceBracketPainter(
+                                        color: const Color(0xFF0284C7),
+                                        animationValue: _scannerController.value,
                                       ),
                                     ),
-                                    Icon(
-                                      Iconsax.scan,
-                                      color: Colors.white.withOpacity(0.4 + (_scannerController.value * 0.6)),
-                                      size: 32,
+                                  ),
+                                  SizedBox(
+                                    width: 44,
+                                    height: 44,
+                                    child: CustomPaint(
+                                      painter: _FaceIdScannerPainter(
+                                        color: Colors.white,
+                                        animationValue: _scannerController.value,
+                                      ),
                                     ),
-                                  ],
-                                );
-                              },
-                            ),
+                                  ),
+                                ],
+                              );
+                            },
                           ),
                           const SizedBox(height: 20),
                           Text(
-                            'BIOMETRIC SCANNING',
+                            'FACE ID SCAN',
                             textAlign: TextAlign.center,
                             style: GoogleFonts.plusJakartaSans(
-                              color: Colors.white,
+                              color: Colors.white.withOpacity(0.9),
                               fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.2,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.5,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Searching secure database registry',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.plusJakartaSans(
-                              color: Colors.white60,
-                              fontSize: 11,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.02),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.04),
-                                width: 1,
+                          const SizedBox(height: 14),
+                          // Compact loader and status text (avoids truncation)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 1.5,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white60),
+                                ),
                               ),
-                            ),
-                            child: Column(
-                              children: [
-                                _buildProgressStep(
-                                  stepIndex: 0,
-                                  title: 'Image Capture',
-                                  subtitle: 'Streaming scanner bytes',
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  _scanningStatus,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: Colors.white60,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                                _buildDivider(),
-                                _buildProgressStep(
-                                  stepIndex: 1,
-                                  title: 'Resolution Filter',
-                                  subtitle: 'Checking blur and liveness',
-                                ),
-                                _buildDivider(),
-                                _buildProgressStep(
-                                  stepIndex: 2,
-                                  title: 'Pose Detection',
-                                  subtitle: 'Extracting focal points',
-                                ),
-                                _buildDivider(),
-                                _buildProgressStep(
-                                  stepIndex: 3,
-                                  title: 'Signature Generation',
-                                  subtitle: 'Hashing facial signature',
-                                ),
-                                _buildDivider(),
-                                _buildProgressStep(
-                                  stepIndex: 4,
-                                  title: 'Database Comparison',
-                                  subtitle: 'Comparing multi-poses',
-                                ),
-                                _buildDivider(),
-                                _buildProgressStep(
-                                  stepIndex: 5,
-                                  title: 'Verification complete',
-                                  subtitle: 'Opening medical record',
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -1286,8 +1213,10 @@ Future<File> _processImageForBiometrics(String inputPath) async {
 }
 
 Uint8List _processImageBytes(Uint8List bytes) {
-  final image = img.decodeImage(bytes);
+  var image = img.decodeImage(bytes);
   if (image == null) throw Exception('Failed to decode image');
+  
+  image = img.bakeOrientation(image);
   
   final minDim = image.width < image.height ? image.width : image.height;
   final x = (image.width - minDim) ~/ 2;
@@ -1313,23 +1242,89 @@ class _FaceBracketPainter extends CustomPainter {
       ..strokeWidth = 2.0
       ..strokeCap = StrokeCap.round;
 
-    final length = 10.0;
+    final length = 14.0;
+    final r = 6.0; // Corner radius for the brackets
 
-    canvas.drawLine(const Offset(0, 0), Offset(0, length), paint);
-    canvas.drawLine(const Offset(0, 0), Offset(length, 0), paint);
+    // Top Left Corner
+    final pathTL = Path()
+      ..moveTo(0, length)
+      ..lineTo(0, r)
+      ..quadraticBezierTo(0, 0, r, 0)
+      ..lineTo(length, 0);
+    canvas.drawPath(pathTL, paint);
 
-    canvas.drawLine(Offset(size.width, 0), Offset(size.width, length), paint);
-    canvas.drawLine(Offset(size.width, 0), Offset(size.width - length, 0), paint);
+    // Top Right Corner
+    final pathTR = Path()
+      ..moveTo(size.width, length)
+      ..lineTo(size.width, r)
+      ..quadraticBezierTo(size.width, 0, size.width - r, 0)
+      ..lineTo(size.width - length, 0);
+    canvas.drawPath(pathTR, paint);
 
-    canvas.drawLine(Offset(0, size.height), Offset(0, size.height - length), paint);
-    canvas.drawLine(Offset(0, size.height), Offset(length, size.height), paint);
+    // Bottom Left Corner
+    final pathBL = Path()
+      ..moveTo(0, size.height - length)
+      ..lineTo(0, size.height - r)
+      ..quadraticBezierTo(0, size.height, r, size.height)
+      ..lineTo(length, size.height);
+    canvas.drawPath(pathBL, paint);
 
-    canvas.drawLine(Offset(size.width, size.height), Offset(size.width, size.height - length), paint);
-    canvas.drawLine(Offset(size.width, size.height), Offset(size.width - length, size.height), paint);
+    // Bottom Right Corner
+    final pathBR = Path()
+      ..moveTo(size.width, size.height - length)
+      ..lineTo(size.width, size.height - r)
+      ..quadraticBezierTo(size.width, size.height, size.width - r, size.height)
+      ..lineTo(size.width - length, size.height);
+    canvas.drawPath(pathBR, paint);
   }
 
   @override
   bool shouldRepaint(covariant _FaceBracketPainter oldDelegate) {
     return oldDelegate.animationValue != animationValue || oldDelegate.color != color;
   }
+}
+
+class _FaceIdScannerPainter extends CustomPainter {
+  final Color color;
+  final double animationValue;
+
+  _FaceIdScannerPainter({required this.color, required this.animationValue});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color.withOpacity(0.4 + (animationValue * 0.4))
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+
+    final double w = size.width;
+    final double h = size.height;
+
+    final facePath = Path()
+      // Left eye
+      ..moveTo(w * 0.35, h * 0.4)
+      ..lineTo(w * 0.35, h * 0.42)
+      // Right eye
+      ..moveTo(w * 0.65, h * 0.4)
+      ..lineTo(w * 0.65, h * 0.42)
+      // Nose
+      ..moveTo(w * 0.5, h * 0.4)
+      ..lineTo(w * 0.5, h * 0.55)
+      ..lineTo(w * 0.58, h * 0.55)
+      // Mouth (smiling arc)
+      ..moveTo(w * 0.38, h * 0.68)
+      ..quadraticBezierTo(w * 0.5, h * 0.76, w * 0.62, h * 0.68)
+      // Face outline (u-shape)
+      ..moveTo(w * 0.25, h * 0.3)
+      ..lineTo(w * 0.25, h * 0.58)
+      ..quadraticBezierTo(w * 0.25, h * 0.85, w * 0.5, h * 0.85)
+      ..quadraticBezierTo(w * 0.75, h * 0.85, w * 0.75, h * 0.58)
+      ..lineTo(w * 0.75, h * 0.3);
+
+    canvas.drawPath(facePath, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _FaceIdScannerPainter oldDelegate) =>
+      oldDelegate.animationValue != animationValue || oldDelegate.color != color;
 }

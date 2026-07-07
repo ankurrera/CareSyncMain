@@ -1,6 +1,8 @@
 import 'dart:io';
+import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,7 +13,6 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../routing/route_names.dart';
 import '../../../../services/custom_biometric_service.dart';
 import '../../../../services/emergency_audit_service.dart';
-import '../../../auth/providers/auth_provider.dart';
 
 class PatientEmergencyScreen extends ConsumerStatefulWidget {
   const PatientEmergencyScreen({super.key});
@@ -26,6 +27,9 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
   bool _isIdentifying = false;
   String _scanningStatus = 'Initializing...';
   late AnimationController _scannerController;
+  BiometricCancelToken? _activeCancelToken;
+  bool _cooldownActive = false;
+  Timer? _cooldownTimer;
 
   @override
   void initState() {
@@ -38,11 +42,22 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
 
   @override
   void dispose() {
+    _cooldownTimer?.cancel();
+    _activeCancelToken?.cancel();
     _scannerController.dispose();
     super.dispose();
   }
 
   Future<void> _scanFace(BuildContext context) async {
+    if (_cooldownActive) {
+      debugPrint('[BIOMETRIC] Scan cooldown active. Ignoring duplicate request.');
+      return;
+    }
+
+    _activeCancelToken?.cancel();
+    final cancelToken = BiometricCancelToken();
+    _activeCancelToken = cancelToken;
+
     final picker = ImagePicker();
     try {
       final XFile? image = await picker.pickImage(
@@ -54,6 +69,7 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
       );
 
       if (image == null) return;
+      if (cancelToken.isCancelled) return;
 
       setState(() {
         _isIdentifying = true;
@@ -61,7 +77,7 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
       });
 
       Future.delayed(const Duration(milliseconds: 1200), () {
-        if (mounted && _isIdentifying) {
+        if (mounted && _isIdentifying && !cancelToken.isCancelled) {
           setState(() {
             _scanningStatus = 'Analyzing biometric coordinates...';
           });
@@ -69,28 +85,42 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
       });
 
       Future.delayed(const Duration(milliseconds: 2500), () {
-        if (mounted && _isIdentifying) {
+        if (mounted && _isIdentifying && !cancelToken.isCancelled) {
           setState(() {
             _scanningStatus = 'Searching CareSync registry...';
           });
         }
       });
 
-      final matchResult = await CustomBiometricService.instance
-          .identifyPatient(File(image.path));
+      final identifyResult = await CustomBiometricService.instance.identifyPatientDetailed(
+        File(image.path),
+        cancelToken: cancelToken,
+      );
 
+      if (cancelToken.isCancelled) return;
       if (!mounted) return;
 
       setState(() {
         _isIdentifying = false;
       });
 
-      if (matchResult != null && matchResult['qr_code_id'] != null) {
-        final qrCodeId = matchResult['qr_code_id'] as String;
-        final fullName = matchResult['full_name'] as String;
-        final confidence = matchResult['confidence'] as num? ?? 100.0;
-        final patientId = matchResult['patient_id'] as String?;
-        final pose = matchResult['pose_matched'] as String? ?? 'neutral';
+      if (identifyResult.status == BiometricResultStatus.success && identifyResult.qrCodeId != null) {
+        setState(() {
+          _cooldownActive = true;
+        });
+        _cooldownTimer = Timer(const Duration(seconds: 4), () {
+          if (mounted) {
+            setState(() {
+              _cooldownActive = false;
+            });
+          }
+        });
+
+        final qrCodeId = identifyResult.qrCodeId!;
+        final fullName = identifyResult.fullName ?? 'Unknown';
+        final confidence = identifyResult.confidence ?? 100.0;
+        final patientId = identifyResult.patientId;
+        final pose = identifyResult.poseMatched ?? 'neutral';
 
         // Log successful face scan
         await EmergencyAuditService.instance.logFaceScan(
@@ -98,6 +128,8 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
           status: 'Success',
           confidence: confidence.toDouble(),
         );
+
+        HapticFeedback.mediumImpact();
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -111,15 +143,27 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
 
         context.push('${RouteNames.patientEmergencyView}/$qrCodeId');
       } else {
-        // Log failed face scan
+        final friendlyMessage = CustomBiometricService.instance.mapStatusToErrorMessage(
+          identifyResult.status,
+          identifyResult.errorMessage,
+          errorCode: identifyResult.errorCode,
+        );
+
+        // Log failed face scan with specific mapped reason
         await EmergencyAuditService.instance.logFaceScan(
           patientId: null,
           status: 'Failed',
           confidence: 0.0,
-          reason: 'Unknown Patient',
+          reason: friendlyMessage,
         );
 
-        _showNoMatchDialog(context);
+        HapticFeedback.heavyImpact();
+
+        if (identifyResult.status == BiometricResultStatus.noMatch) {
+          _showNoMatchDialog(context, message: friendlyMessage);
+        } else {
+          _showErrorDialog(context, friendlyMessage);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -134,14 +178,16 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
         patientId: null,
         status: 'Failed',
         confidence: 0.0,
-        reason: 'Unknown Patient',
+        reason: 'Scanning Error',
       );
+
+      HapticFeedback.heavyImpact();
 
       _showErrorDialog(context, e.toString());
     }
   }
 
-  void _showNoMatchDialog(BuildContext context) {
+  void _showNoMatchDialog(BuildContext context, {String message = 'No Matching Patient Found'}) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -157,7 +203,7 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
           ],
         ),
         content: Text(
-          'We could not find a matching patient profile in the CareSync database.\n\nPlease check lighting, ensure the face is centered, or try scanning their physical QR code.',
+          '$message\n\nWe could not find a matching patient profile in the CareSync database. Please check lighting, ensure the face is centered, or try scanning their physical QR code.',
           style: GoogleFonts.plusJakartaSans(),
         ),
         actions: [
@@ -394,28 +440,28 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
                     color: Colors.black.withOpacity(0.55),
                     child: Center(
                       child: Container(
-                        width: 240,
+                        width: 270,
                         height: 240,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF18181B).withOpacity(0.85), // Premium zinc/graphite
-                          borderRadius: BorderRadius.circular(32),
+                          color: const Color(0xFF0F0F11).withOpacity(0.85), // Premium slate/black frosted
+                          borderRadius: BorderRadius.circular(28),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.08),
-                            width: 0.8,
+                            color: Colors.white.withOpacity(0.12),
+                            width: 1.0,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.35),
-                              blurRadius: 24,
-                              offset: const Offset(0, 8),
+                              color: Colors.black.withOpacity(0.5),
+                              blurRadius: 32,
+                              offset: const Offset(0, 12),
                             ),
                           ],
                         ),
-                        padding: const EdgeInsets.all(24),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            // Apple Face ID style breathing brackets and icon
+                            // Apple Face ID style breathing brackets and abstract vector face
                             AnimatedBuilder(
                               animation: _scannerController,
                               builder: (context, child) {
@@ -432,16 +478,21 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
                                         ),
                                       ),
                                     ),
-                                    Icon(
-                                      Icons.face_unlock_rounded, // Professional biometric lock silhouette
-                                      color: Colors.white.withOpacity(0.4 + (_scannerController.value * 0.5)),
-                                      size: 46,
+                                    SizedBox(
+                                      width: 44,
+                                      height: 44,
+                                      child: CustomPaint(
+                                        painter: _FaceIdScannerPainter(
+                                          color: Colors.white,
+                                          animationValue: _scannerController.value,
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 );
                               },
                             ),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 20),
                             Text(
                               'FACE ID SCAN',
                               textAlign: TextAlign.center,
@@ -452,30 +503,28 @@ class _PatientEmergencyScreenState extends ConsumerState<PatientEmergencyScreen>
                                 letterSpacing: 1.5,
                               ),
                             ),
-                            const SizedBox(height: 16),
-                            // Inline loader and status text (highly compact and clinical)
+                            const SizedBox(height: 14),
+                            // Compact loader and status text (avoids truncation)
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 const SizedBox(
-                                  width: 11,
-                                  height: 11,
+                                  width: 12,
+                                  height: 12,
                                   child: CircularProgressIndicator(
-                                    strokeWidth: 1.2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white54),
+                                    strokeWidth: 1.5,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white60),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                Expanded(
+                                Flexible(
                                   child: Text(
-                                    _scanningStatus.toUpperCase(),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                    _scanningStatus,
                                     style: GoogleFonts.plusJakartaSans(
-                                      color: Colors.white54,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 0.6,
+                                      color: Colors.white60,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ),
@@ -624,30 +673,92 @@ class _FaceBracketPainter extends CustomPainter {
     final paint = Paint()
       ..color = color.withOpacity(0.3 + (animationValue * 0.7))
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.8
+      ..strokeWidth = 2.0
       ..strokeCap = StrokeCap.round;
 
-    final length = 12.0;
+    final length = 14.0;
+    final r = 6.0; // Corner radius for the brackets
 
     // Top Left Corner
-    canvas.drawLine(const Offset(0, 0), Offset(0, length), paint);
-    canvas.drawLine(const Offset(0, 0), Offset(length, 0), paint);
+    final pathTL = Path()
+      ..moveTo(0, length)
+      ..lineTo(0, r)
+      ..quadraticBezierTo(0, 0, r, 0)
+      ..lineTo(length, 0);
+    canvas.drawPath(pathTL, paint);
 
     // Top Right Corner
-    canvas.drawLine(Offset(size.width, 0), Offset(size.width, length), paint);
-    canvas.drawLine(Offset(size.width, 0), Offset(size.width - length, 0), paint);
+    final pathTR = Path()
+      ..moveTo(size.width, length)
+      ..lineTo(size.width, r)
+      ..quadraticBezierTo(size.width, 0, size.width - r, 0)
+      ..lineTo(size.width - length, 0);
+    canvas.drawPath(pathTR, paint);
 
     // Bottom Left Corner
-    canvas.drawLine(Offset(0, size.height), Offset(0, size.height - length), paint);
-    canvas.drawLine(Offset(0, size.height), Offset(length, size.height), paint);
+    final pathBL = Path()
+      ..moveTo(0, size.height - length)
+      ..lineTo(0, size.height - r)
+      ..quadraticBezierTo(0, size.height, r, size.height)
+      ..lineTo(length, size.height);
+    canvas.drawPath(pathBL, paint);
 
     // Bottom Right Corner
-    canvas.drawLine(Offset(size.width, size.height), Offset(size.width, size.height - length), paint);
-    canvas.drawLine(Offset(size.width, size.height), Offset(size.width - length, size.height), paint);
+    final pathBR = Path()
+      ..moveTo(size.width, size.height - length)
+      ..lineTo(size.width, size.height - r)
+      ..quadraticBezierTo(size.width, size.height, size.width - r, size.height)
+      ..lineTo(size.width - length, size.height);
+    canvas.drawPath(pathBR, paint);
   }
 
   @override
   bool shouldRepaint(covariant _FaceBracketPainter oldDelegate) {
     return oldDelegate.animationValue != animationValue || oldDelegate.color != color;
   }
+}
+
+class _FaceIdScannerPainter extends CustomPainter {
+  final Color color;
+  final double animationValue;
+
+  _FaceIdScannerPainter({required this.color, required this.animationValue});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color.withOpacity(0.4 + (animationValue * 0.4))
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+
+    final double w = size.width;
+    final double h = size.height;
+
+    final facePath = Path()
+      // Left eye
+      ..moveTo(w * 0.35, h * 0.4)
+      ..lineTo(w * 0.35, h * 0.42)
+      // Right eye
+      ..moveTo(w * 0.65, h * 0.4)
+      ..lineTo(w * 0.65, h * 0.42)
+      // Nose
+      ..moveTo(w * 0.5, h * 0.4)
+      ..lineTo(w * 0.5, h * 0.55)
+      ..lineTo(w * 0.58, h * 0.55)
+      // Mouth (smiling arc)
+      ..moveTo(w * 0.38, h * 0.68)
+      ..quadraticBezierTo(w * 0.5, h * 0.76, w * 0.62, h * 0.68)
+      // Face outline (u-shape)
+      ..moveTo(w * 0.25, h * 0.3)
+      ..lineTo(w * 0.25, h * 0.58)
+      ..quadraticBezierTo(w * 0.25, h * 0.85, w * 0.5, h * 0.85)
+      ..quadraticBezierTo(w * 0.75, h * 0.85, w * 0.75, h * 0.58)
+      ..lineTo(w * 0.75, h * 0.3);
+
+    canvas.drawPath(facePath, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _FaceIdScannerPainter oldDelegate) =>
+      oldDelegate.animationValue != animationValue || oldDelegate.color != color;
 }

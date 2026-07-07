@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../family/providers/family_provider.dart';
 import '../../../auth/providers/auth_provider.dart';
-import '../../../family/data/family_service.dart'; // For FamilyMember type
 
 class FamilyMemberList extends ConsumerWidget {
   const FamilyMemberList({super.key});

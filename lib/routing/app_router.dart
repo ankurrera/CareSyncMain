@@ -40,16 +40,36 @@ import '../features/shared/presentation/screens/notifications_screen.dart';
 import '../features/shared/models/user_profile.dart';
 import 'route_names.dart';
 
+class RouterNotifier extends ChangeNotifier {
+  final Ref _ref;
+
+  RouterNotifier(this._ref) {
+    _ref.listen(authStateProvider, (previous, next) {
+      notifyListeners();
+    });
+    _ref.listen(currentProfileProvider, (previous, next) {
+      notifyListeners();
+    });
+  }
+}
+
+final routerNotifierProvider = Provider<RouterNotifier>((ref) {
+  return RouterNotifier(ref);
+});
+
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
-  final profileAsync = ref.watch(currentProfileProvider);
-  final profile = profileAsync.valueOrNull;
+  final routerNotifier = ref.read(routerNotifierProvider);
 
   return GoRouter(
     initialLocation: RouteNames.splash,
     debugLogDiagnostics: true,
+    refreshListenable: routerNotifier,
     redirect: (context, state) {
+      final authState = ref.read(authStateProvider);
+      final profileAsync = ref.read(currentProfileProvider);
+      final profile = profileAsync.valueOrNull;
       final isAuthenticated = authState.valueOrNull != null;
+
       final isAuthRoute = state.matchedLocation == RouteNames.signIn ||
           state.matchedLocation == RouteNames.signUp ||
           state.matchedLocation == RouteNames.roleSelection;

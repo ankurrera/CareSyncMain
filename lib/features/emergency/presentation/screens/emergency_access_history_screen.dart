@@ -5,7 +5,6 @@ import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../../../services/emergency_audit_service.dart';
 
 /// Provider to fetch immutable audit logs from database

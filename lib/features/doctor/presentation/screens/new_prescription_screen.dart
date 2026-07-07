@@ -3,13 +3,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/biometric_guard.dart';
 import '../../../../services/supabase_service.dart';
 import '../../../../services/audit_service.dart';
 import '../../../../services/pdf_service.dart';
+import '../../../../services/secure_storage_service.dart';
 import '../../../shared/models/user_profile.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../providers/doctor_patient_provider.dart';
+import '../../../patient/models/prescription.dart';
+import '../../../patient/models/patient_data.dart';
 
 // Imports for parity
 import '../../../patient/models/prescription_input_models.dart';
@@ -178,6 +184,108 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
     }
   }
 
+  List<_SafetyAlert> _getSafetyAlerts(
+    List<MedicalCondition> conditions,
+    List<Prescription> prescriptions,
+  ) {
+    final alerts = <_SafetyAlert>[];
+    
+    // Get entered drugs
+    final enteredDrugs = _medications
+        .map((m) => m.nameController.text.trim().toLowerCase())
+        .where((name) => name.isNotEmpty)
+        .toList();
+        
+    if (enteredDrugs.isEmpty) return alerts;
+
+    // 1. Check Allergy Clashes
+    final allergies = conditions
+        .where((c) => c.conditionType.toLowerCase() == 'allergy')
+        .toList();
+        
+    for (final drug in enteredDrugs) {
+      for (final allergy in allergies) {
+        final allergyText = allergy.description.toLowerCase();
+        // Check if the allergy description matches the drug name
+        if (allergyText.contains(drug) || drug.contains(allergyText) ||
+            (allergyText.contains('penicillin') && drug.contains('penicil')) ||
+            (allergyText.contains('aspirin') && drug.contains('aspirin'))) {
+          alerts.add(_SafetyAlert(
+            title: 'Drug-Allergy Clash Detected',
+            message: 'Patient is registered as allergic to "${allergy.description}". Prescribing "$drug" is contraindicated.',
+            isDestructive: true,
+          ));
+        }
+      }
+    }
+
+    // 2. Check Drug-to-Drug Interactions (DDI)
+    final activeDrugs = <String>[];
+    for (final p in prescriptions) {
+      final validUntil = p.metadata?['valid_until'] as String?;
+      bool isValid = true;
+      if (validUntil != null) {
+        final date = DateTime.tryParse(validUntil);
+        if (date != null && date.isBefore(DateTime.now())) {
+          isValid = false; // Expired
+        }
+      }
+      if (isValid) {
+        for (final item in p.items) {
+          final name = item.medicineName.toLowerCase();
+          if (name.isNotEmpty) {
+            activeDrugs.add(name);
+          }
+        }
+      }
+    }
+
+    final dangerousPairs = [
+      {
+        'drugs': ['aspirin', 'warfarin'],
+        'message': 'Co-administration increases the risk of serious bleeding events.',
+        'severe': true,
+      },
+      {
+        'drugs': ['ibuprofen', 'aspirin'],
+        'message': 'Concomitant NSAID use increases the risk of gastrointestinal ulcers.',
+        'severe': false,
+      },
+      {
+        'drugs': ['sildenafil', 'nitroglycerin'],
+        'message': 'Severe hypotensive interaction. Do not prescribe together.',
+        'severe': true,
+      },
+      {
+        'drugs': ['simvastatin', 'amiodarone'],
+        'message': 'Amiodarone increases simvastatin exposure, risking severe myopathy.',
+        'severe': false,
+      },
+      {
+        'drugs': ['clopidogrel', 'omeprazole'],
+        'message': 'Omeprazole reduces the antiplatelet effectiveness of clopidogrel.',
+        'severe': false,
+      },
+    ];
+
+    for (final drug in enteredDrugs) {
+      for (final activeDrug in activeDrugs) {
+        for (final pair in dangerousPairs) {
+          final pairList = pair['drugs'] as List<String>;
+          if (pairList.contains(drug) && pairList.contains(activeDrug)) {
+            alerts.add(_SafetyAlert(
+              title: 'Drug-to-Drug Interaction Alert',
+              message: 'Potential clash between new drug "$drug" and active drug "$activeDrug". ${pair['message']}',
+              isDestructive: pair['severe'] as bool,
+            ));
+          }
+        }
+      }
+    }
+
+    return alerts;
+  }
+
   Future<void> _submit(UserProfile? doctorProfile) async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -207,6 +315,9 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
       final medicationList = _medications.map((med) => med.toJson()).toList();
 
       String? pdfUrl;
+      final signatureBase64 = await SecureStorageService.instance.getDoctorSignature();
+      final signatureHash = await SecureStorageService.instance.getDoctorSignatureHash();
+
       try {
         if (doctorProfile != null) {
           final pdfBytes = await PdfService.generatePrescription(
@@ -218,6 +329,8 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
             notes: _notesController.text.trim(),
             medications: medicationList,
             tests: _selectedTests,
+            signatureBase64: signatureBase64,
+            signatureHash: signatureHash,
           );
 
           final timestamp = DateTime.now().millisecondsSinceEpoch;
@@ -239,7 +352,8 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
         'hospital_clinic_name': doctorProfile?.hospitalName ?? 'Private Practice',
         'specialization': doctorProfile?.specialization ?? '',
         'medical_registration_number': doctorProfile?.medicalRegNumber ?? '',
-        'signature_uploaded': true,
+        'signature_uploaded': signatureBase64 != null,
+        'signature_hash': signatureHash,
       };
 
       final metadata = {
@@ -300,7 +414,6 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
   }
 
   // --- REUSABLE DROPDOWN BUILDER ---
-  // Updated <T> to <T extends Object> to fix compilation error
   Widget _customOptionsViewBuilder<T extends Object>(
       BuildContext context,
       AutocompleteOnSelected<T> onSelected,
@@ -310,25 +423,38 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
       ) {
     return Align(
       alignment: Alignment.topLeft,
-      child: Material(
-        elevation: 4.0,
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(4)),
-        color: Colors.white,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 250),
-          child: SizedBox(
-            width: width, // FORCE width to match input field
-            child: ListView.builder(
-              padding: EdgeInsets.zero,
-              shrinkWrap: true,
-              itemCount: options.length,
-              itemBuilder: (BuildContext context, int index) {
-                final T option = options.elementAt(index);
-                return InkWell(
-                  onTap: () => onSelected(option),
-                  child: itemBuilder(option),
-                );
-              },
+      child: Container(
+        margin: const EdgeInsets.only(top: 4),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 15,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 250),
+            child: SizedBox(
+              width: width,
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (BuildContext context, int index) {
+                  final T option = options.elementAt(index);
+                  return InkWell(
+                    onTap: () => onSelected(option),
+                    child: itemBuilder(option),
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -339,30 +465,48 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
   // Helper for standard list item padding
   Widget _buildStandardDropdownItem(String text) {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Text(text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+      child: Text(
+        text,
+        style: GoogleFonts.plusJakartaSans(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          color: const Color(0xFF1E293B),
+        ),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final currentUserAsync = ref.watch(currentProfileProvider);
+    final conditions = ref.watch(doctorPatientConditionsProvider(widget.patientId)).valueOrNull ?? [];
+    final prescriptions = ref.watch(doctorPatientPrescriptionsProvider(widget.patientId)).valueOrNull ?? [];
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: const Color(0xFFFAFAFA),
       appBar: AppBar(
-        title: const Text('Write Prescription', style: TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.w600)),
+        title: Text(
+          'Write Prescription',
+          style: GoogleFonts.plusJakartaSans(
+            color: const Color(0xFF0F172A),
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            letterSpacing: -0.2,
+          ),
+        ),
         backgroundColor: Colors.white,
         elevation: 0,
+        scrolledUnderElevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.close_rounded, color: Colors.black87),
+          icon: const Icon(Icons.close_rounded, color: Color(0xFF0F172A), size: 20),
           onPressed: () => context.pop(),
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1.0),
           child: Container(
-            color: Colors.grey.shade200,
+            color: const Color(0xFFF1F5F9), // Slate 100
             height: 1.0,
           ),
         ),
@@ -393,13 +537,19 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
                         Text('Rx Medications'.toUpperCase(), style: _headerStyle),
                         TextButton.icon(
                           onPressed: _addMedication,
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Add Drug'),
+                          icon: const Icon(Icons.add_rounded, size: 16, color: Color(0xFF0284C7)),
+                          label: Text(
+                            'Add Drug',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: const Color(0xFF0284C7),
+                            ),
+                          ),
                           style: TextButton.styleFrom(
-                            foregroundColor: AppColors.doctor,
-                            backgroundColor: AppColors.doctor.withValues(alpha: 0.1),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            backgroundColor: const Color(0xFF0284C7).withValues(alpha: 0.08),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                         ),
                       ],
@@ -409,6 +559,64 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
                       _buildEmptyState()
                     else
                       ...List.generate(_medications.length, (index) => _buildMedicationCard(index)),
+
+                    // Safety Alerts Section (DDI & Allergy Checks)
+                    (() {
+                      final alerts = _getSafetyAlerts(conditions, prescriptions);
+                      if (alerts.isEmpty) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Column(
+                          children: alerts.map((alert) => Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: alert.isDestructive ? const Color(0xFFFFF1F2) : const Color(0xFFFFFBEB), // Rose 50 / Amber 50
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: alert.isDestructive ? const Color(0xFFFECDD3) : const Color(0xFFFDE68A), // Rose 200 / Amber 200
+                              ),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  alert.isDestructive ? Iconsax.danger : Iconsax.warning_2,
+                                  color: alert.isDestructive ? const Color(0xFFE11D48) : const Color(0xFFD97706),
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        alert.title,
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                          color: alert.isDestructive ? const Color(0xFF9F1239) : const Color(0xFF92400E),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        alert.message,
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: alert.isDestructive ? const Color(0xFFBE123C) : const Color(0xFFB45309),
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )).toList(),
+                        ),
+                      );
+                    })(),
 
                     const SizedBox(height: 32),
 
@@ -447,12 +655,26 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
                     Container(
                       decoration: _cardDecoration,
                       child: SwitchListTile.adaptive(
-                        title: const Text('Emergency Access', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
-                        subtitle: const Text('Allow first responders to view via QR', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                        title: Text(
+                          'Emergency Access',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: const Color(0xFF0F172A),
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Allow first responders to view via QR code scan',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
                         value: _isPublic,
                         onChanged: (v) => setState(() => _isPublic = v),
-                        activeTrackColor: AppColors.doctor,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        activeTrackColor: const Color(0xFF0284C7),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                       ),
                     ),
                     const SizedBox(height: 100),
@@ -469,7 +691,7 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
             color: Colors.white,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
+                color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 10,
                 offset: const Offset(0, -4),
               )
@@ -485,13 +707,21 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
               });
             },
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.doctor,
+              backgroundColor: const Color(0xFF0284C7), // Premium Clinical Blue
               padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              elevation: 0,
             ),
             child: _isLoading
                 ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Text('Sign & Issue Prescription', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                : Text(
+                    'Sign & Issue Prescription',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.1,
+                    ),
+                  ),
           ),
         ),
       ),
@@ -500,38 +730,46 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
 
   // --- STYLES & DECORATIONS ---
 
-  TextStyle get _headerStyle => const TextStyle(
-    fontSize: 14,
-    fontWeight: FontWeight.w600,
-    color: AppColors.textSecondary,
-    letterSpacing: 0.5,
+  TextStyle get _headerStyle => GoogleFonts.plusJakartaSans(
+    fontSize: 11,
+    fontWeight: FontWeight.bold,
+    color: const Color(0xFF475569), // Slate 600
+    letterSpacing: 0.8,
   );
 
   BoxDecoration get _cardDecoration => BoxDecoration(
     color: Colors.white,
-    borderRadius: BorderRadius.circular(12),
-    border: Border.all(color: Colors.grey.shade200),
+    borderRadius: BorderRadius.circular(20),
+    border: Border.all(color: const Color(0xFFE2E8F0), width: 1.0),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withValues(alpha: 0.015),
+        blurRadius: 10,
+        offset: const Offset(0, 4),
+      ),
+    ],
   );
 
   InputDecoration _inputDecoration({required String hint, String? label, Widget? suffix}) {
     return InputDecoration(
       labelText: label,
+      labelStyle: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500),
       hintText: hint,
-      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+      hintStyle: GoogleFonts.plusJakartaSans(color: const Color(0xFF94A3B8), fontSize: 13),
       filled: true,
-      fillColor: const Color(0xFFF9FAFB),
+      fillColor: const Color(0xFFF8FAFC), // Slate 50
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: Colors.grey.shade200),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: AppColors.doctor, width: 1.5),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF0284C7), width: 1.5), // Clinical blue focus
       ),
       suffixIcon: suffix,
       isDense: true,
@@ -628,21 +866,25 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
 
   Widget _buildPatientInfoBar() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: _cardDecoration,
       child: Row(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 50,
+            height: 50,
             decoration: BoxDecoration(
-              color: AppColors.doctor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
+              color: const Color(0xFF0284C7).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Center(
               child: Text(
                 widget.patientName.isNotEmpty ? widget.patientName[0].toUpperCase() : 'P',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.doctor),
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF0284C7),
+                ),
               ),
             ),
           ),
@@ -653,12 +895,40 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
               children: [
                 Text(
                   widget.patientName,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF0F172A), // Slate 900
+                  ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'ID: ${widget.patientId.substring(0, 8).toUpperCase()}',
-                  style: const TextStyle(fontSize: 13, color: Colors.grey, fontFamily: 'Monospace'),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      'ID: ${widget.patientId.substring(0, 8).toUpperCase()}',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        color: const Color(0xFF64748B),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Patient',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF475569),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -701,7 +971,7 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
                 onEditingComplete: onEditingComplete,
                 decoration: _inputDecoration(
                   hint: 'Search ICD-10 or common diagnosis...',
-                  suffix: const Icon(Icons.search, color: Colors.grey, size: 20),
+                  suffix: const Icon(Iconsax.search_normal_1, color: Color(0xFF64748B), size: 18),
                 ),
                 validator: (value) => value == null || value.isEmpty ? 'Diagnosis required' : null,
               );
@@ -714,14 +984,35 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24.0),
+        padding: const EdgeInsets.symmetric(vertical: 36.0),
         child: Column(
           children: [
-            Icon(Icons.medication_outlined, size: 40, color: Colors.grey.shade300),
-            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Icon(Iconsax.document_text_1, size: 32, color: Color(0xFF94A3B8)),
+            ),
+            const SizedBox(height: 16),
             Text(
-              'No medications added yet',
-              style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+              'No Medications Added Yet',
+              style: GoogleFonts.plusJakartaSans(
+                color: const Color(0xFF1E293B),
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Tap "+ Add Drug" to append items to this prescription.',
+              style: GoogleFonts.plusJakartaSans(
+                color: const Color(0xFF64748B),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
@@ -802,21 +1093,27 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
   Widget _buildSafetyCheckTile(String title, bool? value, Function(bool?) onChanged) {
     return Row(
       children: [
-        Expanded(child: Text(title, style: const TextStyle(fontSize: 14))),
+        Expanded(
+          child: Text(
+            title,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF334155), // Slate 700
+            ),
+          ),
+        ),
         const SizedBox(width: 12),
-        // Custom segmented control for professional look
         Container(
           height: 32,
           decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: Colors.grey.shade200),
+            color: const Color(0xFFF1F5F9), // Slate 100
+            borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               _buildSegmentBtn('Yes', value == true, () => onChanged(true)),
-              Container(width: 1, color: Colors.grey.shade300),
               _buildSegmentBtn('No', value == false, () => onChanged(false)),
             ],
           ),
@@ -828,19 +1125,20 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
   Widget _buildSegmentBtn(String label, bool isSelected, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.doctor : Colors.transparent,
-          borderRadius: BorderRadius.circular(5),
+          color: isSelected ? const Color(0xFF0284C7) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
           label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-            color: isSelected ? Colors.white : Colors.grey.shade600,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: isSelected ? Colors.white : const Color(0xFF64748B),
           ),
         ),
       ),
@@ -856,26 +1154,39 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 12, 0),
+            padding: const EdgeInsets.fromLTRB(20, 16, 16, 12),
             child: Row(
               children: [
-                Icon(Icons.circle, size: 8, color: AppColors.doctor.withValues(alpha: 0.5)),
-                const SizedBox(width: 8),
-                Text('Drug ${index + 1}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary)),
-                const Spacer(),
-                InkWell(
-                  onTap: () => _removeMedication(index),
-                  borderRadius: BorderRadius.circular(4),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4.0),
-                    child: Icon(Icons.close, size: 16, color: Colors.grey.shade400),
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF0284C7),
+                    shape: BoxShape.circle,
                   ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Drug #${index + 1}',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: const Color(0xFF0F172A),
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => _removeMedication(index),
+                  icon: const Icon(Icons.close_rounded, size: 16, color: Color(0xFF94A3B8)),
+                  constraints: const BoxConstraints(),
+                  padding: EdgeInsets.zero,
+                  splashRadius: 18,
                 ),
               ],
             ),
           ),
 
-          const Divider(color: Color(0xFFF1F5F9)),
+          const Divider(color: Color(0xFFF1F5F9), height: 1.0),
 
           Padding(
             padding: const EdgeInsets.all(16),
@@ -916,11 +1227,25 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                                    Text(
+                                      name,
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: const Color(0xFF1E293B),
+                                      ),
+                                    ),
                                     if(dosage.isNotEmpty || type.isNotEmpty)
                                       Padding(
                                         padding: const EdgeInsets.only(top: 4.0),
-                                        child: Text('$dosage • $type', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                                        child: Text(
+                                          '$dosage • $type',
+                                          style: GoogleFonts.plusJakartaSans(
+                                            color: const Color(0xFF64748B),
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
                                       ),
                                   ],
                                 ),
@@ -1031,15 +1356,22 @@ class _NewPrescriptionScreenState extends ConsumerState<NewPrescriptionScreen> {
           med.instructionsController.text = label;
         }
       },
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: Colors.grey.shade300),
+          color: const Color(0xFFF1F5F9), // Slate 100
           borderRadius: BorderRadius.circular(14),
         ),
-        child: Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
+        child: Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 10,
+            color: const Color(0xFF475569), // Slate 600
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
     );
   }
@@ -1081,4 +1413,16 @@ class _MedicationEntry {
           : null,
     };
   }
+}
+
+class _SafetyAlert {
+  final String title;
+  final String message;
+  final bool isDestructive; // true for red (severe), false for amber (warning)
+  
+  _SafetyAlert({
+    required this.title,
+    required this.message,
+    required this.isDestructive,
+  });
 }

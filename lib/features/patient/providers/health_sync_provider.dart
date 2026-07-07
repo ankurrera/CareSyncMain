@@ -2,13 +2,10 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:health/health.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../services/encryption_service.dart';
 import '../../../services/supabase_service.dart';
-import '../models/vital.dart';
 import 'vitals_provider.dart';
-import '../../../../services/vitals_service.dart';
 
 import '../../../../services/wearables/health_platform_adapter.dart';
 import '../../../../services/wearables/wearable_service.dart';

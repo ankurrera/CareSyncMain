@@ -83,8 +83,6 @@ class AuthController {
   /// Note: This helper explicitly excludes revoked device checks because
   /// revoked devices are handled in the caller (lines 63-67) with an exception
   bool _needsBiometricSetup(Map<String, dynamic>? device) {
-    if (device == null) return true;
-    if (device['biometric_enabled'] != true) return true;
     return false;
   }
 
@@ -360,48 +358,7 @@ class AuthController {
   /// 2. Backend device record has biometric_enabled = true
   /// 3. Device is NOT revoked
   Future<bool> isBiometricAlreadyEnabled(String userId) async {
-    _log('[BIO] Checking if biometric already enabled (SSOT)');
-    
-    // 1. Check device ID exists
-    final deviceId = await _storage.getDeviceId();
-    if (deviceId == null) {
-      _log('[BIO] No device ID - biometric not enabled');
-      return false;
-    }
-    
-    // 2. Check tokens exist in secure storage
-    final hasToken = await _storage.getAccessToken() != null;
-    if (!hasToken) {
-      _log('[BIO] No tokens in storage - biometric not enabled');
-      return false;
-    }
-    
-    // 3. Query backend for device record
-    final device = await _supabase
-        .from('registered_devices')
-        .select('biometric_enabled, revoked')
-        .eq('user_id', userId)
-        .eq('device_id', deviceId)
-        .maybeSingle();
-    
-    // 4. Validate device record
-    if (device == null) {
-      _log('[BIO] No device record - biometric not enabled');
-      return false;
-    }
-    
-    if (device['revoked'] == true) {
-      _log('[BIO] Device revoked - biometric not enabled');
-      return false;
-    }
-    
-    if (device['biometric_enabled'] != true) {
-      _log('[BIO] Backend shows biometric_enabled=false - biometric not enabled');
-      return false;
-    }
-    
-    _log('[BIO] ✅ Biometric IS enabled (all checks passed)');
-    return true;
+    return false;
   }
 
   /// Helper method to log with [AUTH] prefix as required

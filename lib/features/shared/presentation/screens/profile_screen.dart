@@ -4,13 +4,23 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
+import 'dart:convert';
+import 'dart:ui' as ui;
+import 'package:crypto/crypto.dart';
+import 'package:flutter/rendering.dart';
 import '../../../../routing/route_names.dart';
 import '../../../../services/kyc_service.dart';
 import '../../../../services/supabase_service.dart';
+import '../../../../services/secure_storage_service.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../family/presentation/screens/family_members_screen.dart';
 import '../../../family/providers/family_provider.dart';
 import '../../models/user_profile.dart';
+
+// Provider for doctor signature status
+final doctorSignatureProvider = FutureProvider<String?>((ref) async {
+  return await SecureStorageService.instance.getDoctorSignature();
+});
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -23,7 +33,6 @@ class ProfileScreen extends ConsumerWidget {
     final isUsingFamilyAccount = authUser != null && activeId != authUser.id;
 
     final kycAsync = ref.watch(kycStatusProvider);
-    final biometricEnabledAsync = ref.watch(biometricEnabledProvider);
     final familyMembersAsync = ref.watch(familyMembersProvider);
 
     return Scaffold(
@@ -228,26 +237,7 @@ class ProfileScreen extends ConsumerWidget {
                               onTap: () => context.push(RouteNames.patientPrivacy),
                             ),
                           ],
-                          _buildSettingsTile(
-                            icon: Iconsax.finger_scan,
-                            title: 'Biometric App Login',
-                            isToggle: true,
-                            toggleValue: biometricEnabledAsync.valueOrNull ?? false,
-                            onToggle: (val) async {
-                              try {
-                                await ref.read(authNotifierProvider.notifier).toggleBiometric(val);
-                              } catch (e) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Failed to update biometric settings: ${e.toString()}'),
-                                      backgroundColor: const Color(0xFFEF4444),
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                          ),
+
                           _buildSettingsTile(
                             icon: Iconsax.lock,
                             title: 'Change Password',
@@ -374,6 +364,8 @@ class ProfileScreen extends ConsumerWidget {
   }
 
   Widget _buildDoctorDetailsCard(BuildContext context, WidgetRef ref, UserProfile profile) {
+    final signatureAsync = ref.watch(doctorSignatureProvider);
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -396,6 +388,11 @@ class ProfileScreen extends ConsumerWidget {
               icon: Iconsax.card,
               title: 'Reg. Number: ${profile.medicalRegNumber!}',
             ),
+          _buildSettingsTile(
+            icon: Iconsax.edit_2,
+            title: signatureAsync.valueOrNull != null ? 'Digital Signature: Enrolled' : 'Digital Signature: Not Set',
+            onTap: () => _showSignaturePadDialog(context, ref),
+          ),
         ],
       ),
     );
@@ -817,4 +814,279 @@ class ProfileScreen extends ConsumerWidget {
       ),
     );
   }
+
+  void _showSignaturePadDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return _SignatureDialog(ref: ref);
+      },
+    );
+  }
+}
+
+class _SignatureDialog extends StatefulWidget {
+  final WidgetRef ref;
+  const _SignatureDialog({required this.ref});
+
+  @override
+  State<_SignatureDialog> createState() => _SignatureDialogState();
+}
+
+class _SignatureDialogState extends State<_SignatureDialog> {
+  final List<Offset?> _points = [];
+  final GlobalKey _boundaryKey = GlobalKey();
+  bool _isSaving = false;
+
+  Future<void> _save() async {
+    if (_points.where((p) => p != null).isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please draw your signature first'),
+          backgroundColor: Color(0xFFD97706),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final boundary = _boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return;
+      
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData != null) {
+        final bytes = byteData.buffer.asUint8List();
+        final base64String = base64Encode(bytes);
+        final hash = sha256.convert(bytes).toString();
+
+        // 1. Save locally
+        await SecureStorageService.instance.setDoctorSignature(base64String);
+        await SecureStorageService.instance.setDoctorSignatureHash(hash);
+        
+        // 2. Save to Supabase doctors table
+        final userId = SupabaseService.instance.currentUserId;
+        if (userId != null) {
+          await SupabaseService.instance.client
+              .from('doctors')
+              .update({
+                'signature_base64': base64String,
+                'signature_hash': hash,
+              })
+              .eq('user_id', userId);
+        }
+
+        widget.ref.invalidate(doctorSignatureProvider);
+        widget.ref.invalidate(currentProfileProvider);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Digital signature enrolled successfully'),
+              backgroundColor: Color(0xFF16A34A),
+            ),
+          );
+          Navigator.of(context).pop();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error saving signature: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving signature: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      contentPadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+      title: Text(
+        'Draw Signature',
+        style: GoogleFonts.plusJakartaSans(
+          fontWeight: FontWeight.bold,
+          fontSize: 16,
+          color: const Color(0xFF111827),
+        ),
+        textAlign: TextAlign.center,
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Draw your official prescription signature inside the box below.',
+            style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF6B7280)),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          Container(
+            height: 180,
+            width: 280,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9FAFB),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: RepaintBoundary(
+                key: _boundaryKey,
+                child: GestureDetector(
+                  onPanUpdate: (details) {
+                    setState(() {
+                      _points.add(details.localPosition);
+                    });
+                  },
+                  onPanEnd: (details) {
+                    setState(() {
+                      _points.add(null);
+                    });
+                  },
+                  child: CustomPaint(
+                    painter: _SignaturePainter(_points),
+                    size: Size.infinite,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _points.clear();
+                  });
+                },
+                child: Text(
+                  'Clear',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFFEF4444),
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await SecureStorageService.instance.setDoctorSignature('');
+                  await SecureStorageService.instance.setDoctorSignatureHash('');
+                  final userId = SupabaseService.instance.currentUserId;
+                  if (userId != null) {
+                    try {
+                      await SupabaseService.instance.client
+                          .from('doctors')
+                          .update({
+                            'signature_base64': null,
+                            'signature_hash': null,
+                          })
+                          .eq('user_id', userId);
+                    } catch (e) {
+                      debugPrint('Error removing signature from database: $e');
+                    }
+                  }
+                  widget.ref.invalidate(doctorSignatureProvider);
+                  widget.ref.invalidate(currentProfileProvider);
+                  if (context.mounted) Navigator.of(context).pop();
+                },
+                child: Text(
+                  'Reset/Remove',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF6B7280),
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  side: const BorderSide(color: Color(0xFFE5E7EB)),
+                ),
+                child: Text(
+                  'Cancel',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF374151),
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _isSaving ? null : _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF111827),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : Text(
+                        'Save Stamp',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontSize: 13,
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _SignaturePainter extends CustomPainter {
+  final List<Offset?> points;
+  _SignaturePainter(this.points);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    Paint paint = Paint()
+      ..color = const Color(0xFF1E3A8A)
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 3.0;
+
+    for (int i = 0; i < points.length - 1; i++) {
+      if (points[i] != null && points[i + 1] != null) {
+        canvas.drawLine(points[i]!, points[i + 1]!, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SignaturePainter oldDelegate) => true;
 }

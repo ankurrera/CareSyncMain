@@ -64,16 +64,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     super.dispose();
   }
 
-  Color get _roleColor {
-    switch (widget.role) {
-      case 'doctor':
-        return AppColors.doctor;
-      case 'pharmacist':
-        return AppColors.pharmacist;
-      default:
-        return AppColors.patient;
-    }
-  }
 
   String get _roleTitle {
     switch (widget.role) {
@@ -141,8 +131,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       if (mounted) {
         if (widget.role == 'patient') {
           context.go(RouteNames.kycVerification);
-        } else {
-          context.go(RouteNames.biometricEnrollment);
+        } else if (widget.role == 'doctor') {
+          context.go(RouteNames.doctorDashboard);
+        } else if (widget.role == 'pharmacist') {
+          context.go(RouteNames.pharmacistDashboard);
         }
       }
     } catch (e) {
@@ -234,14 +226,17 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     ),
                   ),
                   const SizedBox(height: 0),
-                  Text(
-                    'CARESYNC',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.plusJakartaSans(
-                      color: const Color(0xFF0D0D0D),
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 5,
-                      fontSize: 15,
+                  Padding(
+                    padding: const EdgeInsets.only(left: 5),
+                    child: Text(
+                      'CARESYNC',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.plusJakartaSans(
+                        color: const Color(0xFF0D0D0D),
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 5,
+                        fontSize: 15,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),

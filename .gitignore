@@ -259,3 +259,18 @@ weights/
 *.pt
 *.pth
 
+# Production Hardening / Security Rules
+*.pem
+*.key
+*.crt
+docker-compose.override.yml
+*.pid
+tmp/
+.cache/huggingface/
+.cache/tensorflow/
+.cache/keras/
+*.npy
+*.npz
+*.dmp
+crash_dumps/
+

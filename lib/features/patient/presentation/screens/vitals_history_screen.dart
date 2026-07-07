@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_spacing.dart';
 import '../../models/vital.dart';
 import '../../providers/vitals_provider.dart';
 import '../../../../services/encryption_service.dart';
@@ -172,6 +172,7 @@ class _VitalRecordCardState extends State<_VitalRecordCard> {
     try {
       final decrypted = await EncryptionService.instance.decryptMedicalRecord(
         encryptedData: widget.vital.value,
+        patientId: widget.vital.patientId,
         biometricReason: 'Authenticate to view this health record',
       );
       setState(() {

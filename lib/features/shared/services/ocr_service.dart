@@ -205,31 +205,39 @@ class PrescriptionTextParser {
   }
   
   DateTime? _parseFlexibleDate(String input) {
-     // Very naive parser. In production, use DateFormat with multiple patterns.
-     // Try standard packages or custom logic.
-     // Handling "10 May 2024"
      final parts = input.split(RegExp(r'[\s/]+'));
      if (parts.length >= 3) {
-        int? d = int.tryParse(parts[0]);
-        int? y = int.tryParse(parts[2]);
-        if (y != null && y < 100) y += 2000;
+        int? y;
+        int? m;
+        int? d;
         
-        int m = 1;
-        // Month string parsing
-        const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-        final mStr = parts[1].toLowerCase();
-        int mIdx = months.indexWhere((mon) => mStr.startsWith(mon));
-        if (mIdx != -1) {
-            m = mIdx + 1;
+        if (parts[0].length == 4) {
+           y = int.tryParse(parts[0]);
+           d = int.tryParse(parts[2]);
+           m = _parseMonth(parts[1]);
         } else {
-            m = int.tryParse(parts[1]) ?? 1;
+           d = int.tryParse(parts[0]);
+           y = int.tryParse(parts[2]);
+           if (y != null && y < 100) y += 2000;
+           m = _parseMonth(parts[1]);
         }
         
-        if (d != null && y != null) {
+        if (d != null && y != null && m != null) {
            return DateTime(y, m, d);
         }
      }
      return null;
+  }
+
+  int? _parseMonth(String mStr) {
+     const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+     final cleanStr = mStr.toLowerCase();
+     int mIdx = months.indexWhere((mon) => cleanStr.startsWith(mon));
+     if (mIdx != -1) {
+         return mIdx + 1;
+     } else {
+         return int.tryParse(mStr);
+     }
   }
 
   List<ParsedMedication> _extractMedications(List<String> lines) {
@@ -393,7 +401,7 @@ class PrescriptionTextParser {
   }
 
   bool _isFooterOrJunk(String line) {
-    final junk = RegExp(r'\b(Page|Signature|Sign|Reg No|Reg\.No|Address|Phone|Email|Electronic Signature)\b', caseSensitive: false);
+    final junk = RegExp(r'\b(Page|Signature|Sign|Reg No|Reg\.No|Address|Phone|Email|Electronic Signature|Date|Dated)\b', caseSensitive: false);
     return junk.hasMatch(line) || line.length < 2;
   }
 }

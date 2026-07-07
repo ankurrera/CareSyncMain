@@ -81,17 +81,7 @@ class EncryptionService {
       return base64Decode(keyString);
     }
 
-    // Require biometric authentication
-    final authenticated = await _biometric.authenticate(
-      reason: reason,
-      biometricOnly: true,
-    );
-
-    if (!authenticated) {
-      throw EncryptionException('Biometric authentication failed');
-    }
-
-    // Retrieve the encryption key
+    // Retrieve the encryption key directly (biometrics disabled)
     final keyString = await _storage.read(key: _encryptionKeyKey);
     if (keyString == null) {
       throw EncryptionException('Encryption key not found');
@@ -122,11 +112,14 @@ class EncryptionService {
   /// Returns encrypted string or throws exception
   Future<String> encryptMedicalRecord({
     required String data,
+    String? patientId,
     String biometricReason = 'Authenticate to encrypt medical data',
   }) async {
-    final key = await getEncryptionKeyWithBiometric(
-      reason: biometricReason,
-    );
+    final key = patientId != null
+        ? Uint8List.fromList(sha256.convert(utf8.encode(patientId)).bytes)
+        : await getEncryptionKeyWithBiometric(
+            reason: biometricReason,
+          );
 
     if (key == null) {
       throw EncryptionException('Failed to retrieve encryption key');
@@ -139,17 +132,31 @@ class EncryptionService {
   /// Returns decrypted string or throws exception
   Future<String> decryptMedicalRecord({
     required String encryptedData,
+    String? patientId,
     String biometricReason = 'Authenticate to decrypt medical data',
   }) async {
-    final key = await getEncryptionKeyWithBiometric(
-      reason: biometricReason,
-    );
+    final key = patientId != null
+        ? Uint8List.fromList(sha256.convert(utf8.encode(patientId)).bytes)
+        : await getEncryptionKeyWithBiometric(
+            reason: biometricReason,
+          );
 
     if (key == null) {
       throw EncryptionException('Failed to retrieve encryption key');
     }
 
     return await decryptData(encryptedData, key);
+  }
+
+  /// Decrypt data synchronously using a deterministic patientId key
+  String decryptDeterministic({
+    required String encryptedData,
+    required String patientId,
+  }) {
+    final key = Uint8List.fromList(sha256.convert(utf8.encode(patientId)).bytes);
+    final ciphertextBytes = base64Decode(encryptedData);
+    final decryptedBytes = _xorEncrypt(ciphertextBytes, key);
+    return utf8.decode(decryptedBytes);
   }
 
   /// Clear encryption key (on logout)

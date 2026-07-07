@@ -6,6 +6,7 @@ import '../../providers/vitals_provider.dart';
 import '../../providers/health_sync_provider.dart';
 import '../../models/vital.dart';
 import 'add_vital_bottom_sheet.dart';
+import '../../../../services/encryption_service.dart';
 import 'health_trackers_sheet.dart';
 import '../../../../core/widgets/loading_skeleton.dart';
 
@@ -148,12 +149,25 @@ class VitalsSummaryCard extends ConsumerWidget {
         final weightTrend = _calculateWeightTrend(weightLatest, weightPrev);
 
         // Derive current display value depending on sync state
-        final hrVal =
-            isSynced
-                ? (syncState.liveHeartRate > 0
-                    ? syncState.liveHeartRate.toString()
-                    : 'No wearable data available.')
-                : (hrLatest?.value ?? 'No wearable data available.');
+        final String hrVal;
+        if (isSynced) {
+          hrVal = syncState.liveHeartRate > 0
+              ? syncState.liveHeartRate.toString()
+              : 'No wearable data available.';
+        } else {
+          if (hrLatest?.value != null) {
+            String val = hrLatest!.value;
+            try {
+              val = EncryptionService.instance.decryptDeterministic(
+                encryptedData: hrLatest.value,
+                patientId: hrLatest.patientId,
+              );
+            } catch (_) {}
+            hrVal = val;
+          } else {
+            hrVal = 'No wearable data available.';
+          }
+        }
         final hrLabel =
             isSynced
                 ? '${syncedSource.replaceAll('_', ' ').toUpperCase()} (LIVE)'
@@ -165,12 +179,25 @@ class VitalsSummaryCard extends ConsumerWidget {
                     ? (hrTrend['color'] as Color)
                     : AppColors.textSub);
 
-        final bpVal =
-            isSynced
-                ? (syncState.liveBloodPressure != 'Not Available'
-                    ? syncState.liveBloodPressure
-                    : 'No wearable data available.')
-                : (bpLatest?.value ?? 'No wearable data available.');
+        final String bpVal;
+        if (isSynced) {
+          bpVal = syncState.liveBloodPressure != 'Not Available'
+              ? syncState.liveBloodPressure
+              : 'No wearable data available.';
+        } else {
+          if (bpLatest?.value != null) {
+            String val = bpLatest!.value;
+            try {
+              val = EncryptionService.instance.decryptDeterministic(
+                encryptedData: bpLatest.value,
+                patientId: bpLatest.patientId,
+              );
+            } catch (_) {}
+            bpVal = val;
+          } else {
+            bpVal = 'No wearable data available.';
+          }
+        }
         final bpLabel =
             isSynced
                 ? 'LIVE'
@@ -182,12 +209,25 @@ class VitalsSummaryCard extends ConsumerWidget {
                     ? (bpTrend['color'] as Color)
                     : AppColors.textSub);
 
-        final weightVal =
-            isSynced
-                ? (syncState.liveWeight > 0
-                    ? syncState.liveWeight.toString()
-                    : 'No wearable data available.')
-                : (weightLatest?.value ?? 'No wearable data available.');
+        final String weightVal;
+        if (isSynced) {
+          weightVal = syncState.liveWeight > 0
+              ? syncState.liveWeight.toString()
+              : 'No wearable data available.';
+        } else {
+          if (weightLatest?.value != null) {
+            String val = weightLatest!.value;
+            try {
+              val = EncryptionService.instance.decryptDeterministic(
+                encryptedData: weightLatest.value,
+                patientId: weightLatest.patientId,
+              );
+            } catch (_) {}
+            weightVal = val;
+          } else {
+            weightVal = 'No wearable data available.';
+          }
+        }
         final weightLabel =
             isSynced
                 ? 'LIVE'
