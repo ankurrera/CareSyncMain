@@ -1,5 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -7,6 +11,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../services/supabase_service.dart';
 import '../../../../services/biometric_service.dart';
+import '../../../../services/custom_biometric_service.dart';
 
 class DispenseScreen extends ConsumerStatefulWidget {
   final String? initialQrCodeId;
@@ -22,6 +27,24 @@ class _DispenseScreenState extends ConsumerState<DispenseScreen> {
   Map<String, bool> _selectedItems = {};
   bool _isLoading = false;
   bool _isScanning = true;
+
+  static const _controlledSubstances = [
+    'morphine',
+    'fentanyl',
+    'oxycodone',
+    'codeine',
+    'tramadol',
+    'xanax',
+    'diazepam',
+    'adderall',
+    'ritalin',
+    'methadone',
+    'vicodin',
+    'hydrocodone',
+    'buprenorphine',
+    'alprazolam',
+    'lorazepam',
+  ];
 
   final MobileScannerController _scannerController = MobileScannerController();
 
@@ -188,6 +211,194 @@ class _DispenseScreenState extends ConsumerState<DispenseScreen> {
     );
 
     if (confirmed != true) return;
+
+    // Controlled Substance Check & Patient Biometric Verification
+    final isControlledPrescription = items.any((item) {
+      final itemId = item['id'] as String;
+      if (!selectedItemIds.contains(itemId)) return false;
+
+      final name = (item['medicine_name'] as String? ?? '').toLowerCase();
+      return _controlledSubstances.any((substance) => name.contains(substance));
+    });
+
+    if (isControlledPrescription) {
+      if (!mounted) return;
+      final confirmVerify = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              const Icon(Iconsax.security_safe, color: AppColors.error, size: 28),
+              const SizedBox(width: 8),
+              Text(
+                'Controlled Substance',
+                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: Text(
+            'This prescription contains controlled substances (narcotics/stimulants). '
+            'By law, biometric facial verification of the patient is required before dispensing.\n\n'
+            'Please scan the patient\'s face to proceed.',
+            style: GoogleFonts.plusJakartaSans(height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.plusJakartaSans(color: Colors.grey),
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.pop(context, true),
+              icon: const Icon(Iconsax.frame_1),
+              label: Text(
+                'Scan Patient Face',
+                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.pharmacist,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmVerify != true) return;
+
+      // Initiate camera to scan patient face
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.rear,
+        maxWidth: 1080,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+
+      if (image == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Facial scan cancelled. Dispensation aborted.'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+        return;
+      }
+
+      setState(() => _isLoading = true);
+
+      try {
+        final identifyResult = await CustomBiometricService.instance.identifyPatientDetailed(
+          File(image.path),
+        );
+
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+
+        if (identifyResult.status == BiometricResultStatus.success && identifyResult.patientId != null) {
+          final expectedUserId = _patient!['user_id'] as String?;
+          final currentPatientName = _patient!['profiles']['full_name'] as String? ?? 'Unknown';
+
+          if (identifyResult.patientId == expectedUserId) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Patient Biometric Verified: $currentPatientName (${identifyResult.confidence?.toStringAsFixed(1)}% match)',
+                ),
+                backgroundColor: AppColors.success,
+              ),
+            );
+          } else {
+            // Patient mismatch!
+            await showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                title: Row(
+                  children: [
+                    const Icon(Iconsax.warning_2, color: AppColors.error, size: 28),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Security Mismatch',
+                      style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                content: Text(
+                  'Biometric verification failed.\n\n'
+                  'Expected Patient: $currentPatientName\n'
+                  'Identified Patient: ${identifyResult.fullName ?? "Unknown"}\n\n'
+                  'The dispensing of controlled substances has been blocked for patient safety.',
+                  style: GoogleFonts.plusJakartaSans(height: 1.4),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('Close', style: GoogleFonts.plusJakartaSans()),
+                  ),
+                ],
+              ),
+            );
+            return;
+          }
+        } else {
+          // Face did not match database
+          final errMessage = CustomBiometricService.instance.mapStatusToErrorMessage(
+            identifyResult.status,
+            identifyResult.errorMessage,
+            errorCode: identifyResult.errorCode,
+          );
+          await showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Row(
+                children: [
+                  const Icon(Iconsax.warning_2, color: AppColors.error, size: 28),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Verification Failed',
+                    style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              content: Text(
+                'Could not verify patient\'s biometric identity.\n\n'
+                'Detail: $errMessage\n\n'
+                'Dispensing controlled substances is legally restricted without verified biometric authentication.',
+                style: GoogleFonts.plusJakartaSans(height: 1.4),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Close', style: GoogleFonts.plusJakartaSans()),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Biometric microservice query error: $e'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+        return;
+      }
+    }
 
     // Biometric Verification for Pharmacist
     try {
@@ -598,15 +809,54 @@ class _DispenseScreenState extends ConsumerState<DispenseScreen> {
                                 );
                               }
                               
+                              final isControlled = _controlledSubstances.any(
+                                (substance) => (item['medicine_name'] as String? ?? '').toLowerCase().contains(substance)
+                              );
+
                               return CheckboxListTile(
                                 value: _selectedItems[itemId] ?? false,
                                 activeColor: AppColors.pharmacist,
-                                title: Text(
-                                  '${item['medicine_name']} - ${item['dosage']}',
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '${item['medicine_name']} - ${item['dosage']}',
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                    if (isControlled)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.error.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: AppColors.error.withValues(alpha: 0.2)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(
+                                              Iconsax.security_safe,
+                                              color: AppColors.error,
+                                              size: 10,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              'CONTROLLED',
+                                              style: GoogleFonts.plusJakartaSans(
+                                                color: AppColors.error,
+                                                fontSize: 8,
+                                                fontWeight: FontWeight.bold,
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
                                 ),
                                 subtitle: Text(
                                   '${item['frequency']} for ${item['duration'] ?? "N/A"}',
