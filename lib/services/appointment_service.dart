@@ -7,7 +7,9 @@ class AppointmentService {
 
   final SupabaseService _supabase;
 
-  Future<List<DoctorAvailability>> getDoctorAvailability(String doctorId) async {
+  Future<List<DoctorAvailability>> getDoctorAvailability(
+    String doctorId,
+  ) async {
     final response = await _supabase.client
         .from('doctor_availability')
         .select()
@@ -31,15 +33,97 @@ class AppointmentService {
     }
   }
 
-  Future<List<Appointment>> getUpcomingAppointments(String userId) async {
+  Map<String, dynamic> _flattenDoctorProfile(Map<String, dynamic> json) {
+    final Map<String, dynamic> flattenedJson = Map<String, dynamic>.from(json);
+    if (json['doctor'] != null) {
+      final doctorProfile = Map<String, dynamic>.from(json['doctor'] as Map);
+      final doctorMeta =
+          doctorProfile['doctors'] as Map<String, dynamic>? ?? {};
+      doctorProfile['specialization'] = doctorMeta['specialization'];
+      doctorProfile['hospital_clinic_name'] =
+          doctorMeta['hospital_affiliation'];
+      doctorProfile['medical_registration_number'] =
+          doctorMeta['license_number'];
+      flattenedJson['doctor'] = doctorProfile;
+    }
+    return flattenedJson;
+  }
+
+  Future<List<Appointment>> getUpcomingAppointments(
+    String userId, {
+    int limit = 20,
+    int offset = 0,
+  }) async {
     final response = await _supabase.client
         .from('appointments')
-        .select('*, patient:profiles!patient_id(*), doctor:profiles!doctor_id(*)')
+        .select(
+          '*, patient:profiles!patient_id(*), doctor:profiles!doctor_id(*, doctors(*))',
+        )
         .or('patient_id.eq.$userId,doctor_id.eq.$userId')
         .gte('start_time', DateTime.now().toIso8601String())
-        .order('start_time', ascending: true);
+        .order('start_time', ascending: true)
+        .range(offset, offset + limit - 1);
 
-    return (response as List).map((json) => Appointment.fromJson(json)).toList();
+    return (response as List)
+        .map(
+          (json) => Appointment.fromJson(
+            _flattenDoctorProfile(json as Map<String, dynamic>),
+          ),
+        )
+        .toList();
+  }
+
+  Future<List<Appointment>> getPatientAppointmentsHistory(
+    String userId, {
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    final response = await _supabase.client
+        .from('appointments')
+        .select(
+          '*, patient:profiles!patient_id(*), doctor:profiles!doctor_id(*, doctors(*))',
+        )
+        .eq('patient_id', userId)
+        .order('start_time', ascending: false)
+        .range(offset, offset + limit - 1);
+
+    return (response as List)
+        .map(
+          (json) => Appointment.fromJson(
+            _flattenDoctorProfile(json as Map<String, dynamic>),
+          ),
+        )
+        .toList();
+  }
+
+  Future<List<Appointment>> getBookedAppointments(
+    String doctorId,
+    DateTime date,
+  ) async {
+    final startOfDay =
+        DateTime(date.year, date.month, date.day).toIso8601String();
+    final endOfDay =
+        DateTime(
+          date.year,
+          date.month,
+          date.day,
+          23,
+          59,
+          59,
+          999,
+        ).toIso8601String();
+
+    final response = await _supabase.client
+        .from('appointments')
+        .select()
+        .eq('doctor_id', doctorId)
+        .eq('status', 'scheduled')
+        .gte('start_time', startOfDay)
+        .lte('start_time', endOfDay);
+
+    return (response as List)
+        .map((json) => Appointment.fromJson(json))
+        .toList();
   }
 
   Future<void> bookAppointment({

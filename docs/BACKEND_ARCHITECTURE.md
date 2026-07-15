@@ -53,9 +53,9 @@ During server start, a mock inference is run through `DeepFace.represent()` with
 The FastAPI microservice exposes the following endpoints:
 
 * **`GET /`**  
-  Health-check endpoint. Returns service metadata, system timestamps, and model initialization flags.
+  Health-check endpoint. Returns status, model versions, and initialization flags.
 * **`POST /enroll`**  
-  Registers a new biometric profile pose. Receives a user ID, pose label, and image URL. Evaluates pose angles, liveness, and quality before writing to database.
+  Registers a new biometric profile pose. Receives a patient user ID, pose label, and image URL. Evaluates pose angles, liveness, and quality before writing to database.
 * **`POST /verify_id`**  
   One-to-one verification comparing a patient's live selfie against their uploaded KYC ID document.
 * **`POST /identify`**  
@@ -84,3 +84,6 @@ In emergency situations, responders may resend requests or refresh views. To avo
 * Caching uses the client IP address as the key.
 * Expire timeframe (TTL) is set to **300 seconds (5 minutes)**.
 * Any request within this window bypasses the deep search pipeline and returns immediately.
+
+### Structured Logging (Sprint 3 Landmark)
+The microservice implements a structured JSON logger configuration. This logger writes application event logs, system statistics, and exception stack traces in a machine-readable JSON format, facilitating sync with external monitoring and auditing agents (e.g. Google Cloud Logging, Grafana Loki).

@@ -1,81 +1,162 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:url_launcher/url_launcher.dart';
-
-import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/logging/app_logger.dart';
+import '../../../../services/supabase_service.dart';
+import '../../../../core/design/linear_fade_appbar.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../routing/route_names.dart';
 import '../../models/prescription.dart';
 import '../../providers/patient_provider.dart';
+import '../../../../routing/screen_titles.dart';
+import '../widgets/prescription_card.dart';
 
-class PrescriptionsScreen extends ConsumerWidget {
+class PrescriptionsScreen extends ConsumerStatefulWidget {
   const PrescriptionsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final prescriptions = ref.watch(patientPrescriptionsProvider);
+  ConsumerState<PrescriptionsScreen> createState() =>
+      _PrescriptionsScreenState();
+}
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      appBar: AppBar(
-        title: Text(
-          'Prescriptions',
-          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 18, color: const Color(0xFF121212)),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF121212)),
-          onPressed: () => context.pop(),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1.0),
-          child: Container(color: const Color(0xFFE2E8F0), height: 1.0),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Iconsax.add_circle, size: 22, color: Color(0xFFFF5200)),
-            onPressed: () => context.push(RouteNames.patientAddPrescription),
-          ),
-        ],
-      ),
-      body: prescriptions.when(
-        data: (list) {
-          if (list.isEmpty) return _buildEmptyState(context);
+class _PrescriptionsScreenState extends ConsumerState<PrescriptionsScreen> {
+  final _scrollController = ScrollController();
+  List<Prescription> _prescriptionsList = [];
+  int _page = 0;
+  final int _pageSize = 15;
+  bool _hasMore = true;
+  bool _isLoading = false;
+  bool _hasError = false;
 
-          return RefreshIndicator(
-            onRefresh: () async => ref.invalidate(patientPrescriptionsProvider),
-            color: const Color(0xFFFF5200),
-            child: ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-              itemCount: list.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 16),
-              itemBuilder: (context, index) => PrescriptionCard(prescription: list[index]),
-            ),
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFFFF5200))),
-        error: (e, _) => _buildErrorState(ref),
-      ),
+  @override
+  void initState() {
+    super.initState();
+    _loadNextPage(isRefresh: true);
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 200) {
+        _loadNextPage();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadNextPage({bool isRefresh = false}) async {
+    if (_isLoading || (!_hasMore && !isRefresh)) return;
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _hasError = false;
+      });
+    }
+    try {
+      final nextPage = isRefresh ? 0 : _page + 1;
+      final patientData = await ref.read(patientDataProvider.future);
+      if (patientData != null) {
+        final data = await SupabaseService.instance.getPatientPrescriptions(
+          patientData.id,
+          limit: _pageSize,
+          offset: nextPage * _pageSize,
+        );
+        final list = data.map((json) => Prescription.fromJson(json)).toList();
+        if (mounted) {
+          setState(() {
+            if (isRefresh) {
+              _prescriptionsList = list;
+            } else {
+              _prescriptionsList.addAll(list);
+            }
+            _page = nextPage;
+            _hasMore = list.length >= _pageSize;
+          });
+        }
+      }
+    } catch (e) {
+      AppLogger.warning(
+        'Error loading paginated prescriptions',
+        category: LogCategory.database,
+        error: e,
+      );
+      if (mounted) {
+        setState(() => _hasError = true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+
+    Widget bodyWidget;
+    if (_prescriptionsList.isEmpty && _isLoading) {
+      bodyWidget = Center(child: CircularProgressIndicator(color: t.accent));
+    } else if (_hasError && _prescriptionsList.isEmpty) {
+      bodyWidget = _buildErrorState(context);
+    } else if (_prescriptionsList.isEmpty) {
+      bodyWidget = _buildEmptyState(context);
+    } else {
+      bodyWidget = RefreshIndicator(
+        onRefresh: () => _loadNextPage(isRefresh: true),
+        color: t.accent,
+        child: ListView.separated(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          itemCount: _prescriptionsList.length + (_isLoading ? 1 : 0),
+          separatorBuilder: (_, __) => const SizedBox(height: 16),
+          itemBuilder: (context, index) {
+            if (index == _prescriptionsList.length) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12.0),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: t.accent,
+                  ),
+                ),
+              );
+            }
+            return PrescriptionCard(prescription: _prescriptionsList[index]);
+          },
+        ),
+      );
+    }
+
+    return CSScaffold(
+      title: ScreenTitles.patientPrescriptions,
+      actions: [
+        IconButton(
+          icon: Icon(Iconsax.add_circle, size: 22, color: t.accent),
+          onPressed: () => context.push(RouteNames.patientAddPrescription),
+        ),
+      ],
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push(RouteNames.patientAddPrescription),
-        icon: const Icon(Iconsax.add, color: Colors.white, size: 20),
-        label: Text('Add New', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13)),
-        backgroundColor: const Color(0xFF121212),
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        elevation: 2,
+        icon: const Icon(Iconsax.add, size: 20),
+        label: const Text(
+          'Add New',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+        ),
+        backgroundColor: t.accent,
+        foregroundColor: t.accentOn,
+        elevation: 0,
       ),
+      body: bodyWidget,
     );
   }
 
   Widget _buildEmptyState(BuildContext context) {
+    final t = context.tokens;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32.0),
@@ -85,26 +166,35 @@ class PrescriptionsScreen extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: t.card,
                 shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(color: t.divider),
               ),
-              child: const Icon(Iconsax.document_text, size: 40, color: Color(0xFF94A3B8)),
+              child: Icon(
+                Iconsax.document_text,
+                size: 40,
+                color: t.textSecondary,
+              ),
             ),
             const SizedBox(height: 18),
             Text(
               'No Prescriptions',
-              style: GoogleFonts.plusJakartaSans(
+              style: TextStyle(
                 fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF121212),
+                fontWeight: FontWeight.w700,
+                color: t.textPrimary,
               ),
             ),
             const SizedBox(height: 6),
             Text(
               'Add your first prescription to track your medications and medical history.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 13, height: 1.4, fontWeight: FontWeight.w500),
+              style: TextStyle(
+                color: t.textSecondary,
+                fontSize: 13,
+                height: 1.4,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
@@ -112,940 +202,25 @@ class PrescriptionsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildErrorState(WidgetRef ref) {
+  Widget _buildErrorState(BuildContext context) {
+    final t = context.tokens;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Iconsax.warning_2, size: 36, color: Color(0xFFEF4444)),
+          Icon(Iconsax.warning_2, size: 36, color: t.error),
           const SizedBox(height: 14),
-          Text('Failed to load data', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600, color: const Color(0xFF121212))),
+          Text(
+            'Failed to load data',
+            style: TextStyle(fontWeight: FontWeight.w600, color: t.textPrimary),
+          ),
           const SizedBox(height: 4),
           TextButton(
-            onPressed: () => ref.invalidate(patientPrescriptionsProvider),
-            child: Text('Retry', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, color: const Color(0xFFFF5200))),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class PrescriptionCard extends StatelessWidget {
-  final Prescription prescription;
-
-  const PrescriptionCard({required this.prescription});
-
-  @override
-  Widget build(BuildContext context) {
-    final dateFormat = DateFormat('MMM d, yyyy');
-    final status = prescription.computedStatus;
-    final doctorName = prescription.displayDoctorName;
-    final doctorInitial = doctorName.isNotEmpty ? doctorName[0].toUpperCase() : 'D';
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.012),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: InkWell(
-        onTap: () => _showDetails(context),
-        borderRadius: BorderRadius.circular(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 1. Header: Doctor Info + Status Badge + Type Badge
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 18,
-                        backgroundColor: const Color(0xFFF1F5F9),
-                        child: Text(
-                          doctorInitial,
-                          style: GoogleFonts.plusJakartaSans(
-                            color: const Color(0xFF475569),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              doctorName,
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: const Color(0xFF1E293B),
-                              ),
-                            ),
-                            const SizedBox(height: 1),
-                            Text(
-                              [
-                                dateFormat.format(prescription.prescriptionDate ?? prescription.createdAt),
-                                if (prescription.displayClinicName != null && prescription.displayClinicName!.trim().isNotEmpty)
-                                  prescription.displayClinicName!.trim(),
-                              ].join(' • '),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF94A3B8),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          _StatusBadge(status: status),
-                          if (prescription.prescriptionType != null && prescription.prescriptionType!.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              prescription.prescriptionType!.replaceAll('_', ' ').toUpperCase(),
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 7.5,
-                                fontWeight: FontWeight.w800,
-                                color: const Color(0xFF94A3B8),
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // 2. Diagnosis Box (Clean accent card style with Valid Until date)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'DIAGNOSIS',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF94A3B8),
-                                  letterSpacing: 0.8,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                prescription.displayDiagnosis,
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: const Color(0xFF1E293B),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (prescription.validUntil != null)
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                'VALID UNTIL',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF94A3B8),
-                                  letterSpacing: 0.8,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                dateFormat.format(prescription.validUntil!),
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: const Color(0xFF475569),
-                                ),
-                              ),
-                            ],
-                          ),
-                      ],
-                    ),
-                  ),
-
-                  // 3. Medications (Detailed specs list)
-                  if (prescription.items.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      'PRESCRIBED MEDICATIONS',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF64748B),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: prescription.items.take(3).map((item) {
-                        final instructionLine = [
-                          if (item.frequency.isNotEmpty) item.frequency,
-                          if (item.duration != null && item.duration!.trim().isNotEmpty) item.duration!.trim(),
-                          if (item.foodTiming != null && item.foodTiming!.trim().isNotEmpty) item.foodTiming!.trim(),
-                        ].join(' • ');
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                margin: const EdgeInsets.only(top: 6),
-                                width: 5,
-                                height: 5,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFFF5200),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    RichText(
-                                      text: TextSpan(
-                                        text: item.medicineName,
-                                        style: GoogleFonts.plusJakartaSans(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                          color: const Color(0xFF1E293B),
-                                        ),
-                                        children: [
-                                          TextSpan(
-                                            text: ' (${item.dosage})',
-                                            style: GoogleFonts.plusJakartaSans(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w600,
-                                              color: const Color(0xFF64748B),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    if (instructionLine.isNotEmpty || (item.instructions != null && item.instructions!.trim().isNotEmpty))
-                                      const SizedBox(height: 2),
-                                    if (instructionLine.isNotEmpty)
-                                      Text(
-                                        instructionLine,
-                                        style: GoogleFonts.plusJakartaSans(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                          color: const Color(0xFF64748B),
-                                        ),
-                                      ),
-                                    if (item.instructions != null && item.instructions!.trim().isNotEmpty)
-                                      Text(
-                                        'Directives: ${item.instructions!.trim()}',
-                                        style: GoogleFonts.plusJakartaSans(
-                                          fontSize: 9.5,
-                                          fontWeight: FontWeight.w500,
-                                          color: const Color(0xFF94A3B8),
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    if (prescription.items.length > 3)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          '+ ${prescription.items.length - 3} more',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 11,
-                            color: const Color(0xFFFF5200),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                  ],
-
-                  // 4. Clinical Notes (Patient/Doctor notes)
-                  () {
-                    final notes = prescription.doctorNotes ?? prescription.patientNotes ?? prescription.notes;
-                    if (notes == null || notes.trim().isEmpty) return const SizedBox.shrink();
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 10),
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(Icons.notes_rounded, size: 12, color: Color(0xFF94A3B8)),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                notes,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 10,
-                                  color: const Color(0xFF64748B),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }(),
-                ],
-              ),
+            onPressed: () => _loadNextPage(isRefresh: true),
+            child: Text(
+              'Retry',
+              style: TextStyle(fontWeight: FontWeight.w700, color: t.accent),
             ),
-            
-            // 5. Footer Row
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Iconsax.document_text, size: 14, color: Color(0xFF94A3B8)),
-                      const SizedBox(width: 6),
-                      Text(
-                        prescription.items.length.toString(),
-                        style: GoogleFonts.plusJakartaSans(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                          color: const Color(0xFF1E293B),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'items',
-                        style: GoogleFonts.plusJakartaSans(
-                          color: const Color(0xFF64748B),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Icon(
-                        prescription.isPublic ? Iconsax.global : Iconsax.security_user,
-                        size: 12,
-                        color: const Color(0xFF94A3B8),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      Text(
-                        'View Details',
-                        style: GoogleFonts.plusJakartaSans(
-                          color: const Color(0xFFFF5200),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFFFF5200)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showDetails(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _PrescriptionDetailsSheet(prescription: prescription),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  final PrescriptionStatus status;
-
-  const _StatusBadge({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    Color color;
-    switch (status) {
-      case PrescriptionStatus.active: color = const Color(0xFF10B981); break;
-      case PrescriptionStatus.expired: color = const Color(0xFFEF4444); break;
-      case PrescriptionStatus.upcoming: color = const Color(0xFFF59E0B); break;
-      case PrescriptionStatus.completed: color = const Color(0xFF64748B); break;
-      case PrescriptionStatus.cancelled: color = const Color(0xFF94A3B8); break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.15)),
-      ),
-      child: Text(
-        status.displayName.toUpperCase(),
-        style: GoogleFonts.plusJakartaSans(
-          fontSize: 9,
-          fontWeight: FontWeight.bold,
-          color: color,
-        ),
-      ),
-    );
-  }
-}
-
-class _PrescriptionDetailsSheet extends StatelessWidget {
-  final Prescription prescription;
-
-  const _PrescriptionDetailsSheet({required this.prescription});
-
-  Future<void> _launchPdf(BuildContext context, String url) async {
-    final uri = Uri.parse(url);
-    try {
-      bool launched = false;
-      try {
-        launched = await launchUrl(uri, mode: LaunchMode.externalNonBrowserApplication);
-      } catch (e) {
-        launched = false;
-      }
-
-      if (!launched) {
-        if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-          throw 'Could not open PDF';
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error opening PDF: $e', style: GoogleFonts.plusJakartaSans()),
-          backgroundColor: const Color(0xFFEF4444),
-          behavior: SnackBarBehavior.floating,
-        ));
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final dateFormat = DateFormat('MMMM d, yyyy');
-
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.82,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        children: [
-          // Drag Handle
-          Center(
-            child: Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 8),
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE2E8F0),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-
-          // Header Row
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Prescription Details',
-                  style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFF121212)),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF64748B)),
-                  style: IconButton.styleFrom(
-                    backgroundColor: const Color(0xFFF1F5F9),
-                    padding: const EdgeInsets.all(6),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const Divider(height: 1, color: Color(0xFFE2E8F0)),
-
-          // Scrollable Body
-          Expanded(
-            child: ListView(
-              physics: const ClampingScrollPhysics(),
-              padding: const EdgeInsets.all(24),
-              children: [
-                // 1. core Details
-                _buildSectionLabel('MEDICAL DETAILS'),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: _cardDecoration,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildInfoRow(
-                        'Diagnosis',
-                        prescription.displayDiagnosis,
-                        icon: Iconsax.heart,
-                        isBold: true,
-                      ),
-                      const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1, color: Color(0xFFE2E8F0))),
-                      _buildInfoRow(
-                        'Doctor',
-                        prescription.displayDoctorName,
-                        subtitle: prescription.displayClinicName,
-                        icon: Iconsax.user,
-                      ),
-                      if (prescription.doctorDetails?.specialization != null || prescription.doctorDetails?.medicalRegistrationNumber != null) ...[
-                        const SizedBox(height: 8),
-                        Padding(
-                          padding: const EdgeInsets.only(left: 32),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (prescription.doctorDetails?.specialization != null && prescription.doctorDetails!.specialization!.trim().isNotEmpty)
-                                Text(
-                                  prescription.doctorDetails!.specialization!.trim(),
-                                  style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B), fontSize: 12, fontWeight: FontWeight.w600),
-                                ),
-                              if (prescription.doctorDetails?.medicalRegistrationNumber != null && prescription.doctorDetails!.medicalRegistrationNumber!.trim().isNotEmpty) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Registration No: ${prescription.doctorDetails!.medicalRegistrationNumber!.trim()}',
-                                  style: GoogleFonts.plusJakartaSans(color: const Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w500),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // 2. Validity
-                _buildSectionLabel('VALIDITY'),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: _cardDecoration,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _buildMetaItem('Prescribed On', dateFormat.format(prescription.prescriptionDate ?? prescription.createdAt)),
-                      ),
-                      Container(width: 1, height: 32, color: const Color(0xFFE2E8F0)),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 16),
-                          child: _buildMetaItem(
-                            'Valid Until',
-                            prescription.validUntil != null ? dateFormat.format(prescription.validUntil!) : 'N/A',
-                            isAlert: prescription.validUntil?.isBefore(DateTime.now()) ?? false,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // 3. Medications List
-                _buildSectionLabel('MEDICATIONS (${prescription.items.length})'),
-                if (prescription.items.isEmpty)
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Text('No medications listed', style: GoogleFonts.plusJakartaSans(color: const Color(0xFF94A3B8))),
-                    ),
-                  )
-                else
-                  ...prescription.items.asMap().entries.map(
-                        (e) => _buildMedicationTile(e.value, e.key + 1),
-                  ),
-                const SizedBox(height: 12),
-
-                // 4. Notes
-                if (prescription.notes != null || prescription.doctorNotes != null || prescription.patientNotes != null) ...[
-                  _buildSectionLabel('ADDITIONAL NOTES'),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: _cardDecoration,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (prescription.doctorNotes?.isNotEmpty == true)
-                          _buildNoteItem('Doctor Note', prescription.doctorNotes!),
-                        if (prescription.patientNotes?.isNotEmpty == true)
-                          _buildNoteItem('My Note', prescription.patientNotes!),
-                        if (prescription.notes?.isNotEmpty == true)
-                          _buildNoteItem('General', prescription.notes!),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-
-                // 5. Safety Flags
-                if (prescription.safetyFlags != null)
-                  _buildSafetyFlags(prescription.safetyFlags!),
-
-                // 6. Attachments
-                if (prescription.uploadInfo?.hasFile == true) ...[
-                  const SizedBox(height: 24),
-                  _buildSectionLabel('ATTACHMENTS'),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF5200).withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFFF5200).withValues(alpha: 0.15)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Iconsax.document_text5, color: Color(0xFFFF5200), size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            prescription.uploadInfo?.fileName ?? 'Attached File', 
-                            style: GoogleFonts.plusJakartaSans(color: const Color(0xFFFF5200), fontWeight: FontWeight.bold, fontSize: 13),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-
-                const SizedBox(height: 20),
-              ],
-            ),
-          ),
-
-          // Sticky Bottom Actions
-          Container(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: prescription.pdfUrl != null ? () => _launchPdf(context, prescription.pdfUrl!) : null,
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      side: const BorderSide(color: Color(0xFFE2E8F0)),
-                      foregroundColor: const Color(0xFF121212),
-                    ),
-                    child: Text('Download PDF', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14)),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () { /* Share Copy */ },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF121212),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      elevation: 0,
-                    ),
-                    child: Text('Share Copy', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14)),
-                  ),
-                ),
-              ],
-            ),
-          )
-        ],
-      ),
-    );
-  }
-
-  BoxDecoration get _cardDecoration => BoxDecoration(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(20),
-    border: Border.all(color: const Color(0xFFE2E8F0)),
-  );
-
-  Widget _buildSectionLabel(String label) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8, left: 4),
-      child: Text(
-        label,
-        style: GoogleFonts.plusJakartaSans(
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-          color: const Color(0xFF94A3B8),
-          letterSpacing: 0.8,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value, {String? subtitle, required IconData icon, bool isBold = false}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 18, color: const Color(0xFF94A3B8)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 14,
-                  fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-                  color: const Color(0xFF121212),
-                ),
-              ),
-              if (subtitle != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(subtitle, style: GoogleFonts.plusJakartaSans(fontSize: 12, color: const Color(0xFF64748B), fontWeight: FontWeight.w500)),
-                ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMetaItem(String label, String value, {bool isAlert = false}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500)),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: isAlert ? const Color(0xFFEF4444) : const Color(0xFF121212),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMedicationTile(PrescriptionItem item, int index) {
-    final typeAndRoute = [
-      if (item.displayMedicineType != null) item.displayMedicineType!,
-      if (item.displayRoute != null) item.displayRoute!,
-    ].join(' • ');
-
-    final subtitleParts = [
-      item.dosage,
-      if (typeAndRoute.isNotEmpty) typeAndRoute,
-      item.frequency,
-      if (item.foodTiming != null && item.foodTiming!.trim().isNotEmpty) item.foodTiming!.trim(),
-    ].join(' • ');
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 22,
-            height: 22,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(color: Color(0xFFF1F5F9), shape: BoxShape.circle),
-            child: Text('$index', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF64748B))),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.medicineName, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 14, color: const Color(0xFF1E293B))),
-                const SizedBox(height: 4),
-                Text(
-                  subtitleParts,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
-                    color: const Color(0xFF64748B),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                if (item.displayInstructions != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        item.displayInstructions!,
-                        style: GoogleFonts.plusJakartaSans(fontSize: 11, color: const Color(0xFF64748B), fontStyle: FontStyle.italic, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                  )
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          if ((item.duration != null && item.duration!.trim().isNotEmpty) || (item.quantity != null && item.quantity! > 0))
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (item.duration != null && item.duration!.trim().isNotEmpty)
-                  Text(
-                    item.duration!.toLowerCase().contains('day')
-                        ? item.duration!.trim()
-                        : '${item.duration!.trim()} days',
-                    style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFFFF5200)),
-                  ),
-                if (item.quantity != null && item.quantity! > 0) ...[
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      'QTY: ${item.quantity}',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF475569),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNoteItem(String label, String content) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: RichText(
-        text: TextSpan(
-          style: GoogleFonts.plusJakartaSans(fontSize: 12, color: const Color(0xFF121212), fontWeight: FontWeight.w500, height: 1.4),
-          children: [
-            TextSpan(text: '$label: ', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
-            TextSpan(text: content, style: GoogleFonts.plusJakartaSans(color: const Color(0xFF64748B))),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSafetyFlags(SafetyFlags flags) {
-    if (flags.allergiesMentioned != true && flags.pregnancyBreastfeeding != true && flags.chronicConditionLinked != true) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionLabel('SAFETY ALERTS'),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFEE2E2),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFFCA5A5)),
-          ),
-          child: Column(
-            children: [
-              if(flags.allergiesMentioned == true) _buildSafetyRow('Allergies Detected'),
-              if(flags.pregnancyBreastfeeding == true) _buildSafetyRow('Pregnancy/Breastfeeding Warning'),
-              if(flags.chronicConditionLinked == true) _buildSafetyRow('Chronic Condition Linked'),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSafetyRow(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          const Icon(Iconsax.warning_2, size: 14, color: Color(0xFFEF4444)),
-          const SizedBox(width: 8),
-          Text(
-            text, 
-            style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold, color: const Color(0xFFB91C1C)),
           ),
         ],
       ),

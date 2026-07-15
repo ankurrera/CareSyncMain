@@ -6,7 +6,7 @@ This document describes the high-level architecture of the CareSync ecosystem an
 
 ## 1. High-Level Ecosystem Architecture
 
-CareSync is designed around a three-tier architecture that bridges client applications with secure authentication, database access controls, and custom ML-powered biometric recognition:
+CareSync is designed around a three-tier clean architecture that bridges client applications with secure authentication, database access controls, and custom ML-powered biometric recognition:
 
 ```mermaid
 flowchart TB
@@ -33,7 +33,7 @@ flowchart TB
     App -->|HTTPS REST Auth| SupaAuth
     App -->|HTTPS Custom API Calls| FastAPI
     App -->|HTTPS QR Emergency Page| EdgeFunc
-
+ 
     %% API Interactions
     FastAPI -->|Service Role Access| SupaDb
     FastAPI -->|Fetch Encrypted Docs| SupaStorage
@@ -75,7 +75,7 @@ sequenceDiagram
         App->>CustomBio: Capture Frame
         CustomBio->>BioAPI: POST /identify (image bytes)
         Note over BioAPI: MediaPipe pose calculation<br/>ArcFace embedding generation
-        BioAPI->>DB: RPC: match_patient_by_face_consensus(embedding)
+        BioAPI->>DB: RPC: match_patient_by_face_multi(embedding)
         DB-->>BioAPI: Match found: patient_id, full_name, qr_code_id
         Note over BioAPI: python checks consensus scoring & margin gap
         BioAPI-->>CustomBio: returns best candidate + similarity confidence
@@ -178,7 +178,7 @@ sequenceDiagram
     BioAPI->>Storage: Download selfieUrl
     BioAPI->>BioAPI: Validate pose + liveness
     BioAPI->>BioAPI: Generate ArcFace embedding
-    BioAPI->>DB: Insert to face_embeddings
+    BioAPI->>DB: Insert to patient_embeddings
     DB-->>BioAPI: Success
     BioAPI-->>App: Response Success
     Note over App: Repeat for Left and Right poses
@@ -186,3 +186,50 @@ sequenceDiagram
     DB-->>App: Profile locked
     App-->>Pat: Biometric enrollment completed!
 ```
+
+---
+
+## 3. Architecture Decision Records (ADRs)
+
+Below are the official architectural decisions, trade-offs, and design parameters of the CareSync platform:
+
+### ADR 001: Flutter for Mobile Client Application
+* **Status**: Accepted
+* **Context**: Need a cross-platform client codebase compiling to Android (for doctors in wards) and iOS (for consumer patient devices).
+* **Decision**: Adopt Flutter (Dart) as the single core framework.
+* **Trade-offs**:
+  - *Pros*: Single codebase to maintain, rich UI widgets, and stable native integrations via platform channels.
+  - *Cons*: Slightly larger binary sizes and overhead when calling native OS biometric SDKs.
+
+### ADR 002: Supabase for Backend-as-a-Service (BaaS)
+* **Status**: Accepted
+* **Context**: Need rapid database creation, robust user authorization, realtime messaging capabilities for chats, and storage buckets for KYC validation.
+* **Decision**: Adopt Supabase (PostgreSQL, Auth, Realtime, and Storage).
+* **Trade-offs**:
+  - *Pros*: Built-in Row-Level Security (RLS) policies, easy schema migrations, and native pgvector support.
+  - *Cons*: Custom complex transactions require writing PL/pgSQL database functions (RPCs).
+
+### ADR 003: FastAPI for Biometrics API
+* **Status**: Accepted
+* **Context**: Image parsing, landmark mapping, and convolutional neural network evaluations (ArcFace) require Python's ML ecosystem. These operations are computationally heavy and should be kept separate from the database layer.
+* **Decision**: Implement a self-hosted FastAPI microservice running Uvicorn.
+* **Trade-offs**:
+  - *Pros*: Isolation of neural network pipelines from database operations, high performance, and rapid routing.
+  - *Cons*: Requires managing a separate service API and token checks.
+
+### ADR 004: ArcFace + pgvector for Facial Identification
+* **Status**: Accepted
+* **Context**: First responders need to identify unconscious patients using face recognition. This requires matching a query photo against registered patient face vectors.
+* **Decision**: Generate 512-dimension vector embeddings using the ArcFace model, and query them in PostgreSQL using the pgvector extension and an HNSW cosine distance index.
+* **Trade-offs**:
+  - *Pros*: Quick lookups (<50ms) using HNSW indices, high matching accuracy, and database-level similarity lookups.
+  - *Cons*: Cosine distance calculation is sensitive to lighting and head pose, requiring additional pose validation layers.
+
+### ADR 005: Multi-Pose Enrollment & Consensus Matching
+* **Status**: Accepted
+* **Context**: Single-pose facial identification is highly sensitive to head turns, which are common when responders scan patients.
+* **Decision**: Enroll patients using three poses (Neutral, Left turn, Right turn). During search lookups, evaluate matching candidates across all enrolled poses and calculate a consensus similarity score.
+* **Trade-offs**:
+  - *Pros*: High matching reliability at different angles and robust spoofing prevention.
+  - *Cons*: Multi-pose enrollment takes longer for the user and requires more database storage space.
+

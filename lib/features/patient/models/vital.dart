@@ -19,28 +19,40 @@ class Vital with _$Vital {
 }
 
 enum VitalType {
-  @JsonValue('blood_pressure') bloodPressure,
-  @JsonValue('glucose') glucose,
-  @JsonValue('weight') weight,
-  @JsonValue('heart_rate') heartRate,
+  @JsonValue('blood_pressure')
+  bloodPressure,
+  @JsonValue('glucose')
+  glucose,
+  @JsonValue('weight')
+  weight,
+  @JsonValue('heart_rate')
+  heartRate,
 }
 
 extension VitalTypeExtension on VitalType {
   String get name {
     switch (this) {
-      case VitalType.bloodPressure: return 'Blood Pressure';
-      case VitalType.glucose: return 'Glucose';
-      case VitalType.weight: return 'Weight';
-      case VitalType.heartRate: return 'Heart Rate';
+      case VitalType.bloodPressure:
+        return 'Blood Pressure';
+      case VitalType.glucose:
+        return 'Glucose';
+      case VitalType.weight:
+        return 'Weight';
+      case VitalType.heartRate:
+        return 'Heart Rate';
     }
   }
 
   String get unit {
     switch (this) {
-      case VitalType.bloodPressure: return 'mmHg';
-      case VitalType.glucose: return 'mg/dL';
-      case VitalType.weight: return 'kg';
-      case VitalType.heartRate: return 'bpm';
+      case VitalType.bloodPressure:
+        return 'mmHg';
+      case VitalType.glucose:
+        return 'mg/dL';
+      case VitalType.weight:
+        return 'kg';
+      case VitalType.heartRate:
+        return 'bpm';
     }
   }
 }

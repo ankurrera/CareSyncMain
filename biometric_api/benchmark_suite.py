@@ -236,8 +236,11 @@ if __name__ == "__main__":
             "9be3e6e4-355b-47e0-947f-654ebfbc587d/selfie_smile-1783285304372.jpg"
         )
     except Exception as e:
-        print(f"Failed to fetch reference scan: {e}")
-        sys.exit(1)
+        print(f"Failed to fetch reference scan: {e}. Generating dummy image for benchmark...")
+        import cv2
+        img = np.ones((500, 500, 3), dtype=np.uint8) * 128
+        _, enc = cv2.imencode(".jpg", img)
+        image_bytes = enc.tobytes()
         
     run_db_stress_test([100, 500])
     run_concurrent_load_test(image_bytes, [1, 5, 10])

@@ -21,7 +21,8 @@ class BiometricProfile {
       id: json['id'] as String,
       userId: json['user_id'] as String,
       enrollmentStatus: json['enrollment_status'] as String? ?? 'unverified',
-      livenessScoreThreshold: (json['liveness_score_threshold'] as num? ?? 0.90).toDouble(),
+      livenessScoreThreshold:
+          (json['liveness_score_threshold'] as num? ?? 0.90).toDouble(),
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
     );
@@ -50,7 +51,8 @@ class BiometricProfile {
       id: id ?? this.id,
       userId: userId ?? this.userId,
       enrollmentStatus: enrollmentStatus ?? this.enrollmentStatus,
-      livenessScoreThreshold: livenessScoreThreshold ?? this.livenessScoreThreshold,
+      livenessScoreThreshold:
+          livenessScoreThreshold ?? this.livenessScoreThreshold,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

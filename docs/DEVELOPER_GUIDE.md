@@ -74,7 +74,7 @@ Set up the database schema and add test profiles:
 
 1. Create a free project on [supabase.com](https://supabase.com).
 2. Go to **SQL Editor** in the Supabase console.
-3. Apply migration scripts located in `supabase/migrations/` sequentially.
+3. Apply migration scripts located in `supabase/` sequentially.
 4. Execute `supabase/014_seed_test_doctors.sql` to add mock profiles:
    - This seeds test accounts with predefined roles.
    - Example login credentials for testing:

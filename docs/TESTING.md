@@ -4,9 +4,25 @@ This document outlines the testing strategies, automated suites, performance ben
 
 ---
 
-## 1. Automated Test Suites
+## 1. Pre-Flight Validation Command Pipeline
 
-CareSync includes automated unit and integration tests for both the Flutter client and the Python biometric microservice.
+Before committing or pushing any code changes, developers must run the full pre-flight validation sequence to ensure zero warnings or linting regressions:
+
+### Flutter Client
+```bash
+flutter analyze && dart format --output=none --set-exit-if-changed lib/ && flutter test
+```
+
+### Python Biometrics API
+Ensure dependencies are clean and all unittest scenarios verify:
+```bash
+cd biometric_api
+python -m unittest test_biometric_pipeline.py
+```
+
+---
+
+## 2. Automated Test Suites
 
 ### A. Flutter Unit & Widget Tests
 Flutter tests are located in the `test/` directory.
@@ -15,6 +31,8 @@ Flutter tests are located in the `test/` directory.
 * `ocr_service_test.dart`: Verifies the OCR prescription parser, ensuring scanned text is formatted into structured dosage parameters.
 * `extract_medication_test.dart`: Validates dosage calculations and frequency pattern matches.
 * `widget_test.dart`: Verifies initial application loading states.
+* `production_cert_fixes_test.dart`: Verifies temporary OCR file cleanup and cast null-safety checks.
+* `production_hardening_test.dart`: Hardens appointment FSM transitions.
 
 #### Execution Command
 ```bash
@@ -23,24 +41,7 @@ flutter test
 
 ---
 
-### B. Python Biometric API Tests
-Python tests are located in `biometric_api/test_biometric_pipeline.py`.
-
-#### Verified Scenarios
-* **Pose Verification**: Ensures yaw, pitch, and roll estimation logic correctly validates angles.
-* **Liveness Checks**: Simulates photo attacks and verifies the anti-spoofing rejection filters.
-* **Consensus Matching**: Feeds multi-pose records and validates similarity consensus results.
-* **Authentication**: Verifies that requests with invalid bearer tokens return `HTTP 401 Unauthorized`.
-
-#### Execution Command
-```bash
-cd biometric_api
-python -m unittest test_biometric_pipeline.py
-```
-
----
-
-## 2. Performance & Benchmark Suite
+## 3. Performance & Benchmark Suite
 
 The biometrics microservice contains a benchmark script (`biometric_api/benchmark_suite.py`) that profiles latency, memory overhead, and recognition accuracy.
 
@@ -58,9 +59,9 @@ python benchmark_suite.py
 
 ---
 
-## 3. Manual Testing Checklists
+## 4. Manual Testing Checklists
 
-Developers and QA testers must execute these manual verification steps before submitting PRs:
+Developers and QA testers must execute these manual verification steps before submitting updates:
 
 ### A. Face Scan Registration (Guided KYC)
 1. Navigate to Profile settings -> Register Biometrics.

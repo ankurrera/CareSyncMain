@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme/app_theme.dart';
+import 'features/shared/presentation/widgets/splash_reveal_overlay.dart';
+import 'features/shared/providers/theme_provider.dart';
 import 'routing/app_router.dart';
 import 'services/app_lifecycle_service.dart';
 
@@ -28,13 +30,14 @@ class _CareSyncState extends ConsumerState<CareSync> {
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
+    final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
       title: 'CareSync',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
+      themeMode: themeMode,
       routerConfig: router,
       builder: (context, child) {
         final mediaQueryData = MediaQuery.of(context);
@@ -44,36 +47,39 @@ class _CareSyncState extends ConsumerState<CareSync> {
         Widget appContent = child ?? const SizedBox();
 
         if (isWideScreen) {
+          // Flat phone-width column — separation by colour, no shadow (elevation 0).
           appContent = Center(
-            child: Container(
+            child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 480),
-              decoration: BoxDecoration(
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 24,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
               child: child,
             ),
           );
         }
 
-        return MediaQuery(
-          data: mediaQueryData.copyWith(
-            // Prevent text size scaling from breaking standard layouts
-            textScaler: TextScaler.noScaling,
-            // Normalize layout boundaries on wide screens
-            size: isWideScreen
-                ? Size(480, mediaQueryData.size.height)
-                : mediaQueryData.size,
-          ),
-          child: Container(
-            color: isWideScreen ? const Color(0xFFF8FAFC) : null,
-            child: appContent,
-          ),
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            MediaQuery(
+              data: mediaQueryData.copyWith(
+                // Prevent text size scaling from breaking standard layouts
+                textScaler: TextScaler.noScaling,
+                // Normalize layout boundaries on wide screens
+                size:
+                    isWideScreen
+                        ? Size(480, mediaQueryData.size.height)
+                        : mediaQueryData.size,
+              ),
+              child: Container(
+                color:
+                    isWideScreen
+                        ? Theme.of(context).scaffoldBackgroundColor
+                        : null,
+                child: appContent,
+              ),
+            ),
+            // Launch zoom-reveal splash; removes itself after animating.
+            const SplashRevealOverlay(),
+          ],
         );
       },
     );

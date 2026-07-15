@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/design/circular_icon_button.dart';
+import '../../../../core/design/cs_buttons.dart';
+import '../../../../core/design/minimal_sheet_dialog.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../routing/route_names.dart';
-import '../../../../services/two_factor_service.dart';
 import '../../providers/auth_provider.dart';
-import 'two_factor_verification_screen.dart';
 
 class SignInScreen extends ConsumerStatefulWidget {
   final String role;
@@ -32,17 +34,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     super.dispose();
   }
 
-  Color get _roleColor {
-    switch (widget.role) {
-      case 'doctor':
-        return AppColors.doctor;
-      case 'pharmacist':
-        return AppColors.pharmacist;
-      default:
-        return AppColors.patient;
-    }
-  }
-
   String get _roleTitle {
     switch (widget.role) {
       case 'doctor':
@@ -54,15 +45,15 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     }
   }
 
-
-
   Future<void> _signIn() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
     try {
-      final result = await ref.read(authNotifierProvider.notifier).signIn(
+      final result = await ref
+          .read(authNotifierProvider.notifier)
+          .signIn(
             email: _emailController.text.trim(),
             password: _passwordController.text,
           );
@@ -71,7 +62,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         // Refresh profile to get actual role from database
         ref.invalidate(currentProfileProvider);
         final profile = await ref.read(currentProfileProvider.future);
-        
+
         if (profile == null) {
           throw Exception('Could not load profile');
         }
@@ -80,19 +71,16 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         if (profile.role != widget.role) {
           // Sign out first
           await ref.read(authNotifierProvider.notifier).signOut();
-          
+
           if (mounted) {
-            // Show a dialog with the correct role info
-            await _showRoleMismatchDialog(profile.role);
+            // Show a sheet with the correct role info
+            await _showRoleMismatchSheet(profile.role);
           }
           return;
         }
 
         // Handle different requirements based on sign-in result
-        if (result.requiresTwoFactor && mounted) {
-          // New device - require 2FA
-          await _show2FADialog(result);
-        } else if (result.requiresKyc && mounted) {
+        if (result.requiresKyc && mounted) {
           // KYC not verified - redirect to KYC
           context.go(RouteNames.kycVerification);
         } else if (result.requiresBiometric && mounted) {
@@ -113,7 +101,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: AppColors.error,
+            backgroundColor: context.tokens.error,
             duration: const Duration(seconds: 4),
           ),
         );
@@ -123,106 +111,35 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     }
   }
 
-  Future<void> _show2FADialog(SignInResult result) async {
-    // Show dialog to choose 2FA method
-    final method = await showDialog<TwoFactorCodeType>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Two-Factor Authentication'),
-        content: const Text(
-          'This is a new device. Please verify your identity using a verification code.',
-        ),
-        actions: [
-          TextButton.icon(
-            onPressed: () => Navigator.pop(context, TwoFactorCodeType.email),
-            icon: const Icon(Icons.email),
-            label: const Text('Email Code'),
-          ),
-          // SMS option can be added here if phone number is available
-        ],
-      ),
-    );
-
-    if (method != null && mounted) {
-      // Navigate to 2FA verification screen
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => TwoFactorVerificationScreen(
-            userId: result.user!.id,
-            email: result.email ?? _emailController.text.trim(),
-            codeType: method,
-            onVerified: () async {
-              // After 2FA is verified, get profile and complete setup
-              final profile = await ref.read(currentProfileProvider.future);
-              if (profile != null && mounted) {
-                await _complete2FASetup(profile.role);
-              }
-            },
-          ),
-        ),
-      );
-    }
-  }
-
-  Future<void> _complete2FASetup(String userRole) async {
-    if (!mounted) return;
-
-    // Complete 2FA and register device
-    await ref.read(authNotifierProvider.notifier).completeTwoFactor(
-          registerDevice: true,
-          enableBiometric: false,
-        );
-
-    if (mounted) {
-      _navigateToDashboard(userRole);
-    }
-  }
-
-  Future<void> _showRoleMismatchDialog(String actualRole) async {
+  Future<void> _showRoleMismatchSheet(String actualRole) async {
     final actualRoleTitle = _formatRole(actualRole);
-    final actualRoleColor = _getRoleColor(actualRole);
-    
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Row(
+
+    await showAppSheet<void>(
+      context,
+      builder: (ctx) {
+        final t = ctx.tokens;
+        return AppSheetContent(
+          icon: Iconsax.warning_2,
+          title: 'Wrong Role Selected',
           children: [
-            Icon(Icons.warning_amber_rounded, color: AppColors.warning),
-            const SizedBox(width: 8),
-            const Expanded(child: Text('Wrong Role Selected')),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'This account is registered as:',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-              ),
-            ),
-            const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: actualRoleColor.withValues(alpha: 0.1),
+                color: t.tint,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: actualRoleColor.withValues(alpha: 0.3)),
+                border: Border.all(color: t.accent.withValues(alpha: 0.3)),
               ),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(_getRoleIcon(actualRole), color: actualRoleColor),
+                  Icon(_getRoleIcon(actualRole), color: t.accent),
                   const SizedBox(width: 12),
                   Text(
                     actualRoleTitle,
                     style: TextStyle(
                       fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: actualRoleColor,
+                      fontWeight: FontWeight.w700,
+                      color: t.accent,
                     ),
                   ),
                 ],
@@ -230,47 +147,33 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'You selected "$_roleTitle" but your account is registered as "$actualRoleTitle". '
-              'Please go back and select the correct role.',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-              ),
+              'You selected "$_roleTitle" but your account is registered as '
+              '"$actualRoleTitle". Please go back and select the correct role.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: t.textSecondary, height: 1.5),
+            ),
+            const SizedBox(height: 24),
+            CSPrimaryButton(
+              label: 'Go to Role Selection',
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                context.go(RouteNames.roleSelection);
+              },
             ),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              // Go back to role selection
-              context.go(RouteNames.roleSelection);
-            },
-            child: const Text('Go to Role Selection'),
-          ),
-        ],
-      ),
+        );
+      },
     );
-  }
-
-  Color _getRoleColor(String role) {
-    switch (role) {
-      case 'doctor':
-        return AppColors.doctor;
-      case 'pharmacist':
-        return AppColors.pharmacist;
-      default:
-        return AppColors.patient;
-    }
   }
 
   IconData _getRoleIcon(String role) {
     switch (role) {
       case 'doctor':
-        return Icons.medical_services_rounded;
+        return Iconsax.health;
       case 'pharmacist':
-        return Icons.local_pharmacy_rounded;
+        return Iconsax.hospital;
       default:
-        return Icons.person_rounded;
+        return Iconsax.user;
     }
   }
 
@@ -302,89 +205,81 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final t = context.tokens;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: t.scaffold,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.pageMargin,
+          ),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SizedBox(height: size.height * 0.04),
+                SizedBox(height: size.height * 0.02),
 
                 // ── Back button ─────────────────────────────────
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: IconButton(
-                    onPressed: () => context.pop(),
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    style: IconButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(36, 36),
-                      alignment: Alignment.centerLeft,
-                    ),
+                  child: CircularIconButton(
+                    icon: Iconsax.arrow_left_2,
+                    onTap: () => context.pop(),
                   ),
                 ),
 
-                SizedBox(height: size.height * 0.03),
+                SizedBox(height: size.height * 0.02),
 
                 // ── 1. LOGO & BRANDING ──────────────────────────
                 Center(
                   child: Image.asset(
                     'assets/logo_foreground.png',
-                    height: 150,
-                    width: 150,
+                    height: 130,
+                    width: 130,
                     fit: BoxFit.contain,
                   ),
                 ),
-                const SizedBox(height: 0),
-                Padding(
-                  padding: const EdgeInsets.only(left: 5),
-                  child: Text(
-                    'CARESYNC',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.plusJakartaSans(
-                      color: const Color(0xFF0D0D0D),
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 5,
-                      fontSize: 15,
-                    ),
+                Text(
+                  'CARESYNC',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: t.textPrimary,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 5,
+                    fontSize: 16,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 Center(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0D0D0D),
-                      borderRadius: BorderRadius.circular(6),
+                      color: t.tint,
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       '${_roleTitle.toUpperCase()} PORTAL',
-                      style: GoogleFonts.plusJakartaSans(
+                      style: t.monoMeta.copyWith(
                         fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                        color: t.accent,
                         letterSpacing: 1.5,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 Text(
                   'Sign in to your healthcare account',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 13,
-                    color: const Color(0xFF6B7280),
-                    letterSpacing: 0.1,
-                  ),
+                  style: TextStyle(fontSize: 13, color: t.textSecondary),
                 ),
 
-                SizedBox(height: size.height * 0.05),
+                SizedBox(height: size.height * 0.045),
 
                 // ── 2. INPUT FIELDS ─────────────────────────────
                 _buildLabel('Email Address'),
@@ -392,18 +287,20 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  style: GoogleFonts.plusJakartaSans(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF0D0D0D),
+                    color: t.textPrimary,
                   ),
-                  cursorColor: const Color(0xFF0D0D0D),
+                  cursorColor: t.accent,
                   decoration: _inputDecoration(
                     hint: 'Enter your email address',
-                    icon: Icons.email_outlined,
+                    icon: Iconsax.sms,
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) return 'Email is required';
+                    if (value == null || value.isEmpty) {
+                      return 'Email is required';
+                    }
                     if (!value.contains('@')) return 'Enter a valid email';
                     return null;
                   },
@@ -414,27 +311,34 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
-                  style: GoogleFonts.plusJakartaSans(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF0D0D0D),
+                    color: t.textPrimary,
                   ),
-                  cursorColor: const Color(0xFF0D0D0D),
+                  cursorColor: t.accent,
                   decoration: _inputDecoration(
                     hint: 'Enter your password',
-                    icon: Icons.lock_outline_rounded,
+                    icon: Iconsax.lock_1,
                     suffix: IconButton(
-                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      onPressed:
+                          () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
                       icon: Icon(
-                        _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                        color: const Color(0xFF94A3B8),
+                        _obscurePassword ? Iconsax.eye_slash : Iconsax.eye,
+                        color: t.textSecondary,
                         size: 20,
                       ),
                     ),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) return 'Password is required';
-                    if (value.length < 6) return 'Must be at least 6 characters';
+                    if (value == null || value.isEmpty) {
+                      return 'Password is required';
+                    }
+                    if (value.length < 6) {
+                      return 'Must be at least 6 characters';
+                    }
                     return null;
                   },
                 ),
@@ -445,11 +349,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   child: TextButton(
                     onPressed: () {},
                     style: TextButton.styleFrom(
-                      foregroundColor: _roleColor,
+                      foregroundColor: t.accent,
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      textStyle: GoogleFonts.plusJakartaSans(
+                      textStyle: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),
@@ -461,41 +365,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 const SizedBox(height: 8),
 
                 // ── 3. SIGN IN BUTTON ───────────────────────────
-                GestureDetector(
-                  onTap: _isLoading ? null : _signIn,
-                  child: Container(
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0D0D0D),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF0D0D0D).withValues(alpha: 0.15),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    alignment: Alignment.center,
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : Text(
-                            'SIGN IN',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                  ),
+                CSPrimaryButton(
+                  label: 'Sign In',
+                  loading: _isLoading,
+                  onPressed: _signIn,
                 ),
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 28),
 
                 // ── 4. SIGN UP PROMPT ───────────────────────────
                 Row(
@@ -503,38 +379,39 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   children: [
                     Text(
                       "Don't have an account?  ",
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 13,
-                        color: const Color(0xFF94A3B8),
-                      ),
+                      style: TextStyle(fontSize: 13, color: t.textSecondary),
                     ),
                     GestureDetector(
-                      onTap: () => context.push(RouteNames.signUp, extra: widget.role),
+                      onTap:
+                          () => context.push(
+                            RouteNames.signUp,
+                            extra: widget.role,
+                          ),
                       child: Text(
                         'Sign Up',
-                        style: GoogleFonts.plusJakartaSans(
+                        style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: _roleColor,
+                          color: t.accent,
                         ),
                       ),
                     ),
                   ],
                 ),
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 28),
 
                 // ── 5. SECURITY NOTE ────────────────────────────
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.shield_outlined, size: 13, color: const Color(0xFF9CA3AF)),
+                    Icon(Iconsax.shield_tick, size: 13, color: t.textSecondary),
                     const SizedBox(width: 6),
                     Text(
                       'Secured with end-to-end encryption',
-                      style: GoogleFonts.plusJakartaSans(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: const Color(0xFF9CA3AF),
+                        color: t.textSecondary,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -551,12 +428,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   }
 
   Widget _buildLabel(String text) {
+    final t = context.tokens;
     return Text(
       text.toUpperCase(),
-      style: GoogleFonts.plusJakartaSans(
+      style: t.monoMeta.copyWith(
         fontSize: 10,
-        fontWeight: FontWeight.w800,
-        color: const Color(0xFF374151),
+        fontWeight: FontWeight.w500,
+        color: t.textSecondary,
         letterSpacing: 1,
       ),
     );
@@ -567,39 +445,39 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     required IconData icon,
     Widget? suffix,
   }) {
+    final t = context.tokens;
     return InputDecoration(
       hintText: hint,
-      hintStyle: GoogleFonts.plusJakartaSans(
-        color: const Color(0xFF9CA3AF),
+      hintStyle: TextStyle(
+        color: t.textSecondary,
         fontSize: 14,
         fontWeight: FontWeight.w400,
       ),
-      prefixIcon: Icon(icon, color: const Color(0xFF6B7280), size: 18),
+      prefixIcon: Icon(icon, color: t.textSecondary, size: 18),
       suffixIcon: suffix,
       filled: true,
-      fillColor: Colors.white,
+      fillColor: t.card,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFD1D5DB), width: 1),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: t.divider, width: 1),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFD1D5DB), width: 1),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: t.divider, width: 1),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF0D0D0D), width: 1.5),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: t.error, width: 1),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: t.error, width: 1),
       ),
     );
   }
 }
-

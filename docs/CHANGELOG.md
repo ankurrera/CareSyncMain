@@ -1,31 +1,51 @@
-# Changelog 🗒_
+# Changelog 🗒️
 
 All notable changes to the CareSync project are documented in this file.
+
+---
+
+## [3.2.0] — 2026-07-15
+
+### Added
+* **Biometric Setup Dialog Teardown Immunity**: Configured a local cached state variable guard (`_isVerifiedUser`) inside the patient dashboard screen state. This ensures that when a user logs out, the temporary unverified state of Riverpod providers during session disposal does not trigger a popup dialog.
+* **Premium Sheet Dialog UI Redesign**: Redesigned all sheets globally to include a circular, colored container holding a refined `28px` icon, matching spacing/padding updates to conform with standard clean-design parameters.
+* **Custom Verification Action Controls**: Swapped the biometric setup action controls to use customized rectangular buttons (Outlined/Filled) matching the digital ID card styles.
+
+---
+
+## [3.1.0] — 2026-07-14
+
+### Added
+* **Centralized Structured Logging**: Implemented `AppLogger` supporting levels, categories, timestamps, and release-mode trace suppression.
+* **Global Error Catching Hooks**: Set up framework-wide `FlutterError.onError`, platform-wide `PlatformDispatcher.instance.onError`, `runZonedGuarded` wrappers, and Riverpod `ProviderObserver` logging.
+* **Production Environment Configurations**: Added `APP_ENV` parameter, `AppEnvironment` enum, and `.env.{development,staging,production}` template files.
+* **Android Signing & Optimization Hardening**: Configured Gradle keystore loading dynamically via `key.properties`, forced full NDK debug symbols, and added ABI splits.
+* **Database Migrations Index**: Added `MIGRATIONS.md` reference mapping all database migrations.
 
 ---
 
 ## [3.0.0] — 2026-07-08
 
 ### Added
-* **Centroid Match & Multi-Pose Consensus matching**: Upgraded the Python API to run consensus searches against multi-pose vector files (Neutral, Left, Right).
+* **Centroid Match & Multi-Pose Consensus Matching**: Upgraded the Python API to run consensus searches against multi-pose vector files (Neutral, Left, Right).
 * **Immutability Triggers**: Added the `prevent_audit_changes` trigger to the `biometric_access_logs` and `emergency_access_logs` tables.
-* **Auto-Lock lifecycle**: Added the `AppLifecycleService` to auto-lock active user sessions after 15 minutes of inactivity.
-* **KYC submissions via RPC**: Implemented the `submit_kyc_verification_secure` database function to handle file path inputs.
-* **E-Signature blocks**: Added digital signing fields to the doctor prescription card PDF generator.
+* **Auto-Lock Lifecycle**: Added the `AppLifecycleService` to auto-lock active user sessions after 15 minutes of inactivity.
+* **KYC Submissions via RPC**: Implemented the `submit_kyc_verification_secure` database function to handle file path inputs.
+* **E-Signature Blocks**: Added digital signing fields to the doctor prescription card PDF generator.
 
 ### Fixed
 * **Infinite RLS Policy Loops**: Implemented the `get_user_role()` database helper function to bypass RLS recursion errors.
-* **Biometric access logs FK constraints**: Corrected the foreign key references on `biometric_access_logs` to point to the correct profiles column.
-* **RenderFlex alignment**: Corrected input boundaries on the signin forms for smaller devices.
+* **Biometric Access Logs FK Constraints**: Corrected the foreign key references on `biometric_access_logs` to point to the correct profiles column.
+* **RenderFlex Alignment**: Corrected input boundaries on the signin forms for smaller devices.
 
 ---
 
 ## [2.1.0] — 2026-05-15
 
 ### Added
-* **Medication form auto-calculations**: Integrates drug dosage calculations based on frequency structures.
-* **Symmetric encrypted QR**: Implemented AES GCM offline payload encryption for patients' emergency vitals card generation.
-* **Chat Room attachments**: Added inline upload configurations for sharing clinical photos between patients and doctors.
+* **Medication Form Auto-Calculations**: Integrates drug dosage calculations based on frequency structures.
+* **Symmetric Encrypted QR**: Implemented AES GCM offline payload encryption for patients' emergency vitals card generation.
+* **Chat Room Attachments**: Added inline upload configurations for sharing clinical photos between patients and doctors.
 
 ---
 

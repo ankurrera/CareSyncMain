@@ -19,10 +19,10 @@ class PatientShellScreen extends StatefulWidget {
 class _PatientShellScreenState extends State<PatientShellScreen> {
   // Maps each tab index to its route path
   static const List<String> _tabRoutes = [
-    RouteNames.patientDashboard,      // 0 – Home
-    RouteNames.patientMedicalHistory,  // 1 – Records
-    RouteNames.patientProfile,         // 2 – Profile
-    RouteNames.patientEmergency,       // 3 – Emergency
+    RouteNames.patientDashboard, // 0 – Home
+    RouteNames.patientMedicalHistory, // 1 – Records
+    RouteNames.patientEmergency, // 2 – Emergency
+    RouteNames.patientProfile, // 3 – Profile
   ];
 
   int _selectedIndex = 0;
@@ -30,8 +30,8 @@ class _PatientShellScreenState extends State<PatientShellScreen> {
   /// Derive the active tab from the current location so pressing Back
   /// on a child page still highlights the correct tab.
   int _indexForLocation(String location) {
-    if (location.startsWith(RouteNames.patientEmergency)) return 3;
-    if (location.startsWith(RouteNames.patientProfile)) return 2;
+    if (location.startsWith(RouteNames.patientProfile)) return 3;
+    if (location.startsWith(RouteNames.patientEmergency)) return 2;
     if (location.startsWith(RouteNames.patientMedicalHistory)) return 1;
     return 0;
   }
@@ -59,7 +59,7 @@ class _PatientShellScreenState extends State<PatientShellScreen> {
     const double navBarExtraBottom = 64.0 + 16.0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Stack(
         children: [
           // Inject extra bottom padding so child screens scroll above the nav bar

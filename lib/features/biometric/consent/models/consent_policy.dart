@@ -3,7 +3,8 @@ class ConsentPolicy {
   final String id;
   final String patientId;
   final String doctorId;
-  final String consentType; // Single Session, Scheduled Appointment, Ongoing Care, Emergency Override
+  final String
+  consentType; // Single Session, Scheduled Appointment, Ongoing Care, Emergency Override
   final String status; // active, revoked, expired
   final DateTime grantedAt;
   final DateTime expiresAt;
@@ -31,7 +32,10 @@ class ConsentPolicy {
       status: json['status'] as String? ?? 'active',
       grantedAt: DateTime.parse(json['granted_at'] as String),
       expiresAt: DateTime.parse(json['expires_at'] as String),
-      revokedAt: json['revoked_at'] != null ? DateTime.parse(json['revoked_at'] as String) : null,
+      revokedAt:
+          json['revoked_at'] != null
+              ? DateTime.parse(json['revoked_at'] as String)
+              : null,
       authCodeHash: json['auth_code_hash'] as String?,
     );
   }

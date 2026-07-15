@@ -52,25 +52,12 @@
 	<key>NSCameraUsageDescription</key>
 	<string>CareSync needs camera access to scan patient QR codes for emergency medical information.</string>
 
-	<!-- HealthKit Permissions -->
-	<key>NSHealthShareUsageDescription</key>
-	<string>CareSync requests access to read medical vitals (heart rate, blood pressure) to sync with medical registries.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>CareSync requests write access to log your metrics back to Apple Health.</string>
+	<!-- Location Permission for Auditing -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>CareSync requires location access to log the geographic origin of emergency medical record audits for security and HIPAA compliance.</string>
 
-	<!-- Deep Linking URL Schemes for Wearable OAuth Callback -->
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>CFBundleURLName</key>
-			<string>caresync.oauth</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>caresync</string>
-			</array>
-		</dict>
-	</array>
+	<!-- Photo Library Permission for Document Uploads -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>CareSync requires photo library access to upload medical prescription documents and verify patient identification photos.</string>
 </dict>
 </plist>

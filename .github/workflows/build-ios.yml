@@ -1,0 +1,60 @@
+name: Build Unsigned iOS IPA
+
+on:
+  workflow_dispatch: # Allows manual trigger from the Actions tab on GitHub
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build iOS IPA
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Dependencies
+        run: |
+          flutter pub get
+
+      - name: Run Code Generation
+        run: |
+          flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: Create stub .env for asset bundler
+        run: |
+          echo "APP_ENV=ci" > .env
+          echo "SUPABASE_URL=https://placeholder.supabase.co" >> .env
+          echo "SUPABASE_ANON_KEY=placeholder" >> .env
+          echo "BIOMETRIC_API_URL=https://placeholder.api" >> .env
+
+      - name: Build iOS Archive (Unsigned)
+        run: |
+          flutter build ipa --no-codesign
+
+      - name: Package IPA
+        run: |
+          mkdir Payload
+          cp -r build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app Payload/
+          zip -r Runner.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: caresync-ios-ipa
+          path: Runner.ipa
+          retention-days: 7

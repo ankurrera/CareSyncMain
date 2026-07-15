@@ -30,7 +30,7 @@ BEGIN
         p_date_of_birth,
         p_id_document_url,
         p_selfie_url,
-        p_additional_documents,
+        to_jsonb(p_additional_documents), -- additional_documents column is JSONB
         'verified', -- Auto-approved server-side
         NOW(),
         NOW()
@@ -46,6 +46,10 @@ BEGIN
         updated_at = NOW();
 END;
 $$;
+
+-- Ensure authenticated clients can call the RPC (PUBLIC default may be revoked
+-- in hardened environments).
+GRANT EXECUTE ON FUNCTION public.submit_kyc_secure(TEXT, DATE, TEXT, TEXT, TEXT[]) TO authenticated;
 
 -- 2. Restrict update RLS policy so the client cannot directly verify their own record
 DROP POLICY IF EXISTS "Users can update their own KYC data" ON kyc_verifications;

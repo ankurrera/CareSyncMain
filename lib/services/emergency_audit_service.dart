@@ -1,10 +1,10 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../core/logging/app_logger.dart';
 import 'device_service.dart';
 import 'secure_storage_service.dart';
 
@@ -37,11 +37,12 @@ class EmergencyAuditService {
 
     if (currentUser != null) {
       try {
-        final profile = await _supabase
-            .from('profiles')
-            .select('full_name, role, hospital_clinic_name')
-            .eq('id', currentUser.id)
-            .maybeSingle();
+        final profile =
+            await _supabase
+                .from('profiles')
+                .select('full_name, role, hospital_clinic_name')
+                .eq('id', currentUser.id)
+                .maybeSingle();
         if (profile != null) {
           accessedByName = profile['full_name'] ?? 'Unknown Provider';
           accessedByRole = profile['role'] ?? 'unknown';
@@ -87,7 +88,9 @@ class EmergencyAuditService {
       'confidence_score': confidence,
       'access_status': status,
       'reason_for_access': reason ?? 'Emergency Treatment',
-      'view_scope': viewScope ?? (status == 'Success' ? 'Emergency Summary' : 'Emergency ID Only'),
+      'view_scope':
+          viewScope ??
+          (status == 'Success' ? 'Emergency Summary' : 'Emergency ID Only'),
     };
 
     await _saveOrQueueLog(logPayload);
@@ -109,11 +112,12 @@ class EmergencyAuditService {
 
     if (currentUser != null) {
       try {
-        final profile = await _supabase
-            .from('profiles')
-            .select('full_name, role, hospital_clinic_name')
-            .eq('id', currentUser.id)
-            .maybeSingle();
+        final profile =
+            await _supabase
+                .from('profiles')
+                .select('full_name, role, hospital_clinic_name')
+                .eq('id', currentUser.id)
+                .maybeSingle();
         if (profile != null) {
           accessedByName = profile['full_name'] ?? 'Unknown Provider';
           accessedByRole = profile['role'] ?? 'unknown';
@@ -137,7 +141,8 @@ class EmergencyAuditService {
 
     final logPayload = {
       'id': logId,
-      'patient_id': (patientId != null && patientId.isNotEmpty) ? patientId : null,
+      'patient_id':
+          (patientId != null && patientId.isNotEmpty) ? patientId : null,
       'accessed_by_user_id': currentUser?.id,
       'accessed_by_name': accessedByName,
       'accessed_by_role': accessedByRole,
@@ -156,7 +161,9 @@ class EmergencyAuditService {
       'ip_address': locData['ip_address'],
       'access_status': status,
       'reason_for_access': 'Emergency Treatment',
-      'view_scope': viewScope ?? (status == 'Success' ? 'Emergency ID Only' : 'Emergency ID Only'),
+      'view_scope':
+          viewScope ??
+          (status == 'Success' ? 'Emergency ID Only' : 'Emergency ID Only'),
     };
 
     await _saveOrQueueLog(logPayload);
@@ -209,20 +216,47 @@ class EmergencyAuditService {
     return result;
   }
 
+  Future<void> _executeLogRpc(Map<String, dynamic> logPayload) async {
+    await _supabase.rpc(
+      'log_emergency_scan_secure',
+      params: {
+        'p_patient_id': logPayload['patient_id'],
+        'p_authentication_method': logPayload['authentication_method'],
+        'p_access_status': logPayload['access_status'],
+        'p_confidence_score': logPayload['confidence_score']?.toDouble() ?? 0.0,
+        'p_reason_for_access': logPayload['reason_for_access'],
+        'p_view_scope': logPayload['view_scope'],
+        'p_device_id': logPayload['device_id'],
+        'p_device_name': logPayload['device_name'],
+        'p_device_platform': logPayload['device_platform'],
+        'p_latitude': logPayload['latitude']?.toDouble(),
+        'p_longitude': logPayload['longitude']?.toDouble(),
+        'p_city': logPayload['city'],
+        'p_state': logPayload['state'],
+        'p_country': logPayload['country'],
+        'p_ip_address': logPayload['ip_address'],
+      },
+    );
+  }
+
   /// Internal: save immediately or add to offline queue
   Future<void> _saveOrQueueLog(Map<String, dynamic> logPayload) async {
     try {
-      await _supabase.from('emergency_access_logs').insert(logPayload);
+      await _executeLogRpc(logPayload);
       // Success! Attempt background flush of previous queue items
       await flushQueue();
     } catch (e) {
       final errStr = e.toString().toLowerCase();
-      final isOffline = errStr.contains('socketexception') ||
+      final isOffline =
+          errStr.contains('socketexception') ||
           errStr.contains('failed host lookup') ||
           errStr.contains('handshake_status_server_error');
 
       if (isOffline) {
-        debugPrint('[AUDIT] Device offline. Storing log to keychain queue.');
+        AppLogger.info(
+          '[AUDIT] Device offline. Storing log to keychain queue.',
+          category: LogCategory.emergency,
+        );
         final queue = await _storage.getQueuedLogs();
         // Avoid duplicate logging of same ID
         final exists = queue.any((item) => item['id'] == logPayload['id']);
@@ -231,7 +265,11 @@ class EmergencyAuditService {
           await _storage.saveQueuedLogs(queue);
         }
       } else {
-        debugPrint('[AUDIT] Failed to save database log directly: $e');
+        AppLogger.warning(
+          '[AUDIT] Failed to save database log directly',
+          category: LogCategory.emergency,
+          error: e,
+        );
       }
     }
   }
@@ -241,21 +279,29 @@ class EmergencyAuditService {
     final queue = await _storage.getQueuedLogs();
     if (queue.isEmpty) return;
 
-    debugPrint('[AUDIT] Online. Flushing ${queue.length} queued logs.');
+    AppLogger.info(
+      '[AUDIT] Online. Flushing ${queue.length} queued logs.',
+      category: LogCategory.emergency,
+    );
     final failedToSync = <Map<String, dynamic>>[];
 
     for (final log in queue) {
       try {
-        await _supabase.from('emergency_access_logs').insert(log);
+        await _executeLogRpc(log);
       } catch (e) {
         final errStr = e.toString().toLowerCase();
-        final remainsOffline = errStr.contains('socketexception') ||
+        final remainsOffline =
+            errStr.contains('socketexception') ||
             errStr.contains('failed host lookup');
         if (remainsOffline) {
           failedToSync.add(log);
         } else {
           // Discard bad logs that violate database schemas rather than re-queueing forever
-          debugPrint('[AUDIT] Dropping malformed log: $e');
+          AppLogger.warning(
+            '[AUDIT] Dropping malformed log',
+            category: LogCategory.emergency,
+            error: e,
+          );
         }
       }
     }

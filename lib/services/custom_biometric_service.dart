@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+import '../core/logging/app_logger.dart';
 import '../core/config/env_config.dart';
 
 /// Typed enumeration representing the outcomes of biometric operations
@@ -16,7 +16,7 @@ enum BiometricResultStatus {
   serverError,
   alreadyEnrolled,
   qualityRejected,
-  cancelled
+  cancelled,
 }
 
 /// Scan state machine representing the lifecycle of face scanning
@@ -30,7 +30,7 @@ enum BiometricScanState {
   searchingDatabase,
   verifyingMatch,
   completed,
-  failed
+  failed,
 }
 
 /// Standardized error codes matching the backend microservice
@@ -57,35 +57,57 @@ enum BiometricErrorCode {
   alreadyEnrolled,
   unauthorized,
   cameraPermission,
-  unknown
+  unknown,
 }
 
 /// Parse string error code from backend into BiometricErrorCode enum
 BiometricErrorCode parseErrorCode(String? code) {
   if (code == null) return BiometricErrorCode.none;
   switch (code) {
-    case 'NO_FACE_DETECTED': return BiometricErrorCode.noFaceDetected;
-    case 'NO_MATCH_FOUND': return BiometricErrorCode.noMatchFound;
-    case 'MULTIPLE_FACES': return BiometricErrorCode.multipleFaces;
-    case 'FACE_TOO_SMALL': return BiometricErrorCode.faceTooSmall;
-    case 'FACE_TOO_FAR': return BiometricErrorCode.faceTooFar;
-    case 'FACE_OCCLUDED': return BiometricErrorCode.faceOccluded;
-    case 'LOW_LIGHT': return BiometricErrorCode.lowLight;
-    case 'OVER_EXPOSED': return BiometricErrorCode.overExposed;
-    case 'IMAGE_BLUR': return BiometricErrorCode.imageBlur;
-    case 'INVALID_IMAGE': return BiometricErrorCode.invalidImage;
-    case 'EMPTY_IMAGE': return BiometricErrorCode.emptyImage;
-    case 'LOW_CONFIDENCE': return BiometricErrorCode.lowConfidence;
-    case 'CAMERA_ERROR': return BiometricErrorCode.cameraError;
-    case 'NETWORK_ERROR': return BiometricErrorCode.networkError;
-    case 'TIMEOUT': return BiometricErrorCode.timeout;
-    case 'SERVER_ERROR': return BiometricErrorCode.serverError;
-    case 'RATE_LIMITED': return BiometricErrorCode.rateLimited;
-    case 'LIVENESS_FAILED': return BiometricErrorCode.livenessFailed;
-    case 'ALREADY_ENROLLED': return BiometricErrorCode.alreadyEnrolled;
-    case 'UNAUTHORIZED': return BiometricErrorCode.unauthorized;
-    case 'CAMERA_PERMISSION': return BiometricErrorCode.cameraPermission;
-    default: return BiometricErrorCode.unknown;
+    case 'NO_FACE_DETECTED':
+      return BiometricErrorCode.noFaceDetected;
+    case 'NO_MATCH_FOUND':
+      return BiometricErrorCode.noMatchFound;
+    case 'MULTIPLE_FACES':
+      return BiometricErrorCode.multipleFaces;
+    case 'FACE_TOO_SMALL':
+      return BiometricErrorCode.faceTooSmall;
+    case 'FACE_TOO_FAR':
+      return BiometricErrorCode.faceTooFar;
+    case 'FACE_OCCLUDED':
+      return BiometricErrorCode.faceOccluded;
+    case 'LOW_LIGHT':
+      return BiometricErrorCode.lowLight;
+    case 'OVER_EXPOSED':
+      return BiometricErrorCode.overExposed;
+    case 'IMAGE_BLUR':
+      return BiometricErrorCode.imageBlur;
+    case 'INVALID_IMAGE':
+      return BiometricErrorCode.invalidImage;
+    case 'EMPTY_IMAGE':
+      return BiometricErrorCode.emptyImage;
+    case 'LOW_CONFIDENCE':
+      return BiometricErrorCode.lowConfidence;
+    case 'CAMERA_ERROR':
+      return BiometricErrorCode.cameraError;
+    case 'NETWORK_ERROR':
+      return BiometricErrorCode.networkError;
+    case 'TIMEOUT':
+      return BiometricErrorCode.timeout;
+    case 'SERVER_ERROR':
+      return BiometricErrorCode.serverError;
+    case 'RATE_LIMITED':
+      return BiometricErrorCode.rateLimited;
+    case 'LIVENESS_FAILED':
+      return BiometricErrorCode.livenessFailed;
+    case 'ALREADY_ENROLLED':
+      return BiometricErrorCode.alreadyEnrolled;
+    case 'UNAUTHORIZED':
+      return BiometricErrorCode.unauthorized;
+    case 'CAMERA_PERMISSION':
+      return BiometricErrorCode.cameraPermission;
+    default:
+      return BiometricErrorCode.unknown;
   }
 }
 
@@ -95,7 +117,10 @@ class BiometricCancelToken {
 
   void cancel() {
     _isCancelled = true;
-    debugPrint('[BIOMETRIC] Request cancellation triggered by client.');
+    AppLogger.debug(
+      '[BIOMETRIC] Request cancellation triggered by client.',
+      category: LogCategory.biometric,
+    );
   }
 
   bool get isCancelled => _isCancelled;
@@ -189,7 +214,7 @@ class CustomBiometricService {
     if (token != null && token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
     }
-    
+
     // Attach tracking correlation request headers
     headers['X-Request-Id'] = const Uuid().v4();
 
@@ -199,7 +224,11 @@ class CustomBiometricService {
         headers['X-Actor-Id'] = currentUser.id;
       }
     } catch (e) {
-      debugPrint('[BIOMETRIC] Error adding X-Actor-Id header: $e');
+      AppLogger.warning(
+        '[BIOMETRIC] Error adding X-Actor-Id header',
+        category: LogCategory.biometric,
+        error: e,
+      );
     }
     return headers;
   }
@@ -215,8 +244,13 @@ class CustomBiometricService {
   }) async {
     int attempts = 0;
     final String idempotencyKey = const Uuid().v4();
-    final Map<String, String> requestHeaders = Map<String, String>.from(headers);
+    final Map<String, String> requestHeaders = Map<String, String>.from(
+      headers,
+    );
     requestHeaders['X-Idempotency-Key'] = idempotencyKey;
+
+    Uri targetUrl = url;
+    bool isUsingFallback = false;
 
     while (true) {
       attempts++;
@@ -224,17 +258,41 @@ class CustomBiometricService {
         throw Exception('Request cancelled.');
       }
       try {
-        final response = await http.post(
-          url,
-          headers: requestHeaders,
-          body: body,
-        ).timeout(timeout);
+        final response = await http
+            .post(targetUrl, headers: requestHeaders, body: body)
+            .timeout(timeout);
+
+        if (response.statusCode == 503 &&
+            !isUsingFallback &&
+            EnvConfig.fallbackBiometricApiUrl != EnvConfig.biometricApiUrl) {
+          throw SocketException('Primary service returned 503');
+        }
+
         return response;
       } catch (e) {
         final isTransient = e is SocketException || e is TimeoutException;
+
+        if (!isUsingFallback &&
+            EnvConfig.fallbackBiometricApiUrl != EnvConfig.biometricApiUrl) {
+          AppLogger.warning(
+            '[BIOMETRIC] Primary endpoint failed. Switching to fallback failover: ${EnvConfig.fallbackBiometricApiUrl}',
+            category: LogCategory.biometric,
+            error: e,
+          );
+          final newPath = targetUrl.path;
+          targetUrl = Uri.parse('${EnvConfig.fallbackBiometricApiUrl}$newPath');
+          isUsingFallback = true;
+          attempts = 0; // Reset attempts for the fallback server
+          continue;
+        }
+
         if (isTransient && attempts < maxRetries) {
           final delayMs = attempts * 1000;
-          debugPrint('[BIOMETRIC] Transient error on attempt $attempts: $e. Retrying in ${delayMs}ms...');
+          AppLogger.debug(
+            '[BIOMETRIC] Transient error on attempt $attempts. Retrying in ${delayMs}ms...',
+            category: LogCategory.biometric,
+            error: e,
+          );
           await Future.delayed(Duration(milliseconds: delayMs));
           continue;
         }
@@ -255,8 +313,13 @@ class CustomBiometricService {
   }) async {
     int attempts = 0;
     final String idempotencyKey = const Uuid().v4();
-    final Map<String, String> requestHeaders = Map<String, String>.from(headers);
+    final Map<String, String> requestHeaders = Map<String, String>.from(
+      headers,
+    );
     requestHeaders['X-Idempotency-Key'] = idempotencyKey;
+
+    Uri targetUrl = url;
+    bool isUsingFallback = false;
 
     while (true) {
       attempts++;
@@ -264,14 +327,14 @@ class CustomBiometricService {
         throw Exception('Request cancelled.');
       }
       try {
-        final request = http.MultipartRequest('POST', url);
+        final request = http.MultipartRequest('POST', targetUrl);
         requestHeaders.forEach((key, value) {
           request.headers[key] = value;
         });
         if (fields != null) {
           request.fields.addAll(fields);
         }
-        
+
         final stream = http.ByteStream(faceImage.openRead());
         final length = await faceImage.length();
         final multipartFile = http.MultipartFile(
@@ -281,15 +344,41 @@ class CustomBiometricService {
           filename: faceImage.path.split('/').last,
         );
         request.files.add(multipartFile);
-        
+
         final streamedResponse = await request.send().timeout(timeout);
         final response = await http.Response.fromStream(streamedResponse);
+
+        if (response.statusCode == 503 &&
+            !isUsingFallback &&
+            EnvConfig.fallbackBiometricApiUrl != EnvConfig.biometricApiUrl) {
+          throw SocketException('Primary service returned 503');
+        }
+
         return response;
       } catch (e) {
         final isTransient = e is SocketException || e is TimeoutException;
+
+        if (!isUsingFallback &&
+            EnvConfig.fallbackBiometricApiUrl != EnvConfig.biometricApiUrl) {
+          AppLogger.warning(
+            '[BIOMETRIC] Primary multipart endpoint failed. Switching to fallback failover: ${EnvConfig.fallbackBiometricApiUrl}',
+            category: LogCategory.biometric,
+            error: e,
+          );
+          final newPath = targetUrl.path;
+          targetUrl = Uri.parse('${EnvConfig.fallbackBiometricApiUrl}$newPath');
+          isUsingFallback = true;
+          attempts = 0; // Reset attempts for the fallback server
+          continue;
+        }
+
         if (isTransient && attempts < maxRetries) {
           final delayMs = attempts * 1000;
-          debugPrint('[BIOMETRIC] Transient multipart error on attempt $attempts: $e. Retrying in ${delayMs}ms...');
+          AppLogger.debug(
+            '[BIOMETRIC] Transient multipart error on attempt $attempts. Retrying in ${delayMs}ms...',
+            category: LogCategory.biometric,
+            error: e,
+          );
           await Future.delayed(Duration(milliseconds: delayMs));
           continue;
         }
@@ -328,7 +417,7 @@ class CustomBiometricService {
         'full_name': result.fullName,
         'similarity': result.similarity,
         'confidence': result.confidence,
-        'success': true
+        'success': true,
       };
     }
     return null;
@@ -371,9 +460,12 @@ class CustomBiometricService {
   }) async {
     final startTime = DateTime.now();
     try {
-      debugPrint('[BIOMETRIC-API] Initiating face enrollment for user: $userId (pose: $poseLabel)');
+      AppLogger.debug(
+        '[BIOMETRIC-API] Initiating face enrollment for user: $userId (pose: $poseLabel)',
+        category: LogCategory.biometric,
+      );
       final url = Uri.parse('${EnvConfig.biometricApiUrl}/enroll');
-      
+
       final response = await _postWithRetry(
         url,
         headers: _headers,
@@ -389,7 +481,8 @@ class CustomBiometricService {
         cancelToken: cancelToken,
       );
 
-      final latency = DateTime.now().difference(startTime).inMilliseconds / 1000.0;
+      final latency =
+          DateTime.now().difference(startTime).inMilliseconds / 1000.0;
       final data = _safeParseJson(response.body);
       final String? backendErrorCode = data['error_code'];
       final String? backendMessage = data['message'] ?? data['detail'];
@@ -397,7 +490,10 @@ class CustomBiometricService {
       final errCode = parseErrorCode(backendErrorCode);
 
       if (response.statusCode == 200) {
-        debugPrint('[BIOMETRIC-API] Face enrollment completed successfully.');
+        AppLogger.info(
+          '[BIOMETRIC-API] Face enrollment completed successfully.',
+          category: LogCategory.biometric,
+        );
         return BiometricEnrollResult(
           status: BiometricResultStatus.success,
           errorCode: errCode,
@@ -410,30 +506,45 @@ class CustomBiometricService {
       } else if (response.statusCode == 409) {
         return BiometricEnrollResult(
           status: BiometricResultStatus.alreadyEnrolled,
-          errorCode: errCode == BiometricErrorCode.none ? BiometricErrorCode.alreadyEnrolled : errCode,
-          errorMessage: backendMessage ?? 'Biometrics already registered under another account.',
+          errorCode:
+              errCode == BiometricErrorCode.none
+                  ? BiometricErrorCode.alreadyEnrolled
+                  : errCode,
+          errorMessage:
+              backendMessage ??
+              'Biometrics already registered under another account.',
           latency: latency,
           requestId: requestId,
         );
       } else if (response.statusCode == 400) {
         return BiometricEnrollResult(
           status: BiometricResultStatus.qualityRejected,
-          errorCode: errCode == BiometricErrorCode.none ? BiometricErrorCode.lowLight : errCode,
-          errorMessage: backendMessage ?? 'Enrollment rejected due to low biometric quality checks.',
+          errorCode:
+              errCode == BiometricErrorCode.none
+                  ? BiometricErrorCode.lowLight
+                  : errCode,
+          errorMessage:
+              backendMessage ??
+              'Enrollment rejected due to low biometric quality checks.',
           latency: latency,
           requestId: requestId,
         );
       } else {
         return BiometricEnrollResult(
           status: BiometricResultStatus.serverError,
-          errorCode: errCode == BiometricErrorCode.none ? BiometricErrorCode.serverError : errCode,
-          errorMessage: backendMessage ?? 'Server error occurred during enrollment.',
+          errorCode:
+              errCode == BiometricErrorCode.none
+                  ? BiometricErrorCode.serverError
+                  : errCode,
+          errorMessage:
+              backendMessage ?? 'Server error occurred during enrollment.',
           latency: latency,
           requestId: requestId,
         );
       }
     } on TimeoutException {
-      final latency = DateTime.now().difference(startTime).inMilliseconds / 1000.0;
+      final latency =
+          DateTime.now().difference(startTime).inMilliseconds / 1000.0;
       return BiometricEnrollResult(
         status: BiometricResultStatus.timeout,
         errorCode: BiometricErrorCode.timeout,
@@ -441,7 +552,8 @@ class CustomBiometricService {
         latency: latency,
       );
     } on SocketException {
-      final latency = DateTime.now().difference(startTime).inMilliseconds / 1000.0;
+      final latency =
+          DateTime.now().difference(startTime).inMilliseconds / 1000.0;
       return BiometricEnrollResult(
         status: BiometricResultStatus.offline,
         errorCode: BiometricErrorCode.networkError,
@@ -449,7 +561,8 @@ class CustomBiometricService {
         latency: latency,
       );
     } catch (e) {
-      final latency = DateTime.now().difference(startTime).inMilliseconds / 1000.0;
+      final latency =
+          DateTime.now().difference(startTime).inMilliseconds / 1000.0;
       if (e.toString().contains('cancelled')) {
         return BiometricEnrollResult(
           status: BiometricResultStatus.cancelled,
@@ -468,7 +581,11 @@ class CustomBiometricService {
   }
 
   /// Analyze a preview frame image for real-time guided scan feedback
-  Future<Map<String, dynamic>> analyzeFrame(File frameImage, {String? targetPose, BiometricCancelToken? cancelToken}) async {
+  Future<Map<String, dynamic>> analyzeFrame(
+    File frameImage, {
+    String? targetPose,
+    BiometricCancelToken? cancelToken,
+  }) async {
     try {
       final url = Uri.parse('${EnvConfig.biometricApiUrl}/analyze_frame');
       final response = await _sendMultipartWithRetry(
@@ -496,9 +613,12 @@ class CustomBiometricService {
   }) async {
     final startTime = DateTime.now();
     try {
-      debugPrint('[BIOMETRIC-API] Streaming face scan bytes directly to microservice...');
+      AppLogger.debug(
+        '[BIOMETRIC-API] Streaming face scan bytes directly to microservice...',
+        category: LogCategory.biometric,
+      );
       final url = Uri.parse('${EnvConfig.biometricApiUrl}/identify');
-      
+
       final response = await _sendMultipartWithRetry(
         url,
         faceImage,
@@ -506,7 +626,8 @@ class CustomBiometricService {
         cancelToken: cancelToken,
       );
 
-      final latency = DateTime.now().difference(startTime).inMilliseconds / 1000.0;
+      final latency =
+          DateTime.now().difference(startTime).inMilliseconds / 1000.0;
       final data = _safeParseJson(response.body);
       final String? backendErrorCode = data['error_code'];
       final String? backendMessage = data['message'] ?? data['detail'];
@@ -515,8 +636,11 @@ class CustomBiometricService {
 
       if (response.statusCode == 200) {
         if (data['success'] == true) {
-          debugPrint('[BIOMETRIC-API] Patient identified: ${data['full_name']}');
-          
+          AppLogger.info(
+            '[BIOMETRIC-API] Patient identified: ${data["full_name"]}',
+            category: LogCategory.biometric,
+          );
+
           // Phase 10 response validation
           final patientId = data['patient_id'];
           final fullName = data['full_name'];
@@ -524,11 +648,16 @@ class CustomBiometricService {
           final similarity = data['similarity'];
           final confidence = data['confidence'];
 
-          if (patientId == null || fullName == null || qrCodeId == null || similarity == null || confidence == null) {
+          if (patientId == null ||
+              fullName == null ||
+              qrCodeId == null ||
+              similarity == null ||
+              confidence == null) {
             return BiometricIdentifyResult(
               status: BiometricResultStatus.serverError,
               errorCode: BiometricErrorCode.serverError,
-              errorMessage: 'Malformed biometric API response: missing required fields.',
+              errorMessage:
+                  'Malformed biometric API response: missing required fields.',
               latency: latency,
               requestId: requestId,
             );
@@ -550,10 +679,16 @@ class CustomBiometricService {
           );
         }
       } else if (response.statusCode == 404) {
-        debugPrint('[BIOMETRIC-API] No matching profile found (404)');
+        AppLogger.info(
+          '[BIOMETRIC-API] No matching profile found (404)',
+          category: LogCategory.biometric,
+        );
         return BiometricIdentifyResult(
           status: BiometricResultStatus.noMatch,
-          errorCode: errCode == BiometricErrorCode.none ? BiometricErrorCode.noMatchFound : errCode,
+          errorCode:
+              errCode == BiometricErrorCode.none
+                  ? BiometricErrorCode.noMatchFound
+                  : errCode,
           errorMessage: backendMessage ?? 'No match found.',
           latency: latency,
           requestId: requestId,
@@ -561,22 +696,32 @@ class CustomBiometricService {
       } else if (response.statusCode == 400) {
         return BiometricIdentifyResult(
           status: BiometricResultStatus.qualityRejected,
-          errorCode: errCode == BiometricErrorCode.none ? BiometricErrorCode.lowLight : errCode,
-          errorMessage: backendMessage ?? 'Scan rejected due to face quality check failures.',
+          errorCode:
+              errCode == BiometricErrorCode.none
+                  ? BiometricErrorCode.lowLight
+                  : errCode,
+          errorMessage:
+              backendMessage ??
+              'Scan rejected due to face quality check failures.',
           latency: latency,
           requestId: requestId,
         );
       }
-      
+
       return BiometricIdentifyResult(
         status: BiometricResultStatus.serverError,
-        errorCode: errCode == BiometricErrorCode.none ? BiometricErrorCode.serverError : errCode,
-        errorMessage: backendMessage ?? 'Server error occurred during identification.',
+        errorCode:
+            errCode == BiometricErrorCode.none
+                ? BiometricErrorCode.serverError
+                : errCode,
+        errorMessage:
+            backendMessage ?? 'Server error occurred during identification.',
         latency: latency,
         requestId: requestId,
       );
     } on TimeoutException {
-      final latency = DateTime.now().difference(startTime).inMilliseconds / 1000.0;
+      final latency =
+          DateTime.now().difference(startTime).inMilliseconds / 1000.0;
       return BiometricIdentifyResult(
         status: BiometricResultStatus.timeout,
         errorCode: BiometricErrorCode.timeout,
@@ -584,7 +729,8 @@ class CustomBiometricService {
         latency: latency,
       );
     } on SocketException {
-      final latency = DateTime.now().difference(startTime).inMilliseconds / 1000.0;
+      final latency =
+          DateTime.now().difference(startTime).inMilliseconds / 1000.0;
       return BiometricIdentifyResult(
         status: BiometricResultStatus.offline,
         errorCode: BiometricErrorCode.networkError,
@@ -592,7 +738,8 @@ class CustomBiometricService {
         latency: latency,
       );
     } catch (e) {
-      final latency = DateTime.now().difference(startTime).inMilliseconds / 1000.0;
+      final latency =
+          DateTime.now().difference(startTime).inMilliseconds / 1000.0;
       if (e.toString().contains('cancelled')) {
         return BiometricIdentifyResult(
           status: BiometricResultStatus.cancelled,
@@ -618,9 +765,12 @@ class CustomBiometricService {
   }) async {
     final startTime = DateTime.now();
     try {
-      debugPrint('[BIOMETRIC-API] Verifying face from selfie against ID document.');
+      AppLogger.debug(
+        '[BIOMETRIC-API] Verifying face from selfie against ID document.',
+        category: LogCategory.biometric,
+      );
       final url = Uri.parse('${EnvConfig.biometricApiUrl}/verify_id');
-      
+
       final response = await _postWithRetry(
         url,
         headers: _headers,
@@ -631,7 +781,8 @@ class CustomBiometricService {
         cancelToken: cancelToken,
       );
 
-      final latency = DateTime.now().difference(startTime).inMilliseconds / 1000.0;
+      final latency =
+          DateTime.now().difference(startTime).inMilliseconds / 1000.0;
       final data = _safeParseJson(response.body);
       final String? backendErrorCode = data['error_code'];
       final String? backendMessage = data['message'] ?? data['detail'];
@@ -641,7 +792,10 @@ class CustomBiometricService {
       if (response.statusCode == 200) {
         final isVerified = data['verified'] == true;
         final similarity = (data['similarity'] as num?)?.toDouble() ?? 0.0;
-        debugPrint('[BIOMETRIC-API] ID Verification matches=$isVerified');
+        AppLogger.info(
+          '[BIOMETRIC-API] ID Verification matches=$isVerified',
+          category: LogCategory.biometric,
+        );
         return BiometricVerifyResult(
           status: BiometricResultStatus.success,
           errorCode: BiometricErrorCode.none,
@@ -653,24 +807,34 @@ class CustomBiometricService {
       } else if (response.statusCode == 400) {
         return BiometricVerifyResult(
           status: BiometricResultStatus.qualityRejected,
-          errorCode: errCode == BiometricErrorCode.none ? BiometricErrorCode.lowLight : errCode,
+          errorCode:
+              errCode == BiometricErrorCode.none
+                  ? BiometricErrorCode.lowLight
+                  : errCode,
           verified: false,
-          errorMessage: backendMessage ?? 'ID verification rejected due to face occlusion/detection errors.',
+          errorMessage:
+              backendMessage ??
+              'ID verification rejected due to face occlusion/detection errors.',
           latency: latency,
           requestId: requestId,
         );
       }
-      
+
       return BiometricVerifyResult(
         status: BiometricResultStatus.serverError,
-        errorCode: errCode == BiometricErrorCode.none ? BiometricErrorCode.serverError : errCode,
+        errorCode:
+            errCode == BiometricErrorCode.none
+                ? BiometricErrorCode.serverError
+                : errCode,
         verified: false,
-        errorMessage: backendMessage ?? 'Server error occurred during ID comparison.',
+        errorMessage:
+            backendMessage ?? 'Server error occurred during ID comparison.',
         latency: latency,
         requestId: requestId,
       );
     } on TimeoutException {
-      final latency = DateTime.now().difference(startTime).inMilliseconds / 1000.0;
+      final latency =
+          DateTime.now().difference(startTime).inMilliseconds / 1000.0;
       return BiometricVerifyResult(
         status: BiometricResultStatus.timeout,
         errorCode: BiometricErrorCode.timeout,
@@ -679,7 +843,8 @@ class CustomBiometricService {
         latency: latency,
       );
     } on SocketException {
-      final latency = DateTime.now().difference(startTime).inMilliseconds / 1000.0;
+      final latency =
+          DateTime.now().difference(startTime).inMilliseconds / 1000.0;
       return BiometricVerifyResult(
         status: BiometricResultStatus.offline,
         errorCode: BiometricErrorCode.networkError,
@@ -688,7 +853,8 @@ class CustomBiometricService {
         latency: latency,
       );
     } catch (e) {
-      final latency = DateTime.now().difference(startTime).inMilliseconds / 1000.0;
+      final latency =
+          DateTime.now().difference(startTime).inMilliseconds / 1000.0;
       if (e.toString().contains('cancelled')) {
         return BiometricVerifyResult(
           status: BiometricResultStatus.cancelled,
@@ -709,7 +875,11 @@ class CustomBiometricService {
   }
 
   /// Map a biometric result to a human-friendly error message based on Phase 3/8 requirements
-  String mapStatusToErrorMessage(BiometricResultStatus status, String? rawError, {BiometricErrorCode errorCode = BiometricErrorCode.none}) {
+  String mapStatusToErrorMessage(
+    BiometricResultStatus status,
+    String? rawError, {
+    BiometricErrorCode errorCode = BiometricErrorCode.none,
+  }) {
     if (errorCode != BiometricErrorCode.none) {
       switch (errorCode) {
         case BiometricErrorCode.noFaceDetected:
@@ -757,27 +927,39 @@ class CustomBiometricService {
     if (status == BiometricResultStatus.noMatch) {
       return 'No Matching Patient Found';
     }
-    if (status == BiometricResultStatus.qualityRejected || status == BiometricResultStatus.serverError) {
+    if (status == BiometricResultStatus.qualityRejected ||
+        status == BiometricResultStatus.serverError) {
       final err = rawError?.toLowerCase() ?? '';
-      if (err.contains('no face detected') || err.contains('face not detected')) {
+      if (err.contains('no face detected') ||
+          err.contains('face not detected')) {
         return 'No Face Found';
       }
       if (err.contains('multiple faces')) {
         return 'Multiple Faces Detected';
       }
-      if (err.contains('too small') || err.contains('too far') || err.contains('move closer')) {
+      if (err.contains('too small') ||
+          err.contains('too far') ||
+          err.contains('move closer')) {
         return 'Move Closer To Camera';
       }
       if (err.contains('blurred') || err.contains('focus')) {
         return 'Image Too Blurry';
       }
-      if (err.contains('occluded') || err.contains('mask') || err.contains('glasses') || err.contains('sunglasses')) {
+      if (err.contains('occluded') ||
+          err.contains('mask') ||
+          err.contains('glasses') ||
+          err.contains('sunglasses')) {
         return 'Face Cannot Be Verified';
       }
-      if (err.contains('dark') || err.contains('lighting too dark') || err.contains('poor lighting')) {
+      if (err.contains('dark') ||
+          err.contains('lighting too dark') ||
+          err.contains('poor lighting')) {
         return 'Poor Lighting';
       }
-      if (err.contains('bright') || err.contains('lighting too bright') || err.contains('overexposed') || err.contains('over exposed')) {
+      if (err.contains('bright') ||
+          err.contains('lighting too bright') ||
+          err.contains('overexposed') ||
+          err.contains('over exposed')) {
         return 'Lighting Too Bright';
       }
       if (err.contains('empty')) {

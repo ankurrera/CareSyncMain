@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:encrypt/encrypt.dart' as enc;
+import '../core/logging/app_logger.dart';
 import 'biometric_service.dart';
 
 /// Service for managing encryption keys and encrypting/decrypting medical data
@@ -12,16 +14,15 @@ class EncryptionService {
   static final EncryptionService instance = EncryptionService._();
 
   static const _storage = FlutterSecureStorage(
-    aOptions: AndroidOptions(
-      encryptedSharedPreferences: true,
-    ),
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
     iOptions: IOSOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
     ),
   );
 
   static const String _encryptionKeyKey = 'caresync_encryption_key';
-  static const String _keyInitializedKey = 'caresync_encryption_key_initialized';
+  static const String _keyInitializedKey =
+      'caresync_encryption_key_initialized';
 
   final _biometric = BiometricService.instance;
 
@@ -36,23 +37,17 @@ class EncryptionService {
   Future<void> initializeEncryptionKey() async {
     // Generate a random encryption key
     final key = _generateRandomKey(32); // 256-bit key
-    
+
     // Store the key securely
-    await _storage.write(
-      key: _encryptionKeyKey,
-      value: base64Encode(key),
-    );
+    await _storage.write(key: _encryptionKeyKey, value: base64Encode(key));
 
     // Mark as initialized
-    await _storage.write(
-      key: _keyInitializedKey,
-      value: 'true',
-    );
+    await _storage.write(key: _keyInitializedKey, value: 'true');
 
-    assert(() {
-      debugPrint('[ENCRYPTION] Encryption key initialized');
-      return true;
-    }());
+    AppLogger.debug(
+      '[ENCRYPTION] Encryption key initialized',
+      category: LogCategory.encryption,
+    );
   }
 
   /// Get encryption key after biometric authentication
@@ -63,10 +58,10 @@ class EncryptionService {
     // Auto-initialize the key on first use if not already done
     final initialized = await isKeyInitialized();
     if (!initialized) {
-      assert(() {
-        debugPrint('[ENCRYPTION] Auto-initializing encryption key on first use');
-        return true;
-      }());
+      AppLogger.debug(
+        '[ENCRYPTION] Auto-initializing encryption key on first use',
+        category: LogCategory.encryption,
+      );
       await initializeEncryptionKey();
     }
 
@@ -90,22 +85,46 @@ class EncryptionService {
     return base64Decode(keyString);
   }
 
-  /// Encrypt medical data using the encryption key
-  /// Note: This is a simple XOR encryption for demonstration
-  /// In production, use a proper encryption library like pointycastle
+  /// Encrypt medical data using AES-256 CBC
   Future<String> encryptData(String plaintext, Uint8List key) async {
-    final plaintextBytes = utf8.encode(plaintext);
-    final encryptedBytes = _xorEncrypt(plaintextBytes, key);
-    return base64Encode(encryptedBytes);
+    try {
+      final encKey = enc.Key(key);
+      final iv = enc.IV.fromSecureRandom(16);
+      final encrypter = enc.Encrypter(enc.AES(encKey, mode: enc.AESMode.cbc));
+      final encrypted = encrypter.encrypt(plaintext, iv: iv);
+      // Format: iv_base64:ciphertext_base64
+      return '${iv.base64}:${encrypted.base64}';
+    } catch (e) {
+      throw EncryptionException('AES encryption failed: $e');
+    }
   }
 
-  /// Decrypt medical data using the encryption key
-  /// Note: This is a simple XOR decryption for demonstration
-  /// In production, use a proper encryption library like pointycastle
+  /// Decrypt medical data using the encryption key with hybrid XOR fallback
   Future<String> decryptData(String ciphertext, Uint8List key) async {
-    final ciphertextBytes = base64Decode(ciphertext);
-    final decryptedBytes = _xorEncrypt(ciphertextBytes, key);
-    return utf8.decode(decryptedBytes);
+    try {
+      if (ciphertext.contains(':')) {
+        final parts = ciphertext.split(':');
+        if (parts.length == 2) {
+          final iv = enc.IV.fromBase64(parts[0]);
+          final encKey = enc.Key(key);
+          final encrypter = enc.Encrypter(
+            enc.AES(encKey, mode: enc.AESMode.cbc),
+          );
+          return encrypter.decrypt(enc.Encrypted.fromBase64(parts[1]), iv: iv);
+        }
+      }
+    } catch (_) {
+      // Fall through to XOR decryption if AES fails
+    }
+
+    // Hybrid Fallback: Legacy XOR Decryption
+    try {
+      final ciphertextBytes = base64Decode(ciphertext);
+      final decryptedBytes = _xorEncrypt(ciphertextBytes, key);
+      return utf8.decode(decryptedBytes);
+    } catch (e) {
+      throw EncryptionException('Decryption failed under both AES and XOR: $e');
+    }
   }
 
   /// Encrypt medical record in memory only
@@ -115,11 +134,10 @@ class EncryptionService {
     String? patientId,
     String biometricReason = 'Authenticate to encrypt medical data',
   }) async {
-    final key = patientId != null
-        ? Uint8List.fromList(sha256.convert(utf8.encode(patientId)).bytes)
-        : await getEncryptionKeyWithBiometric(
-            reason: biometricReason,
-          );
+    final key =
+        patientId != null
+            ? Uint8List.fromList(sha256.convert(utf8.encode(patientId)).bytes)
+            : await getEncryptionKeyWithBiometric(reason: biometricReason);
 
     if (key == null) {
       throw EncryptionException('Failed to retrieve encryption key');
@@ -135,11 +153,10 @@ class EncryptionService {
     String? patientId,
     String biometricReason = 'Authenticate to decrypt medical data',
   }) async {
-    final key = patientId != null
-        ? Uint8List.fromList(sha256.convert(utf8.encode(patientId)).bytes)
-        : await getEncryptionKeyWithBiometric(
-            reason: biometricReason,
-          );
+    final key =
+        patientId != null
+            ? Uint8List.fromList(sha256.convert(utf8.encode(patientId)).bytes)
+            : await getEncryptionKeyWithBiometric(reason: biometricReason);
 
     if (key == null) {
       throw EncryptionException('Failed to retrieve encryption key');
@@ -153,10 +170,37 @@ class EncryptionService {
     required String encryptedData,
     required String patientId,
   }) {
-    final key = Uint8List.fromList(sha256.convert(utf8.encode(patientId)).bytes);
-    final ciphertextBytes = base64Decode(encryptedData);
-    final decryptedBytes = _xorEncrypt(ciphertextBytes, key);
-    return utf8.decode(decryptedBytes);
+    final key = Uint8List.fromList(
+      sha256.convert(utf8.encode(patientId)).bytes,
+    );
+
+    // Check if the ciphertext is in the AES format (contains ':')
+    try {
+      if (encryptedData.contains(':')) {
+        final parts = encryptedData.split(':');
+        if (parts.length == 2) {
+          final iv = enc.IV.fromBase64(parts[0]);
+          final encKey = enc.Key(key);
+          final encrypter = enc.Encrypter(
+            enc.AES(encKey, mode: enc.AESMode.cbc),
+          );
+          return encrypter.decrypt(enc.Encrypted.fromBase64(parts[1]), iv: iv);
+        }
+      }
+    } catch (_) {
+      // Fall through to XOR decryption if AES fails
+    }
+
+    // Hybrid Fallback: Legacy XOR Decryption
+    try {
+      final ciphertextBytes = base64Decode(encryptedData);
+      final decryptedBytes = _xorEncrypt(ciphertextBytes, key);
+      return utf8.decode(decryptedBytes);
+    } catch (e) {
+      throw EncryptionException(
+        'Deterministic decryption failed under both AES and XOR: $e',
+      );
+    }
   }
 
   /// Clear encryption key (on logout)
@@ -164,10 +208,10 @@ class EncryptionService {
     await _storage.delete(key: _encryptionKeyKey);
     await _storage.delete(key: _keyInitializedKey);
 
-    assert(() {
-      debugPrint('[ENCRYPTION] Encryption key cleared');
-      return true;
-    }());
+    AppLogger.debug(
+      '[ENCRYPTION] Encryption key cleared',
+      category: LogCategory.encryption,
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -179,17 +223,15 @@ class EncryptionService {
     // Use crypto-secure random generation
     final random = Random.secure();
     final key = Uint8List(length);
-    
+
     for (int i = 0; i < length; i++) {
       key[i] = random.nextInt(256);
     }
-    
+
     return key;
   }
 
   /// Simple XOR encryption/decryption
-  /// Note: This is for demonstration only
-  /// In production, use AES-256 or similar strong encryption
   Uint8List _xorEncrypt(Uint8List data, Uint8List key) {
     final result = Uint8List(data.length);
     for (int i = 0; i < data.length; i++) {

@@ -346,7 +346,7 @@ class CompletePrescriptionInput {
   Map<String, dynamic> toJson() {
     // Determine verification status based on completeness
     final verificationStatus = canBeVerified ? 'verified' : 'pending';
-    
+
     return {
       'metadata': metadata.toJson(),
       'doctor_details': doctorDetails.toJson(),

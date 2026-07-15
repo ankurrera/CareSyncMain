@@ -59,10 +59,22 @@ class ImageQualityValidator {
           final pixelUp = image.getPixel(x, y - 1);
           final pixelDown = image.getPixel(x, y + 1);
 
-          final lumLeft = 0.299 * pixelLeft.r.toDouble() + 0.587 * pixelLeft.g.toDouble() + 0.114 * pixelLeft.b.toDouble();
-          final lumRight = 0.299 * pixelRight.r.toDouble() + 0.587 * pixelRight.g.toDouble() + 0.114 * pixelRight.b.toDouble();
-          final lumUp = 0.299 * pixelUp.r.toDouble() + 0.587 * pixelUp.g.toDouble() + 0.114 * pixelUp.b.toDouble();
-          final lumDown = 0.299 * pixelDown.r.toDouble() + 0.587 * pixelDown.g.toDouble() + 0.114 * pixelDown.b.toDouble();
+          final lumLeft =
+              0.299 * pixelLeft.r.toDouble() +
+              0.587 * pixelLeft.g.toDouble() +
+              0.114 * pixelLeft.b.toDouble();
+          final lumRight =
+              0.299 * pixelRight.r.toDouble() +
+              0.587 * pixelRight.g.toDouble() +
+              0.114 * pixelRight.b.toDouble();
+          final lumUp =
+              0.299 * pixelUp.r.toDouble() +
+              0.587 * pixelUp.g.toDouble() +
+              0.114 * pixelUp.b.toDouble();
+          final lumDown =
+              0.299 * pixelDown.r.toDouble() +
+              0.587 * pixelDown.g.toDouble() +
+              0.114 * pixelDown.b.toDouble();
 
           final dx = lumRight - lumLeft;
           final dy = lumDown - lumUp;
@@ -88,7 +100,8 @@ class ImageQualityValidator {
       if (avgBrightness < 45) {
         return ImageQualityResult(
           isValid: false,
-          errorMessage: 'The photo is too dark. Please move to a brighter area.',
+          errorMessage:
+              'The photo is too dark. Please move to a brighter area.',
           averageBrightness: avgBrightness,
           blurScore: avgBlurScore,
         );
@@ -96,7 +109,8 @@ class ImageQualityValidator {
       if (avgBrightness > 235) {
         return ImageQualityResult(
           isValid: false,
-          errorMessage: 'The photo is too bright (overexposed). Avoid direct light source.',
+          errorMessage:
+              'The photo is too bright (overexposed). Avoid direct light source.',
           averageBrightness: avgBrightness,
           blurScore: avgBlurScore,
         );
@@ -107,7 +121,8 @@ class ImageQualityValidator {
       if (avgBlurScore < 7.5) {
         return ImageQualityResult(
           isValid: false,
-          errorMessage: 'The photo is blurry. Please hold your camera steady and refocus.',
+          errorMessage:
+              'The photo is blurry. Please hold your camera steady and refocus.',
           averageBrightness: avgBrightness,
           blurScore: avgBlurScore,
         );

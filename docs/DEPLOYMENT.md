@@ -31,7 +31,7 @@ CareSync schema upgrades are managed via the Supabase CLI:
    supabase link --project-ref YOUR_PROJECT_ID
    ```
 3. **Apply Local Migrations**:
-   The database migrations are located in `supabase/migrations/` and apply sequentially from `001_schema.sql` to `042_...`. Apply them using the CLI:
+   The database migrations are located in the `supabase/` directory and apply sequentially from `001_schema.sql` to `052_sprint1_indexes.sql`. Apply them using the CLI:
    ```bash
    supabase db push
    ```

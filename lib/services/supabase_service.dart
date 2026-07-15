@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../core/logging/app_logger.dart';
 import 'emergency_audit_service.dart';
 import 'secure_storage_service.dart';
 import 'encryption_service.dart';
@@ -27,21 +28,14 @@ class SupabaseService {
     required String password,
     Map<String, dynamic>? data,
   }) async {
-    return await auth.signUp(
-      email: email,
-      password: password,
-      data: data,
-    );
+    return await auth.signUp(email: email, password: password, data: data);
   }
 
   Future<AuthResponse> signIn({
     required String email,
     required String password,
   }) async {
-    return await auth.signInWithPassword(
-      email: email,
-      password: password,
-    );
+    return await auth.signInWithPassword(email: email, password: password);
   }
 
   Future<void> signOut() async {
@@ -54,21 +48,25 @@ class SupabaseService {
 
   Future<Map<String, dynamic>?> getProfile() async {
     if (currentUserId == null) return null;
-    final response = await client
-        .from('profiles')
-        .select()
-        .eq('id', currentUserId!)
-        .maybeSingle();
-    
+    final response =
+        await client
+            .from('profiles')
+            .select()
+            .eq('id', currentUserId!)
+            .maybeSingle();
+
     if (response == null) return null;
 
     final role = response['role'] as String?;
     if (role == 'doctor') {
-      final docResponse = await client
-          .from('doctors')
-          .select('license_number, specialization, hospital_affiliation, signature_base64, signature_hash')
-          .eq('user_id', currentUserId!)
-          .maybeSingle();
+      final docResponse =
+          await client
+              .from('doctors')
+              .select(
+                'license_number, specialization, hospital_affiliation, signature_base64, signature_hash',
+              )
+              .eq('user_id', currentUserId!)
+              .maybeSingle();
       if (docResponse != null) {
         response['medical_registration_number'] = docResponse['license_number'];
         response['specialization'] = docResponse['specialization'];
@@ -83,11 +81,12 @@ class SupabaseService {
         }
       }
     } else if (role == 'pharmacist') {
-      final pharmResponse = await client
-          .from('pharmacists')
-          .select('license_number, pharmacy_name, pharmacy_address')
-          .eq('user_id', currentUserId!)
-          .maybeSingle();
+      final pharmResponse =
+          await client
+              .from('pharmacists')
+              .select('license_number, pharmacy_name, pharmacy_address')
+              .eq('user_id', currentUserId!)
+              .maybeSingle();
       if (pharmResponse != null) {
         response['license_number'] = pharmResponse['license_number'];
         response['pharmacy_name'] = pharmResponse['pharmacy_name'];
@@ -99,20 +98,40 @@ class SupabaseService {
   }
 
   Future<void> upsertProfile(Map<String, dynamic> data) async {
-    final profileKeys = ['email', 'phone', 'full_name', 'avatar_url', 'role', 'gender'];
+    final profileKeys = [
+      'email',
+      'phone',
+      'full_name',
+      'avatar_url',
+      'role',
+      'gender',
+    ];
     final profileData = <String, dynamic>{
       'id': currentUserId,
       'updated_at': DateTime.now().toIso8601String(),
     };
+    bool hasProfileUpdates = false;
     for (final key in profileKeys) {
       if (data.containsKey(key)) {
         profileData[key] = data[key];
+        if (key != 'role') {
+          hasProfileUpdates = true;
+        }
       }
     }
 
-    await client.from('profiles').upsert(profileData);
+    if (hasProfileUpdates) {
+      await client.from('profiles').upsert(profileData);
+    }
 
-    final role = data['role'] ?? (await client.from('profiles').select('role').eq('id', currentUserId!).single())['role'] as String?;
+    final role =
+        data['role'] ??
+        (await client
+                .from('profiles')
+                .select('role')
+                .eq('id', currentUserId!)
+                .single())['role']
+            as String?;
 
     if (role == 'doctor') {
       final doctorData = <String, dynamic>{'user_id': currentUserId};
@@ -126,7 +145,7 @@ class SupabaseService {
         doctorData['license_number'] = data['medical_registration_number'];
       }
       if (doctorData.length > 1) {
-        await client.from('doctors').upsert(doctorData);
+        await client.from('doctors').upsert(doctorData, onConflict: 'user_id');
       }
     } else if (role == 'pharmacist') {
       final pharmacistData = <String, dynamic>{'user_id': currentUserId};
@@ -140,7 +159,9 @@ class SupabaseService {
         pharmacistData['pharmacy_address'] = data['pharmacy_address'];
       }
       if (pharmacistData.length > 1) {
-        await client.from('pharmacists').upsert(pharmacistData);
+        await client
+            .from('pharmacists')
+            .upsert(pharmacistData, onConflict: 'user_id');
       }
     }
   }
@@ -161,27 +182,30 @@ class SupabaseService {
 
     try {
       // FIX: Changed 'patient_data' to 'patients'
-      var response = await client
-          .from('patients')
-          .select()
-          .eq('user_id', targetId)
-          .maybeSingle();
-
-      if (response == null) {
-        try {
-          // FIX: Changed 'patient_data' to 'patients'
-          response = await client
-              .from('patients')
-              .insert({'user_id': targetId})
-              .select()
-              .single();
-        } catch (insertError) {
-          // FIX: Changed 'patient_data' to 'patients'
-          response = await client
+      var response =
+          await client
               .from('patients')
               .select()
               .eq('user_id', targetId)
               .maybeSingle();
+
+      if (response == null) {
+        try {
+          // FIX: Changed 'patient_data' to 'patients'
+          response =
+              await client
+                  .from('patients')
+                  .insert({'user_id': targetId})
+                  .select()
+                  .single();
+        } catch (insertError) {
+          // FIX: Changed 'patient_data' to 'patients'
+          response =
+              await client
+                  .from('patients')
+                  .select()
+                  .eq('user_id', targetId)
+                  .maybeSingle();
         }
       }
 
@@ -191,30 +215,41 @@ class SupabaseService {
     }
   }
 
-  Future<Map<String, dynamic>?> getPatientDataByPatientId(String patientId) async {
+  Future<Map<String, dynamic>?> getPatientDataByPatientId(
+    String patientId,
+  ) async {
+    if (patientId.isEmpty) return null;
     try {
-      final response = await client
-          .from('patients')
-          .select('*, profiles(full_name, gender)')
-          .eq('id', patientId)
-          .maybeSingle();
+      final response =
+          await client
+              .from('patients')
+              .select('*, profiles(full_name, gender)')
+              .eq('id', patientId)
+              .maybeSingle();
       return response;
     } catch (e) {
-      debugPrint('Error getting patient data by patientId: $e');
+      AppLogger.warning(
+        'Error getting patient data by patientId',
+        category: LogCategory.database,
+        error: e,
+      );
       return null;
     }
   }
 
-  Future<void> upsertPatientData(Map<String, dynamic> data, {String? userId}) async {
+  Future<void> upsertPatientData(
+    Map<String, dynamic> data, {
+    String? userId,
+  }) async {
     final targetId = userId ?? currentUserId;
     if (targetId == null) return;
 
-    // FIX: Changed 'patient_data' to 'patients'
+    // FIX: Changed 'patient_data' to 'patients' with explicit onConflict key
     await client.from('patients').upsert({
       'user_id': targetId,
       ...data,
       'updated_at': DateTime.now().toIso8601String(),
-    });
+    }, onConflict: 'user_id');
   }
 
   /// Update face scan URL and embedding vector for the patient
@@ -224,12 +259,15 @@ class SupabaseService {
   }) async {
     final userId = currentUserId;
     if (userId == null) return;
-    
-    await client.from('patients').update({
-      'face_scan_url': faceScanUrl,
-      'face_embedding': embedding,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).eq('user_id', userId);
+
+    await client
+        .from('patients')
+        .update({
+          'face_scan_url': faceScanUrl,
+          'face_embedding': embedding,
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('user_id', userId);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -244,16 +282,42 @@ class SupabaseService {
     required String contentType,
   }) async {
     try {
-      await client.storage.from(bucket).uploadBinary(
-        path,
-        fileBytes,
-        fileOptions: FileOptions(contentType: contentType, upsert: true),
-      );
+      await client.storage
+          .from(bucket)
+          .uploadBinary(
+            path,
+            fileBytes,
+            fileOptions: FileOptions(contentType: contentType, upsert: true),
+          );
 
       final publicUrl = client.storage.from(bucket).getPublicUrl(path);
       return publicUrl;
     } catch (e) {
-      debugPrint('Error uploading file: $e');
+      AppLogger.warning(
+        'Error uploading file',
+        category: LogCategory.network,
+        error: e,
+      );
+      return null;
+    }
+  }
+
+  /// Generates a signed access URL for private prescription PDFs (valid for 10 min)
+  Future<String?> getPrescriptionSignedUrl(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      final filename = uri.pathSegments.last;
+
+      final signedUrl = await client.storage
+          .from('prescriptions')
+          .createSignedUrl(filename, 600);
+      return signedUrl;
+    } catch (e) {
+      AppLogger.warning(
+        'Error generating signed URL for prescription',
+        category: LogCategory.network,
+        error: e,
+      );
       return null;
     }
   }
@@ -263,12 +327,17 @@ class SupabaseService {
   // ─────────────────────────────────────────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> getPatientPrescriptions(
-      String patientId) async {
+    String patientId, {
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    if (patientId.isEmpty) return [];
     final response = await client
         .from('prescriptions')
         .select('*, prescription_items(*), doctor:profiles!doctor_id(*)')
         .eq('patient_id', patientId)
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .range(offset, offset + limit - 1);
 
     return List<Map<String, dynamic>>.from(response);
   }
@@ -286,6 +355,7 @@ class SupabaseService {
         .select('''
           *,
           patient:patients!patient_id(
+            id,
             user_id,
             profiles:profiles!user_id(full_name)
           )
@@ -306,19 +376,20 @@ class SupabaseService {
     required List<Map<String, dynamic>> items,
     Map<String, dynamic>? metadata,
   }) async {
-    final prescription = await client
-        .from('prescriptions')
-        .insert({
-      'patient_id': patientId,
-      'doctor_id': patientEntered ? null : currentUserId,
-      'diagnosis': diagnosis,
-      'notes': notes,
-      'is_public': isPublic,
-      'patient_entered': patientEntered,
-      'metadata': metadata,
-    })
-        .select()
-        .single();
+    final prescription =
+        await client
+            .from('prescriptions')
+            .insert({
+              'patient_id': patientId,
+              'doctor_id': patientEntered ? null : currentUserId,
+              'diagnosis': diagnosis,
+              'notes': notes,
+              'is_public': isPublic,
+              'patient_entered': patientEntered,
+              'metadata': metadata,
+            })
+            .select()
+            .single();
 
     final prescriptionId = prescription['id'];
     for (final item in items) {
@@ -341,32 +412,30 @@ class SupabaseService {
     String? notes,
     List<String>? itemsDispensed,
   }) async {
-    await client.from('dispensing_records').insert({
-      'prescription_id': prescriptionId,
-      'pharmacist_id': currentUserId,
-      'patient_id': patientId,
-      'dispensed_at': DateTime.now().toIso8601String(),
-      'notes': notes,
-      if (itemsDispensed != null) 'items_dispensed': itemsDispensed,
-    });
+    final pharmacistId = currentUserId;
+    if (pharmacistId == null) {
+      throw Exception('User session is invalid. Cannot dispense.');
+    }
+
+    await client.rpc(
+      'dispense_prescription_items_v1',
+      params: {
+        'p_prescription_id': prescriptionId,
+        'p_pharmacist_id': pharmacistId,
+        'p_patient_id': patientId,
+        'p_item_ids': itemsDispensed ?? [],
+        'p_notes': notes ?? '',
+      },
+    );
   }
 
   Future<Map<String, dynamic>?> getEmergencyData(String qrCodeId) async {
-    final patientData = await client
-        .from('patients')
-        .select('''
-          id,
-          blood_type,
-          date_of_birth,
-          weight,
-          height,
-          emergency_contact,
-          profiles!inner(full_name, gender, avatar_url)
-        ''')
-        .eq('qr_code_id', qrCodeId)
-        .maybeSingle();
+    final response = await client.rpc(
+      'get_emergency_data',
+      params: {'p_qr_code_id': qrCodeId},
+    );
 
-    if (patientData == null) {
+    if (response == null) {
       try {
         await EmergencyAuditService.instance.logQrScan(
           patientId: null,
@@ -376,111 +445,52 @@ class SupabaseService {
       return null;
     }
 
-    final patientId = patientData['id'];
+    final data = Map<String, dynamic>.from(response);
+    final patient = data['patient'] as Map<String, dynamic>?;
+    final patientId = patient?['id'] as String?;
+
     try {
       await EmergencyAuditService.instance.logQrScan(
         patientId: patientId,
         status: 'Success',
       );
     } catch (_) {}
-    final profile = patientData['profiles'] as Map<String, dynamic>?;
 
-    final conditions = await client
-        .from('medical_conditions')
-        .select('condition_type, description, severity')
-        .eq('patient_id', patientId)
-        .eq('is_public', true);
+    // Decrypt vitals values locally (they are returned as encrypted strings in vital objects)
+    final vitalsRaw = data['vitals'] as Map<String, dynamic>? ?? {};
+    final Map<String, Map<String, dynamic>> decryptedVitals = {};
 
-    final prescriptions = await client
-        .from('prescriptions')
-        .select('prescription_items(medicine_name, dosage, frequency)')
-        .eq('patient_id', patientId)
-        .eq('is_public', true)
-        .eq('status', 'active');
-
-    final medications = <Map<String, dynamic>>[];
-    for (final rx in prescriptions) {
-      final items = rx['prescription_items'] as List? ?? [];
-      for (final item in items) {
-        medications.add({
-          'medicine': item['medicine_name'],
-          'dosage': item['dosage'],
-          'frequency': item['frequency'],
-        });
-      }
-    }
-
-    // Fetch most recent vitals — one entry per type
-    final vitalsRaw = await client
-        .from('vitals')
-        .select('type, value, unit, recorded_at')
-        .eq('patient_id', patientId)
-        .order('recorded_at', ascending: false)
-        .limit(20);
-
-    final Map<String, Map<String, dynamic>> latestVitals = {};
-    for (final v in vitalsRaw) {
-      final type = v['type']?.toString() ?? '';
-      if (type.isNotEmpty && !latestVitals.containsKey(type)) {
-        String decryptedValue = v['value']?.toString() ?? '';
+    if (patientId != null) {
+      vitalsRaw.forEach((type, v) {
+        final valRaw = v as Map<String, dynamic>? ?? {};
+        final valEnc = valRaw['value']?.toString() ?? '';
+        String valDec = valEnc;
         try {
-          decryptedValue = EncryptionService.instance.decryptDeterministic(
-            encryptedData: v['value'],
+          valDec = EncryptionService.instance.decryptDeterministic(
+            encryptedData: valEnc,
             patientId: patientId,
           );
         } catch (e) {
-          debugPrint('Error decrypting vital in emergency: $e');
+          AppLogger.warning(
+            'Error decrypting vital in emergency',
+            category: LogCategory.encryption,
+            error: e,
+          );
         }
-        latestVitals[type] = {
-          'value': decryptedValue,
-          'unit': v['unit'],
-          'recorded_at': v['recorded_at'],
+        decryptedVitals[type] = {
+          'value': valDec,
+          'unit': valRaw['unit'],
+          'recorded_at': valRaw['recorded_at'],
         };
-      }
+      });
     }
 
-    // Fetch attending physician from most recent public prescription
-    Map<String, dynamic>? physician;
-    try {
-      final physicianRx = await client
-          .from('prescriptions')
-          .select('doctor_id, created_at, profiles!doctor_id(full_name)')
-          .eq('patient_id', patientId)
-          .eq('is_public', true)
-          .not('doctor_id', 'is', null)
-          .order('created_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
-
-      if (physicianRx != null) {
-        final docProfile = physicianRx['profiles'] as Map<String, dynamic>?;
-        final docName = docProfile?['full_name']?.toString();
-        if (docName != null) {
-          physician = {'full_name': docName};
-        }
-      }
-    } catch (_) {}
-
     return {
-      'patient': {
-        'id': patientId,
-        'full_name': profile?['full_name'],
-        'gender': profile?['gender'],
-        'avatar_url': profile?['avatar_url'],
-        'blood_type': patientData['blood_type'],
-        'date_of_birth': patientData['date_of_birth'],
-        'weight': patientData['weight'],
-        'height': patientData['height'],
-        'emergency_contact': patientData['emergency_contact'],
-      },
-      'conditions': List<Map<String, dynamic>>.from(conditions).map((c) => {
-        'type': c['condition_type'],
-        'description': c['description'],
-        'severity': c['severity'],
-      }).toList(),
-      'medications': medications,
-      'vitals': latestVitals,
-      'physician': physician,
+      'patient': patient,
+      'conditions': List<Map<String, dynamic>>.from(data['conditions'] ?? []),
+      'medications': List<Map<String, dynamic>>.from(data['medications'] ?? []),
+      'vitals': decryptedVitals,
+      'physician': data['physician'] as Map<String, dynamic>?,
     };
   }
 
@@ -504,7 +514,6 @@ class SupabaseService {
         .eq('doctor_id', currentUserId!);
     return (result as List).length;
   }
-
 
   Future<int> getTodaysDispensingCount() async {
     if (currentUserId == null) return 0;

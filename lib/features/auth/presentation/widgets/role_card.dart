@@ -29,12 +29,13 @@ class RoleCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
         child: Ink(
           decoration: BoxDecoration(
-            color: isDark
-                ? Theme.of(context).colorScheme.surface
-                : Colors.white,
+            color:
+                isDark ? Theme.of(context).colorScheme.surface : Colors.white,
             borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
             border: Border.all(
-              color: Theme.of(context).colorScheme.outline.withValues(alpha: isDark ? 0.2 : 0.5),
+              color: Theme.of(
+                context,
+              ).colorScheme.outline.withValues(alpha: isDark ? 0.2 : 0.5),
             ),
           ),
           child: Padding(
@@ -50,11 +51,7 @@ class RoleCard extends StatelessWidget {
                     color: color.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(
-                    icon,
-                    color: color,
-                    size: 24,
-                  ),
+                  child: Icon(icon, color: color, size: 24),
                 ),
                 const SizedBox(height: 12),
                 // Title
@@ -75,10 +72,9 @@ class RoleCard extends StatelessWidget {
                     description,
                     style: TextStyle(
                       fontSize: 12,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.6),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.6),
                       height: 1.25,
                     ),
                     maxLines: 3,
@@ -93,4 +89,3 @@ class RoleCard extends StatelessWidget {
     );
   }
 }
-

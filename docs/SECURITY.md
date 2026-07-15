@@ -1,67 +1,59 @@
-# Security Architecture & HIPAA Compliance 🛡️
+# Security Architecture & Compliance Guidelines 🛡️
 
-This document describes the security protocols, encryption methods, Row-Level Security (RLS) configurations, and compliance controls that secure CareSync.
+This document describes the security protocols, encryption methodologies, Row-Level Security (RLS) policies, and data controls of the CareSync platform.
 
----
-
-## 1. HIPAA Compliance & Data Classification
-
-CareSync manages Protected Health Information (PHI) and must comply with HIPAA regulations (Health Insurance Portability and Accountability Act).
-
-### PHI Data Classification
-* **Public Emergency Data**: Demographics, blood type, severe allergies, and emergency contact card. This data is exposed to first responders via the emergency QR code.
-* **Private Clinical Data**: Prescriptions, detailed diagnoses, lab reports, doctor chat histories, and vitals history logs. This data is private and locked behind authentication or explicit consent records.
-* **Sensitive Biometric Data**: Image face frames and 512-dimension vector coordinates. These coordinates cannot be reverse engineered to recreate the user's face. They are stored without names inside the database, referenced only by UUID keys.
+CareSync is designed with HIPAA-aligned security principles and implements security controls commonly associated with HIPAA requirements to protect Protected Health Information (PHI) and secure biometric attributes.
 
 ---
 
-## 2. Row-Level Security (RLS) Policy Audit
+## 1. Data Classification & PHI Separation
 
-Every table in the database is protected by Row-Level Security policies. Users can only access rows matching their authenticated identities.
+CareSync segregates data into three tiers of access and sensitivity:
 
-### Table Policies Mapping
-
-| Table | Policy Name | Access Criteria |
+| Tier | Data Classification | Security controls |
 | :--- | :--- | :--- |
-| **`profiles`** | "Profiles view self" | `auth.uid() = id` |
-| | "System select profiles" | `authenticated` users can read names (for searches) |
-| **`patients`** | "Patients read write self" | `auth.uid() = user_id` |
-| | "Responder select emergency" | `first_responder` can read if active emergency log exists |
-| **`prescriptions`** | "Doctor insert update" | Only if `profiles.role = 'doctor'` and is active |
-| | "Patient read self" | Only if `prescriptions.patient_id = patients.id` where `patients.user_id = auth.uid()` |
-| **`medical_conditions`** | "Responder select public" | Allow reading if `is_public = true` during scan |
-| **`biometric_access_logs`** | "Logs insert system" | Automatically written by database triggers |
-| | "Logs select owner" | Only viewable by the actor or the target patient |
+| **Tier 1: Emergency demographic Data** | Basic demographic info, blood type, severe allergies, primary emergency contacts. | Encrypted via AES-256-GCM for offline emergency QR display; readable by verified responders. |
+| **Tier 2: Private Clinical Data** | Prescriptions, active medical histories, lab reports, doctor chats, and vital history trends. | Strictly restricted to owner and explicitly authorized medical professionals; RLS enforced. |
+| **Tier 3: Sensitive Biometric Data** | Facial images, facial crop templates, and 512-dimension biometric vector embeddings. | Vectors are normalized and irreversible (cannot recreate face); stored anonymously. |
 
 ---
 
-## 3. Device Security & Session Management
+## 2. Row-Level Security (RLS) Policy Mapping
 
-### 15-Minute Auto-Lock
-To prevent unauthorized access on unattended devices, CareSync enforces an activity timer:
-1. `AppLifecycleService` records the timestamp of user actions.
-2. If the application goes to the background or has no touch interactions for more than **15 minutes**, a state variable `isSessionLocked` is set to `true`.
-3. GoRouter detects the locked state and redirects the user to `/biometric-guard`.
-4. The user must complete local Face ID or passcode authentication (via `local_auth`) to unlock the view.
+Every table in the CareSync database has RLS active. Below is the mapping of access criteria:
 
-### Trusted Device Registration (2FA)
-When logging in from a new device, a two-factor challenge (2FA) is triggered:
-* An OTP is sent to the registered email/phone.
-* Upon validation, the device ID is stored in `user_devices`.
-* Future logins from this device bypass the 2FA step, checking the device fingerprint hash.
+| Table | Operations | Allowed Access Criteria |
+| :--- | :--- | :--- |
+| **`profiles`** | `SELECT`, `UPDATE` | Users can view all active profiles (for search lookup); edits restricted to `auth.uid() = id`. |
+| **`patients`** | `SELECT` | Owned profile (`auth.uid() = user_id`) OR First Responders with an active emergency window. |
+| **`prescriptions`** | `SELECT` | Owner patient OR the issuing doctor profile (`doctor_id` of prescription). |
+| | `INSERT`, `UPDATE` | Restricted to authenticated users with the `doctor` role. |
+| **`medical_conditions`** | `SELECT` | Owner patient OR public emergency conditions (if marked `is_public`). |
+| **`biometric_access_logs`** | `SELECT`, `INSERT` | Access logs can only be read by the patient or target doctor; inserts via DB triggers. |
+
+> [!WARNING]
+> Database triggers raise SQL exceptions blocking any updates (`UPDATE`) or deletions (`DELETE`) on `biometric_access_logs`, creating a tamper-proof audit trail for HIPAA compliance checks.
 
 ---
 
-## 4. Cryptographic QR Codes (Offline-First)
+## 3. Storage Security & Signed URLs (Sprint 1 Landmark)
 
-For situations without internet access (e.g. subways, wilderness), CareSync uses an offline-first QR decryption mechanism.
+To prevent exposure of private health documents and facial images:
+* **Private Storage Buckets**: All uploads (selfie scans, prescriptions, reports) are stored in non-public Supabase storage buckets.
+* **Signed URL Delivery**: The client request invokes a secure Edge RPC that generates an expires-bounded signed URL (expiry: 60 seconds). Once the time window closes, the URL is invalidated at the CDN level.
+
+---
+
+## 4. Cryptographic QR Codes (Offline-First Emergency Bypass)
+
+In remote areas without mobile data access, first responders can access critical demographic and allergy records using offline symmetric decryption:
 
 ```mermaid
 flowchart TD
     subgraph PatientDevice [Patient Mobile App]
         Data[Compile Allergies + Contact JSON] --> AES[Encrypt with AES-256 GCM]
         Key[(Static Symmetric Key)] --> AES
-        AES --> QR[Generate Pretty QR Code]
+        AES --> QR[Generate Encrypted QR Code]
     end
 
     subgraph ResponderDevice [Responder App - Offline]
@@ -72,16 +64,14 @@ flowchart TD
     QR -->|Scanner| Scan
 ```
 
-### Encryption Protocol
+### Encryption Parameters
 * **Algorithm**: AES-256-GCM.
-* **Payload**: Includes name, DOB, blood type, active emergency conditions, and emergency contacts.
-* **Key Distribution**: A static key is built into the client application binary, enabling decryption by the responder's app without internet connections.
+* **Key Distribution**: A static key is pre-shared and embedded within the client application binary compilation to support offline decrypt capabilities.
+* **Scope**: Limits offline data payload strictly to Tier 1 emergency details.
 
 ---
 
-## 5. Immutable Audit Trails
+## 5. Session Locks & Biometric Guard
 
-All emergency operations and biometric searches write logs to the database:
-* Trigger functions (`BEFORE UPDATE OR DELETE`) raise database exceptions, preventing any modifications to `biometric_access_logs` or `emergency_access_logs`.
-* Audit records remain tamper-proof, satisfying HIPAA audit requirements.
-* These logs can be reviewed by patients in their privacy settings screen.
+* **15-Minute Auto-Lock**: An app-level lifecycle listener records device touch signals. If the app remains in the background or inactive for more than 15 minutes, it forces the user to the `biometric-guard` route, requiring Face ID or local PIN input to restore session state.
+* **Device Authentication**: Secure storage stores cryptographic session keys inside iOS Keychain / Android KeyStore, protected by device biometric enrollment checks.

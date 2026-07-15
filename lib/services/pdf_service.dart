@@ -48,24 +48,38 @@ class PdfService {
                       ),
                     ),
                     pw.SizedBox(height: 4),
-                    pw.Text('Official Digital Prescription',
-                        style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
+                    pw.Text(
+                      'Official Digital Prescription',
+                      style: const pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.grey600,
+                      ),
+                    ),
                   ],
                 ),
                 // Doctor Details
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
-                    pw.Text('Dr. ${doctor.fullName}',
-                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
+                    pw.Text(
+                      'Dr. ${doctor.fullName}',
+                      style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
                     if (doctor.specialization != null)
-                      pw.Text(doctor.specialization!,
-                          style: const pw.TextStyle(fontSize: 12)),
+                      pw.Text(
+                        doctor.specialization!,
+                        style: const pw.TextStyle(fontSize: 12),
+                      ),
                     if (doctor.medicalRegNumber != null)
-                      pw.Text('Reg No: ${doctor.medicalRegNumber}',
-                          style: pw.TextStyle(color: accentColor, fontSize: 10)),
+                      pw.Text(
+                        'Reg No: ${doctor.medicalRegNumber}',
+                        style: pw.TextStyle(color: accentColor, fontSize: 10),
+                      ),
                   ],
-                )
+                ),
               ],
             ),
             pw.SizedBox(height: 10),
@@ -84,8 +98,14 @@ class PdfService {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   _buildInfoColumn('PATIENT NAME', patientName),
-                  _buildInfoColumn('PATIENT ID', patientId.substring(0, 8).toUpperCase()),
-                  _buildInfoColumn('DATE', DateFormat('dd MMM yyyy').format(date)),
+                  _buildInfoColumn(
+                    'PATIENT ID',
+                    patientId.substring(0, 8).toUpperCase(),
+                  ),
+                  _buildInfoColumn(
+                    'DATE',
+                    DateFormat('dd MMM yyyy').format(date),
+                  ),
                   _buildInfoColumn('DIAGNOSIS', diagnosis),
                 ],
               ),
@@ -93,28 +113,36 @@ class PdfService {
             pw.SizedBox(height: 30),
 
             // ──────────────── RX SECTION ────────────────
-            pw.Text('Rx',
-                style: pw.TextStyle(
-                  fontStyle: pw.FontStyle.italic,
-                  fontSize: 34,
-                  fontWeight: pw.FontWeight.bold,
-                  color: baseColor,
-                )
+            pw.Text(
+              'Rx',
+              style: pw.TextStyle(
+                fontStyle: pw.FontStyle.italic,
+                fontSize: 34,
+                fontWeight: pw.FontWeight.bold,
+                color: baseColor,
+              ),
             ),
             pw.SizedBox(height: 10),
 
             // Medications Table
             pw.TableHelper.fromTextArray(
-              headers: ['Medicine', 'Dosage', 'Frequency', 'Duration', 'Instructions'],
-              data: medications.map((med) {
-                return [
-                  med['medicine_name'],
-                  med['dosage'],
-                  med['frequency'],
-                  med['duration'] ?? '-',
-                  med['instructions'] ?? '-',
-                ];
-              }).toList(),
+              headers: [
+                'Medicine',
+                'Dosage',
+                'Frequency',
+                'Duration',
+                'Instructions',
+              ],
+              data:
+                  medications.map((med) {
+                    return [
+                      med['medicine_name'],
+                      med['dosage'],
+                      med['frequency'],
+                      med['duration'] ?? '-',
+                      med['instructions'] ?? '-',
+                    ];
+                  }).toList(),
               border: null,
               headerStyle: pw.TextStyle(
                 fontWeight: pw.FontWeight.bold,
@@ -123,9 +151,14 @@ class PdfService {
               ),
               headerDecoration: pw.BoxDecoration(color: baseColor),
               rowDecoration: const pw.BoxDecoration(
-                border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey200, width: 0.5)),
+                border: pw.Border(
+                  bottom: pw.BorderSide(color: PdfColors.grey200, width: 0.5),
+                ),
               ),
-              cellPadding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              cellPadding: const pw.EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 10,
+              ),
               cellStyle: const pw.TextStyle(fontSize: 10),
               cellAlignments: {
                 0: pw.Alignment.centerLeft,
@@ -150,22 +183,40 @@ class PdfService {
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text('RECOMMENDED TESTS / INVESTIGATIONS:',
-                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10, color: baseColor)),
+                    pw.Text(
+                      'RECOMMENDED TESTS / INVESTIGATIONS:',
+                      style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 10,
+                        color: baseColor,
+                      ),
+                    ),
                     pw.SizedBox(height: 6),
                     pw.Wrap(
                       spacing: 10,
                       runSpacing: 5,
-                      children: tests.map((test) =>
-                          pw.Container(
-                            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: pw.BoxDecoration(
-                              border: pw.Border.all(color: baseColor, width: 0.5),
-                              borderRadius: pw.BorderRadius.circular(10),
-                            ),
-                            child: pw.Text(test, style: const pw.TextStyle(fontSize: 9)),
-                          )
-                      ).toList(),
+                      children:
+                          tests
+                              .map(
+                                (test) => pw.Container(
+                                  padding: const pw.EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: pw.BoxDecoration(
+                                    border: pw.Border.all(
+                                      color: baseColor,
+                                      width: 0.5,
+                                    ),
+                                    borderRadius: pw.BorderRadius.circular(10),
+                                  ),
+                                  child: pw.Text(
+                                    test,
+                                    style: const pw.TextStyle(fontSize: 9),
+                                  ),
+                                ),
+                              )
+                              .toList(),
                     ),
                   ],
                 ),
@@ -185,8 +236,14 @@ class PdfService {
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text('Doctor\'s Notes / Advice:',
-                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10, color: baseColor)),
+                    pw.Text(
+                      'Doctor\'s Notes / Advice:',
+                      style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 10,
+                        color: baseColor,
+                      ),
+                    ),
                     pw.SizedBox(height: 4),
                     pw.Text(notes, style: const pw.TextStyle(fontSize: 10)),
                   ],
@@ -205,10 +262,20 @@ class PdfService {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text('Powered by CareSync',
-                        style: pw.TextStyle(color: PdfColors.grey500, fontSize: 8)),
-                    pw.Text('Digitally verified biometric prescription.',
-                        style: pw.TextStyle(color: PdfColors.grey500, fontSize: 8)),
+                    pw.Text(
+                      'Powered by CareSync',
+                      style: pw.TextStyle(
+                        color: PdfColors.grey500,
+                        fontSize: 8,
+                      ),
+                    ),
+                    pw.Text(
+                      'Digitally verified biometric prescription.',
+                      style: pw.TextStyle(
+                        color: PdfColors.grey500,
+                        fontSize: 8,
+                      ),
+                    ),
                   ],
                 ),
                 pw.Column(
@@ -216,7 +283,10 @@ class PdfService {
                   children: [
                     // Digital Signature Stamp
                     pw.Container(
-                      padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: pw.BoxDecoration(
                         border: pw.Border.all(color: baseColor, width: 1.5),
                         borderRadius: pw.BorderRadius.circular(6),
@@ -234,21 +304,42 @@ class PdfService {
                               ),
                             )
                           else
-                            pw.Text('DIGITALLY SIGNED',
-                                style: pw.TextStyle(color: baseColor, fontWeight: pw.FontWeight.bold, fontSize: 8)),
+                            pw.Text(
+                              'DIGITALLY SIGNED',
+                              style: pw.TextStyle(
+                                color: baseColor,
+                                fontWeight: pw.FontWeight.bold,
+                                fontSize: 8,
+                              ),
+                            ),
                           pw.SizedBox(height: 2),
                           if (signatureHash != null)
-                            pw.Text('SHA-256: ${signatureHash.substring(0, 12).toUpperCase()}...',
-                                style: const pw.TextStyle(color: PdfColors.grey500, fontSize: 6))
+                            pw.Text(
+                              'SHA-256: ${signatureHash.substring(0, 12).toUpperCase()}...',
+                              style: const pw.TextStyle(
+                                color: PdfColors.grey500,
+                                fontSize: 6,
+                              ),
+                            )
                           else
-                            pw.Text('VERIFIED PHYSICIAN',
-                                style: const pw.TextStyle(color: PdfColors.grey500, fontSize: 6)),
+                            pw.Text(
+                              'VERIFIED PHYSICIAN',
+                              style: const pw.TextStyle(
+                                color: PdfColors.grey500,
+                                fontSize: 6,
+                              ),
+                            ),
                         ],
                       ),
                     ),
                     pw.SizedBox(height: 8),
-                    pw.Text('Dr. ${doctor.fullName}',
-                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
+                    pw.Text(
+                      'Dr. ${doctor.fullName}',
+                      style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -265,9 +356,15 @@ class PdfService {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Text(label, style: pw.TextStyle(color: PdfColors.grey600, fontSize: 8)),
+        pw.Text(
+          label,
+          style: pw.TextStyle(color: PdfColors.grey600, fontSize: 8),
+        ),
         pw.SizedBox(height: 2),
-        pw.Text(value, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+        pw.Text(
+          value,
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+        ),
       ],
     );
   }

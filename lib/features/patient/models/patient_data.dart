@@ -37,25 +37,29 @@ class PatientData {
       id: json['id'] as String,
       userId: json['user_id'] as String,
       bloodType: json['blood_type'] as String?,
-      dateOfBirth: json['date_of_birth'] != null
-          ? DateTime.parse(json['date_of_birth'] as String)
-          : null,
-      weight: json['weight'] != null
-          ? (json['weight'] as num).toDouble()
-          : null,
-      height: json['height'] != null
-          ? (json['height'] as num).toDouble()
-          : null, // Added height parsing
-      emergencyContact: json['emergency_contact'] != null
-          ? EmergencyContact.fromJson(
-          json['emergency_contact'] as Map<String, dynamic>)
-          : null,
+      dateOfBirth:
+          json['date_of_birth'] != null
+              ? DateTime.parse(json['date_of_birth'] as String)
+              : null,
+      weight:
+          json['weight'] != null ? (json['weight'] as num).toDouble() : null,
+      height:
+          json['height'] != null
+              ? (json['height'] as num).toDouble()
+              : null, // Added height parsing
+      emergencyContact:
+          json['emergency_contact'] != null
+              ? EmergencyContact.fromJson(
+                json['emergency_contact'] as Map<String, dynamic>,
+              )
+              : null,
       qrCodeId: json['qr_code_id'] as String,
       faceScanUrl: json['face_scan_url'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
-          : null,
+      updatedAt:
+          json['updated_at'] != null
+              ? DateTime.parse(json['updated_at'] as String)
+              : null,
       fullName: profile?['full_name'] as String?,
       gender: profile?['gender'] as String?,
     );
@@ -114,11 +118,7 @@ class EmergencyContact {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'name': name,
-      'phone': phone,
-      'relationship': relationship,
-    };
+    return {'name': name, 'phone': phone, 'relationship': relationship};
   }
 }
 

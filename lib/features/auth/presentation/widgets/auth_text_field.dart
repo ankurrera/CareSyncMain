@@ -34,7 +34,9 @@ class AuthTextField extends StatelessWidget {
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.8),
           ),
         ),
         const SizedBox(height: 6),
@@ -47,13 +49,16 @@ class AuthTextField extends StatelessWidget {
           style: const TextStyle(fontSize: 16),
           decoration: InputDecoration(
             hintText: hint,
-            prefixIcon: prefixIcon != null
-                ? Icon(
-                    prefixIcon,
-                    size: 22,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                  )
-                : null,
+            prefixIcon:
+                prefixIcon != null
+                    ? Icon(
+                      prefixIcon,
+                      size: 22,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.5),
+                    )
+                    : null,
             suffixIcon: suffixIcon,
           ),
         ),
@@ -61,4 +66,3 @@ class AuthTextField extends StatelessWidget {
     );
   }
 }
-

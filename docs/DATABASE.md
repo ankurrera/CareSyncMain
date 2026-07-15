@@ -1,12 +1,12 @@
-# Database Schema & pgvector Audit 💾
+# Database Schema & Indexing Guide 💾
 
-This document describes the database design, tables, constraints, indexes, triggers, and Row-Level Security (RLS) policies of the CareSync platform.
+This document provides the official database schema specification, indexes, triggers, and Row-Level Security (RLS) policies implemented on the CareSync platform.
 
 ---
 
 ## 1. Entity Relationship (ER) Diagram
 
-CareSync uses a relational PostgreSQL database with role-based access models, auditing tables, messaging channels, and biometric vector embeddings:
+The PostgreSQL database leverages role-specific profiles, immutable logs, and vector embeddings for facial identification search routing:
 
 ```mermaid
 erDiagram
@@ -16,8 +16,7 @@ erDiagram
     profiles ||--|| first_responders : "extends (user_id)"
     
     profiles ||--o{ user_devices : "registers"
-    profiles ||--o{ biometric_profiles : "has"
-    biometric_profiles ||--o{ face_embeddings : "contains"
+    patients ||--o{ patient_embeddings : "has poses"
     
     patients ||--o{ prescriptions : "has"
     doctors ||--o{ prescriptions : "signs"
@@ -27,138 +26,136 @@ erDiagram
     patients ||--o{ medical_conditions : "has"
     patients ||--o{ vitals : "has"
     
-    profiles ||--o{ chat_rooms : "creates"
-    chat_rooms ||--o{ messages : "contains"
-    
     patients ||--o{ emergency_access_logs : "audited"
 ```
 
 ---
 
-## 2. Table Audits & Schemas
+## 2. Table Registry & Schemas
 
-### A. Profiles & Role Extensions
+### A. Profiles & Role Extension Tables
 
 #### `profiles`
-* **Purpose**: Extends Supabase auth metadata to map core roles and profile attributes.
+* **Purpose**: Extends default Supabase `auth.users` schema.
 * **Columns**:
-  - `id` (UUID, Primary Key): Maps directly to `auth.users(id)`.
+  - `id` (UUID, Primary Key): Foreign key to `auth.users(id)`.
   - `email` (TEXT, NOT NULL).
   - `full_name` (TEXT, NOT NULL).
   - `role` (TEXT, NOT NULL): Allowed values: `patient`, `doctor`, `pharmacist`, `first_responder`.
-  - `avatar_url` (TEXT, Nullable).
-* **Policies**:
-  - Select: Allowed for authenticated users.
-  - Update: Only allowed if `auth.uid() = id`.
 
 #### `patients`
-* **Purpose**: Patient-specific metadata (blood type, birth date, emergency contact card).
+* **Purpose**: Patient clinical metadata, QR code bindings, and centroid vector representation caches.
 * **Columns**:
   - `id` (UUID, Primary Key).
   - `user_id` (UUID, Unique Reference to `profiles(id)`).
-  - `blood_type` (TEXT): Allowed values: `A+`, `A-`, `B+`, `B-`, `AB+`, `AB-`, `O+`, `O-`.
-  - `date_of_birth` (DATE).
-  - `emergency_contact` (JSONB): Structured as `{ "name": "...", "phone": "...", "relationship": "..." }`.
-  - `qr_code_id` (TEXT, Unique): Used in emergency lookup urls.
-
-#### `doctors` / `pharmacists` / `first_responders`
-* **Purpose**: Role-specific credentials (license numbers, specialization details, badge numbers).
-* **Triggers**: Trigger functions validate that the related profile role matches the specific table's role upon row insertion.
+  - `blood_type` (TEXT, Nullable): e.g. `O+`, `AB-`.
+  - `date_of_birth` (DATE, Nullable).
+  - `emergency_contact` (JSONB, Nullable).
+  - `qr_code_id` (TEXT, Unique): Scanned by first responders.
+  - `face_centroid_embedding` (vector(512), Nullable): Centroid vector calculation of all enrolled poses.
 
 ---
 
-### B. Biometric vector Tables
+### B. Biometric Poses & Vector Tables
 
-#### `biometric_profiles`
-* **Purpose**: Manages biometric registration state for patient face recognition.
+#### `patient_embeddings`
+* **Purpose**: Stores vector embeddings extracted from multi-pose face enrollments.
 * **Columns**:
   - `id` (UUID, Primary Key).
-  - `user_id` (UUID, Unique Reference to `profiles(id)`).
-  - `enrollment_status` (TEXT): Allowed values: `unverified`, `verified`, `suspended`.
-
-#### `face_embeddings`
-* **Purpose**: Stores ArcFace face signature coordinates using `pgvector`.
-* **Columns**:
-  - `id` (UUID, Primary Key).
-  - `biometric_profile_id` (UUID, Reference to `biometric_profiles(id)`).
-  - `embedding` (vector(512)): Stores the 512-dimension normalized floats.
-  - `pose_label` (TEXT): Allowed values: `neutral`, `smile`, `angle_left`, `angle_right`.
-  - `is_active` (BOOLEAN): Defaults to `true`.
-* **Index**:
-  - HNSW index using cosine operations for sub-50ms vector lookups:
-    ```sql
-    CREATE INDEX idx_face_embeddings_vector 
-    ON public.face_embeddings USING hnsw (embedding vector_cosine_ops);
-    ```
+  - `patient_id` (UUID, Foreign Key referencing `patients(id)` ON DELETE CASCADE).
+  - `embedding` (vector(512), NOT NULL).
+  - `pose_label` (TEXT, NOT NULL): e.g., `neutral`, `smile`, `left_30`, `right_30`.
+  - `quality_score` (DOUBLE PRECISION, Defaults to 1.0).
+  - `yaw` (DOUBLE PRECISION, Nullable).
+  - `pitch` (DOUBLE PRECISION, Nullable).
+  - `roll` (DOUBLE PRECISION, Nullable).
+  - `created_at` (TIMESTAMP WITH TIME ZONE).
 
 ---
 
-### C. Medical Core Tables
+### C. Clinical Core Tables
 
-#### `prescriptions` & `prescription_items`
-* **Purpose**: Contains prescription data issued by doctors (or scanned by patients).
+#### `prescriptions`
+* **Purpose**: Electronic medical prescriptions containing prescription metadata.
 * **Columns**:
-  - `patient_id` (UUID, Reference to `patients(id)`).
-  - `doctor_id` (UUID, Reference to `profiles(id)`).
-  - `is_public` (BOOLEAN): If true, details can be accessed by first responders during emergencies.
-  - `status` (TEXT): Allowed values: `active`, `completed`, `cancelled`.
-  - `doctor_signature` (TEXT, Nullable): Base64 signature image.
-  - `signature_hash` (TEXT, Nullable): SHA-256 validation stamp.
+  - `id` (UUID, Primary Key).
+  - `patient_id` (UUID, REFERENCES `patients(id)`).
+  - `doctor_id` (UUID, REFERENCES `profiles(id)`).
+  - `status` (TEXT): e.g., `active`, `completed`, `cancelled`.
+  - `doctor_signature` (TEXT, Base64 representation).
+  - `signature_hash` (TEXT, SHA-256).
 
 #### `medical_conditions`
-* **Purpose**: Chronic conditions, allergies, and alerts. Used by first responders.
+* **Purpose**: Chronic conditions, active medications, and severe allergies.
 * **Columns**:
-  - `condition_type` (TEXT): Allowed values: `allergy`, `chronic`, `medication`, `other`.
-  - `severity` (TEXT): Allowed values: `mild`, `moderate`, `severe`, `critical`.
+  - `id` (UUID, Primary Key).
+  - `patient_id` (UUID, REFERENCES `patients(id)`).
+  - `condition_type` (TEXT): `allergy`, `chronic`, `medication`, `other`.
+  - `severity` (TEXT): `mild`, `moderate`, `severe`, `critical`.
+  - `is_public` (BOOLEAN): If true, visible to first responders.
 
 #### `vitals`
-* **Purpose**: Demographic vitals chart data (blood pressure, oxygen levels, heart rate).
+* **Purpose**: Decrypted demographic vitals tracking history (BP, SpO2, Heart Rate).
 
 ---
 
-### D. Audit Logging
+## 3. Index Registry & Optimization (Sprint 1 Landmark)
 
-#### `biometric_access_logs` (Immutable Audit Trail)
-* **Purpose**: Tracks every API request accessing a patient's medical file during a search.
-* **Immutability Enforcement**: An database trigger prevents update or delete actions on this table:
-  ```sql
-  CREATE OR REPLACE FUNCTION public.prevent_audit_changes()
-  RETURNS TRIGGER AS $$
-  BEGIN
-      RAISE EXCEPTION 'Audit logs are immutable. Modifying records is prohibited.';
-  END;
-  $$ LANGUAGE plpgsql;
+CareSync uses HNSW vector indexes for biometrics and B-Tree indexes for paginated lookups:
 
-  CREATE TRIGGER trigger_prevent_audit_changes
-  BEFORE UPDATE OR DELETE ON public.biometric_access_logs
-  FOR EACH ROW EXECUTE FUNCTION public.prevent_audit_changes();
-  ```
+| Index Name | Table | Columns | Index Type | Target Benefit |
+| :--- | :--- | :--- | :--- | :--- |
+| `idx_patients_face_centroid_embedding` | `patients` | `face_centroid_embedding` | HNSW (`vector_cosine_ops`) | Sub-50ms centroid matching. |
+| `idx_patient_embeddings_vector` | `patient_embeddings` | `embedding` | HNSW (`vector_cosine_ops`) | Multi-pose similarity matching search. |
+| `idx_audit_log_user_timestamp` | `audit_log` | `user_id`, `timestamp DESC` | B-Tree | Fast retrieval of user audit history. |
+| `idx_prescriptions_patient_id` | `prescriptions` | `patient_id`, `created_at DESC` | B-Tree | High-speed paginated prescription timeline. |
+| `idx_appointments_patient_time` | `appointments` | `patient_id`, `start_time DESC` | B-Tree | Paginated appointment histories for patients. |
+| `idx_appointments_doctor_time` | `appointments` | `doctor_id`, `start_time DESC` | B-Tree | Paginated clinical schedule lookup for doctors. |
 
 ---
 
-## 3. Remote Procedure Calls (RPCs) & Functions
+## 4. Trigger & RPC Logic
 
-### `match_patient_by_face_consensus`
-* **Description**: Custom function called by the FastAPI `/identify` pipeline to fetch candidates matching the face vector.
-* **Parameters**:
-  - `query_embedding` (vector(512))
-  - `max_distance` (DOUBLE PRECISION)
-  - `match_limit` (INTEGER)
-* **Query Logic**:
-  ```sql
-  SELECT 
-    bp.user_id AS patient_id,
-    p.full_name,
-    p.qr_code_id,
-    (1 - (fe.embedding <=> query_embedding))::DOUBLE PRECISION AS similarity
-  FROM public.face_embeddings fe
-  JOIN public.biometric_profiles bp ON fe.biometric_profile_id = bp.id
-  JOIN public.profiles p ON bp.user_id = p.id
-  WHERE fe.is_active = true
-    AND (fe.embedding <=> query_embedding) < max_distance
-  ORDER BY fe.embedding <=> query_embedding ASC
-  LIMIT match_limit;
-  ```
+### Centroid Cache Recalculation
+A database trigger updates the cache in `patients.face_centroid_embedding` when a new biometric pose is added:
+```sql
+CREATE OR REPLACE FUNCTION update_patient_face_centroid()
+RETURNS TRIGGER AS $$
+DECLARE
+    avg_vector vector(512);
+    target_patient_id UUID;
+BEGIN
+    target_patient_id := COALESCE(NEW.patient_id, OLD.patient_id);
 
-### `submit_kyc_verification_secure`
-* **Description**: Secure transaction function that updates patient records and logs KYC verification submissions.
+    SELECT avg(embedding) INTO avg_vector
+    FROM patient_embeddings
+    WHERE patient_id = target_patient_id;
+
+    UPDATE patients
+    SET face_centroid_embedding = avg_vector, updated_at = now()
+    WHERE id = target_patient_id;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+### Smart Multi-Embedding Matching RPC
+Invoked by FastAPI service:
+```sql
+CREATE OR REPLACE FUNCTION match_patient_by_face_multi(
+    query_embedding vector(512),
+    max_distance double precision,
+    match_limit integer DEFAULT 10
+)
+RETURNS TABLE (
+    patient_id UUID,
+    qr_code_id TEXT,
+    full_name TEXT,
+    pose_label TEXT,
+    similarity double precision,
+    quality_score double precision
+) AS $$
+...
+$$ LANGUAGE plpgsql;
+```

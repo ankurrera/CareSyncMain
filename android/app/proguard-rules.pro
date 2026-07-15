@@ -16,3 +16,13 @@
 # General ML Kit rules
 -keep class com.google.mlkit.** { *; }
 -dontwarn com.google.mlkit.**
+
+# Flutter plugins & platform channel keep rules
+-keep class io.flutter.plugins.localauth.** { *; }
+-keep class io.flutter.plugin.common.** { *; }
+-keep class io.flutter.embedding.engine.** { *; }
+-keep class io.flutter.embedding.android.** { *; }
+
+# Google Play Core / Deferred components dontwarn rules to allow R8/minify compilation
+-dontwarn com.google.android.play.core.**
+-dontwarn com.google.android.play.core.tasks.**

@@ -1,4 +1,4 @@
-# CareSync 🏥
+# CareSync 🏥 — Unified Biometric Healthcare Companion
 
 [![Project License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Flutter Build](https://img.shields.io/badge/flutter-3.7+-02569B.svg?logo=flutter)](https://flutter.dev)
@@ -6,129 +6,98 @@
 [![FastAPI Biometrics](https://img.shields.io/badge/fastapi-biometrics-009688.svg?logo=fastapi)](https://fastapi.tiangolo.com)
 [![Python Version](https://img.shields.io/badge/python-3.8+-3776AB.svg?logo=python)](https://www.python.org)
 
-CareSync is a highly secure, HIPAA-compliant, biometric-authenticated medical logging and electronic prescription application. It facilitates seamless and secure interactions between Patients, Doctors, Pharmacists, and First Responders. 
+CareSync is an enterprise-grade, offline-resilient healthcare orchestration platform designed to facilitate secure, role-based workflows for Patients, Doctors, Pharmacists, and First Responders. 
 
-The platform features a custom, self-hosted facial recognition API powered by ArcFace and pgvector to securely identify patients and release life-saving medical data to first responders in emergency situations.
+Designed with HIPAA-aligned security principles, CareSync combines robust client-side encryption, immutable database audit logs, and a custom biometric identification engine to grant instant access to critical health data in emergencies.
 
 ---
 
 ## 📖 Table of Contents
 * [System Overview](#-system-overview)
-* [Core Features](#-core-features)
+* [Core Features & Sprint Landmark Updates](#-core-features--sprint-landmark-updates)
+* [Role-Based Workflows](#-role-based-workflows)
 * [Technology Stack](#-technology-stack)
-* [Documentation Directory](#-documentation-directory)
+* [Ecosystem Architecture](#-ecosystem-architecture)
+* [Project Structure](#-project-structure)
 * [Quick Start & Installation](#-quick-start--installation)
-* [Environment Setup](#-environment-setup)
+* [Environment Configuration](#-environment-configuration)
+* [Development & Contribution Workflow](#-development--contribution-workflow)
 * [Testing & Quality Assurance](#-testing--quality-assurance)
-* [Security & Compliance](#-security--compliance)
-* [License](#-license)
+* [Security & Compliance Highlights](#-security--compliance-highlights)
+* [Ecosystem Documentation Index](#-ecosystem-documentation-index)
+* [Ecosystem Roadmap](#-ecosystem-roadmap)
+* [License & Acknowledgments](#-license--acknowledgments)
 
 ---
 
 ## 🔍 System Overview
 
-CareSync bridges patient confidentiality with immediate emergency medical responsiveness. 
+In emergency medical scenarios, every second counts. If a patient is incapacitated, first responders require immediate access to vital records (allergies, chronic conditions, and emergency contacts) without compromising patient privacy under normal operations.
 
-In a medical crisis, seconds save lives. If a patient is unconscious or incapacitated, first responders need immediate access to critical medical history (allergies, chronic conditions, emergency contacts) without violating privacy regulations during normal operations. 
-
-CareSync achieves this through a **dual-layer biometric verification system**:
-1. **Local Biometrics (`local_auth`)**: Handles local authentication and session lock management.
-2. **Cloud Biometrics (ArcFace + Supabase pgvector)**: Compiles 512-dimension vector representations from multi-pose face scans to identify patients in emergency settings.
+CareSync achieves this balance with a **Dual-Layer Biometric Verification Architecture**:
+1. **Local Biometrics (`local_auth`)**: Secures local device screens, session lock control, and routine access.
+2. **Cloud Biometrics (ArcFace + pgvector)**: Translates multi-pose facial frames into 512-dimension vector representations, matching face scans against registered profiles for rapid patient identification during emergencies.
 
 ---
 
-## 🏗️ System Architecture
+## 🚀 Core Features & Sprint Landmark Updates
 
-```mermaid
-graph TD
-    %% Frontend Applications %%
-    subgraph Frontend [Flutter Client Application]
-        UI[UI Screens & Widgets]
-        RP[Riverpod State Management]
-        Router[GoRouter Navigation]
-    end
+### ⚡ Performance & Caching (Sprint 1)
+* **Signed URL Optimization**: Reduces bandwidth overhead by serving secure, expires-bounded media requests directly via CDN layers.
+* **Paginated Lookups**: Implemented server-side pagination for medical histories, prescriptions, and logs to maintain sub-100ms response times.
+* **Connectivity Observer**: Active network state listener adjusts UI components and switches queries seamlessly between local cache and cloud database.
+* **Index Hardening**: Custom pgvector HNSW and B-Tree indexes enable sub-50ms search query responses.
 
-    %% Services Layer %%
-    subgraph Services [Local & Cloud Services Layer]
-        BS[Biometric Service - local_auth]
-        AS[Auth Controller]
-        SS[Secure Storage - encrypted]
-        SbS[Supabase Service]
-        AFS[Custom Biometric Service]
-        PDF[PDF Service]
-        OCR[OCR Service]
-    end
+### 🛠️ Maintainability & Design DNA (Sprint 2)
+* **Clean Code Architecture**: Enforces a strict separation of concerns into distinct `presentation`, `domain`, `data`, and `application` layers.
+* **Modular UI Components**: Fully extracted reusable widgets (e.g. shared cards, input forms, and app bars) conforming to the unified styling system.
+* **Responsive Grid Alignment**: Redesigned vital dashboard widgets to use modular grids for a professional, compact dashboard layout.
 
-    %% Backend Layer %%
-    subgraph Backend [Supabase Cloud Backend]
-        Auth[Supabase Auth]
-        DB[(PostgreSQL Database + RLS)]
-        Storage[(Supabase Storage Buckets)]
-        EF[Edge Functions]
-    end
-
-    %% External APIs %%
-    subgraph External [External APIs]
-        Azure[Custom Biometric API - ArcFace]
-    end
-
-    %% Connections %%
-    UI --> RP
-    RP --> Router
-    RP --> Services
-    
-    BS --> AS
-    AS --> SS
-    SbS --> Auth
-    SbS --> DB
-    SbS --> Storage
-    
-    AFS --> Azure
-    
-    OCR --> SbS
-    PDF --> SbS
-```
+### 🛡️ Operations & Reliability (Sprint 3)
+* **Structured JSON Logging**: Implemented application-wide structured loggers to capture system events with category tags and error traces.
+* **Global Error Boundaries**: Added robust UI error catches and fallback layouts to handle network failure gracefully.
+* **Multi-Tier Environment Separation**: Full separation of environments via `.env` (Development), `.env.staging` (Staging), and `.env.production` (Production) files.
 
 ---
 
-## 👥 Roles & Workflows
+## 👥 Role-Based Workflows
 
-CareSync enforces Role-Based Access Controls (RBAC) to segment workflows across four user groups:
+CareSync uses custom triggers and policies to enforce Role-Based Access Controls (RBAC):
 
 ```mermaid
 flowchart TD
     Start([User Logs In]) --> RoleCheck{Identify User Role}
     
-    RoleCheck -->|Patient| PatientWF[Patient Workflow]
-    RoleCheck -->|Doctor| DoctorWF[Doctor Workflow]
-    RoleCheck -->|Pharmacist| PharmacistWF[Pharmacist WF]
-    RoleCheck -->|First Responder| FRWF[First Responder WF]
+    RoleCheck -->|Patient| PatientWF[Patient Portal]
+    RoleCheck -->|Doctor| DoctorWF[Clinical Workstation]
+    RoleCheck -->|Pharmacist| PharmacistWF[Pharmacy Panel]
+    RoleCheck -->|First Responder| FRWF[Emergency Hub]
 
-    subgraph PatientWF [Patient Panel]
-        P1[Register Biometrics / Face ID]
-        P2[Track Vitals & Appointments]
-        P3[Generate Emergency QR Code]
-        P4[Upload & Manage Self-Entered Prescriptions]
+    subgraph PatientWF [Patient Portal]
+        P1[Enroll Face ID / KYC]
+        P2[Track Daily Vitals]
+        P3[View Prescriptions]
+        P4[Generate Offline QR]
     end
 
-    subgraph DoctorWF [Doctor Panel]
-        D1[Lookup Patients Securely]
-        D2[Issue E-Prescription with Auto-Calculation]
-        D3[Generate Signed PDFs]
-        D4[Chat with Patients]
+    subgraph DoctorWF [Clinical Workstation]
+        D1[Lookup Patients]
+        D2[Write E-Prescriptions]
+        D3[Auto-Calculate Dosages]
+        D4[Digital Signatures]
     end
 
-    subgraph Pharmacist WF [Pharmacist Panel]
-        Ph1[Lookup Prescriptions by Patient/ID]
-        Ph2[Verify Doctor Signatures]
-        Ph3[Mark Medicines as Dispensed]
-        Ph4[View Dispensing History]
+    subgraph PharmacistWF [Pharmacy Panel]
+        Ph1[Lookup Prescriptions]
+        Ph2[Validate Signatures]
+        Ph3[Log Dispense Transactions]
     end
 
-    subgraph FRWF [Emergency Panel]
-        F1[Scan Emergency QR Code]
-        F2[Fallback offline decryption]
-        F3[Access Critical Vitals & Allergies]
+    subgraph FRWF [Emergency Hub]
+        F1[Scan Emergency QR]
+        F2[Offline Decryption]
+        F3[Cloud Biometric Match]
+        F4[Read Critical Vitals]
     end
 ```
 
@@ -136,29 +105,76 @@ flowchart TD
 
 ## 💻 Technology Stack
 
-* **Frontend**: [Flutter 3.7+](https://flutter.dev) (Dart client), [Riverpod](https://riverpod.dev) (state management), and [GoRouter](https://pub.dev/packages/go_router) (routing).
-* **Backend BaaS**: [Supabase](https://supabase.com) (Auth, PostgreSQL DB, Realtime messaging, and Storage).
+* **Frontend Client**: [Flutter SDK 3.7+](https://flutter.dev) (Dart), [Riverpod](https://riverpod.dev) (State Management), and [GoRouter](https://pub.dev/packages/go_router) (Routing).
+* **Backend Database**: [Supabase](https://supabase.com) (PostgreSQL, Realtime sync, storage buckets, and RLS policies).
 * **Biometrics API**: [FastAPI](https://fastapi.tiangolo.com) + [Uvicorn](https://www.uvicorn.org) (Python microservice).
-* **AI Models**: ArcFace (via DeepFace) for facial embedding vectors and Google MediaPipe Face Mesh for pose landmarks.
+* **AI & Machine Learning**: ArcFace for facial feature extraction, Google MediaPipe Face Mesh for multi-pose landmark and liveness validation.
 
 ---
 
-## 📂 Documentation Directory
+## 🏗️ Ecosystem Architecture
 
-For detailed documentation, refer to the specialized sub-guides in the `docs/` folder:
+The following diagram maps the structural interactions between the Flutter client, database backend, storage buckets, and Custom Biometrics API:
 
-* **[Documentation Index](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/DOCUMENTATION_INDEX.md)**: Main Table of Contents mapping all guides.
-* **[System Architecture](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/SYSTEM_ARCHITECTURE.md)**: Ecosystem maps and cross-subsystem workflows.
-* **[Flutter Client Architecture](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/FLUTTER_ARCHITECTURE.md)**: Feature folder structure, Riverpod states, and routing.
-* **[Backend Microservice Architecture](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/BACKEND_ARCHITECTURE.md)**: FastAPI design, model preloading, and endpoints.
-* **[Biometric Engine Deep-Dive](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/BIOMETRIC_SYSTEM.md)**: Embedding generation math, MediaPipe pose calculation, and consensus scoring.
-* **[Database Schema Audit](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/DATABASE.md)**: ER diagrams, table schemas, triggers, indexes, and RPCs.
-* **[API Reference](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/API_REFERENCE.md)**: Request/Response payloads, headers, and Edge Functions parameters.
-* **[Security & HIPAA Compliance](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/SECURITY.md)**: JWTs, RLS rules, offline QR symmetric keys, and audit log immutability.
-* **[Deployment & Infrastructure](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/DEPLOYMENT.md)**: Dockerfiles, env var checklists, and Hugging Face space setups.
-* **[Developer Onboarding Guide](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/DEVELOPER_GUIDE.md)**: Local machine setup instructions, databases setup, and run scripts.
-* **[Testing & Verification Plan](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/TESTING.md)**: Running Flutter unit/widget tests and python validation suites.
-* **[Troubleshooting Handbook](file:///Users/zen/Documents/GitHub/CareSyncMain/docs/TROUBLESHOOTING.md)**: Common build errors, database recursion fixes, and camera issues.
+```mermaid
+graph TB
+    subgraph Client [Flutter Client Application]
+        UI[UI Presentation Layer]
+        RP[Riverpod Providers]
+        CO[Connectivity Observer]
+    end
+
+    subgraph Supabase [Supabase BaaS]
+        Auth[Supabase Auth Engine]
+        DB[(Postgres Database + RLS)]
+        Storage[(Secure Storage Buckets)]
+        EF[Edge Functions]
+    end
+
+    subgraph PythonAPI [Biometrics Microservice]
+        FastAPI[FastAPI Server]
+        MF[MediaPipe Liveness]
+        AF[ArcFace Embedding Engine]
+    end
+
+    %% Flow lines
+    UI --> RP
+    RP --> CO
+    CO -->|Fetch / Sync| DB
+    RP -->|Authenticate| Auth
+    RP -->|Symmetric File Upload| Storage
+    RP -->|Invoke Search| FastAPI
+    FastAPI -->|Liveness Check| MF
+    FastAPI -->|Vector Representation| AF
+    FastAPI -->|pgvector Lookup| DB
+    EF -->|Signed URL Signatures| Storage
+```
+
+---
+
+## 📂 Project Structure
+
+```
+.
+├── .agents/                    # Internal agent guidelines & release runbooks
+├── biometric_api/              # FastAPI Python facial recognition service
+├── docs/                       # Core architectural and deployment guides
+│   ├── archive/                # Historical summaries and design documents
+│   └── database/               # Database catalogs and documentation
+├── ios/                        # iOS-specific build wrappers
+├── lib/                        # Flutter client source directory
+│   ├── core/                   # Shared theme styling, design tokens, and utilities
+│   ├── features/               # Domain-specific vertical feature slices
+│   │   ├── appointments/       # Booking FSM & schedules
+│   │   ├── auth/               # authentication, secure storage, and 2FA
+│   │   ├── emergency/          # Emergency QR generation and first responder views
+│   │   ├── patient/            # Patient dashboards and vitals track
+│   │   └── shared/             # Shared profile and navigation layouts
+│   ├── routing/                # App router declaration and GoRouter guards
+│   └── services/               # Core API connectors (Supabase, Secure Storage)
+├── supabase/                   # Supabase migrations schema scripts & RLS policies
+└── test/                       # Unit and widget test suite
+```
 
 ---
 
@@ -170,30 +186,41 @@ git clone https://github.com/ankurrera/CareSyncMain.git
 cd CareSyncMain
 ```
 
-### Step 2: Configure Environment Variables
-Create a `.env` file in the project root:
-```env
-SUPABASE_URL=https://your-project-id.supabase.co
-SUPABASE_ANON_KEY=your-anon-public-key
-BIOMETRIC_API_URL=http://localhost:8000
-HF_TOKEN=your-optional-huggingface-token
-```
+### Step 2: Configure Environment Files
+1. Copy the environment template:
+   ```bash
+   cp .env.development.example .env
+   ```
+2. Open `.env` and fill in your Supabase configurations and local endpoint values:
+   ```env
+   SUPABASE_URL=https://your-project.supabase.co
+   SUPABASE_ANON_KEY=your-anon-key
+   BIOMETRIC_API_URL=http://127.0.0.1:8000
+   ```
 
-### Step 3: Run the Biometric API
-1. Navigate to the `biometric_api` folder and activate a virtual environment:
+### Step 3: Spin Up the Biometrics API
+1. Navigate to the api directory and create a virtual environment:
    ```bash
    cd biometric_api
    python3 -m venv venv
    source venv/bin/activate
    ```
-2. Install Python dependencies and run the server:
+2. Install dependencies:
    ```bash
+   pip install --upgrade pip
    pip install -r requirements.txt
+   ```
+3. Preload the weights of the neural networks:
+   ```bash
    python download_models.py
-   uvicorn main:app --reload --port 8000
+   ```
+4. Start the server:
+   ```bash
+   uvicorn main:app --reload --host 127.0.0.1 --port 8000
    ```
 
-### Step 4: Run the Flutter Client
+### Step 4: Run the Flutter App
+Return to the project root and start the application:
 ```bash
 flutter pub get
 flutter run
@@ -201,26 +228,95 @@ flutter run
 
 ---
 
+## ⚙️ Environment Configuration
+
+CareSync supports three main build tiers managed through individual env files:
+* **Development (`.env`)**: Maps to local database configurations and uvicorn API instances.
+* **Staging (`.env.staging`)**: Connects to the cloud staging databases and sandbox API environments.
+* **Production (`.env.production`)**: Links to production Supabase nodes and secure GCP instances.
+
+See the [Environment Guide](./docs/ENVIRONMENT_GUIDE.md) for step-by-step setup details.
+
+---
+
+## 🛠️ Development & Contribution Workflow
+
+Developers must adhere to strict code standards:
+* **Branch Strategy**: Direct commits to `main` are allowed and preferred.
+* **Commit Guidelines**: Use semantic commit structures: `type(scope): message` (e.g. `feat(auth): add face ID lock`).
+* **Pre-flight Quality Check**: Never push code before running standard verification:
+  ```bash
+  npm run lint && npm run build && npm run test       # Web components (if any)
+  flutter analyze && dart format --output=none lib/   # Flutter client components
+  ```
+
+For more details, see [CONTRIBUTING.md](./CONTRIBUTING.md).
+
+---
+
 ## 🧪 Testing & Quality Assurance
 
-* **Flutter Tests**:
+* **Flutter Unit & Widget Tests**:
   ```bash
   flutter test
   ```
-* **Python Biometric Pipeline Tests**:
+* **Python Biometrics Unit Tests**:
   ```bash
   cd biometric_api
   python -m unittest test_biometric_pipeline.py
   ```
 
----
-
-## 🛡️ Security & HIPAA Compliance
-* **Row-Level Security (RLS)**: Protects all tables in PostgreSQL.
-* **Tamper-Proof Audit Logging**: Database triggers block any edits or deletions on `biometric_access_logs`.
-* **15-Minute Auto-Lock**: Automatically locks the app session after 15 minutes of inactivity, requiring local biometric re-authentication.
+Review [Testing Guidelines](./docs/TESTING.md) to write and verify new test files.
 
 ---
 
-## 📝 License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 🛡️ Security & Compliance Highlights
+
+* **Designed-for HIPAA Security**: Segmented clinical vs demographic datasets, symmetric QR encryption, and access validation guards.
+* **Immutable Database Triggers**: SQL triggers raise exceptions on any updates or deletions within `biometric_access_logs`.
+* **Encryption Protocols**: AES-256-GCM symmetric encryption for offline QR code storage, and HTTPS/WSS channels for cloud traffic.
+
+For deep-dive compliance details, review the [Security & HIPAA Document](./docs/SECURITY.md).
+
+---
+
+## 📂 Ecosystem Documentation Index
+
+Refer to the following guides for detailed architecture, design specifications, and operations details:
+
+| Category | Guide | Purpose |
+|:---|:---|:---|
+| **System Guides** | [System Architecture](./docs/SYSTEM_ARCHITECTURE.md) | Component layouts and sequence flows. |
+| | [Flutter Client Architecture](./docs/FLUTTER_ARCHITECTURE.md) | Riverpod state modeling & clean design layers. |
+| | [Backend Architecture](./docs/BACKEND_ARCHITECTURE.md) | FastAPI startup configurations and endpoints. |
+| | [Biometrics Deep-Dive](./docs/BIOMETRIC_SYSTEM.md) | ArcFace calculations and consensus thresholds. |
+| | [Biometric Workflow Guide](./docs/BIOMETRIC_WORKFLOW_GUIDE.md) | Enrollment/Verification sequence details. |
+| **Database & API**| [Database Schema Audit](./docs/DATABASE.md) | Entity relationships, indexing, pgvector layout. |
+| | [API Endpoint Reference](./docs/API_REFERENCE.md) | Request/Response JSON payloads. |
+| | [Biometric Performance](./docs/BIOMETRIC_PERFORMANCE.md) | Real-world benchmark stats and latency profiles. |
+| **Operations** | [Security & Compliance](./docs/SECURITY.md) | Cryptographic QR specs, RLS policy mappings. |
+| | [Deployment & Devops](./docs/DEPLOYMENT.md) | Docker, Hugging Face, environment parameters. |
+| | [Developer Guide](./docs/DEVELOPER_GUIDE.md) | Local machine initialization steps. |
+| | [Testing Guide](./docs/TESTING.md) | Static analysis checks and unit tests. |
+| | [Database Migrations Registry](./supabase/MIGRATIONS.md) | Sequential migration timeline details. |
+| | [Environment Guide](./docs/ENVIRONMENT_GUIDE.md) | Configuration matrix across environment tiers. |
+| | [Release Runbook](./.agents/RELEASE_RUNBOOK.md) | Release validation steps & checklists. |
+| | [Troubleshooting Guide](./docs/TROUBLESHOOTING.md) | Recovery scripts for common build bugs. |
+
+---
+
+## 🗺️ Ecosystem Roadmap
+
+Our current goals focus on expanding biometric capability and data standards:
+* **Multi-Pose TFLite extraction**: Execute liveness calculations directly on mobile devices without microservice roundtrips.
+* **FHIR HL7 Standards Compliance**: Match clinical databases to FHIR representation standard.
+* **Offline Mesh Sync**: Direct device-to-device verification overlays using bluetooth mesh relays.
+
+Review the complete [Roadmap Guide](./docs/ROADMAP.md) to explore future milestones.
+
+---
+
+## 📝 License & Acknowledgments
+
+* **License**: CareSync is distributed under the MIT License. See [LICENSE](LICENSE) for details.
+* **Credits**: Built using MediaPipe landmark engines and DeepFace ArcFace models.

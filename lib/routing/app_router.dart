@@ -9,6 +9,10 @@ import '../features/auth/presentation/screens/biometric_enrollment_screen.dart';
 import '../features/auth/presentation/screens/kyc_verification_screen.dart';
 import '../features/auth/presentation/screens/device_management_screen.dart';
 import '../features/auth/providers/auth_provider.dart';
+import '../features/patient/providers/patient_provider.dart';
+import '../features/auth/presentation/screens/two_factor_verification_screen.dart';
+import '../services/two_factor_service.dart';
+import '../services/supabase_service.dart';
 import '../features/patient/presentation/screens/patient_dashboard_screen.dart';
 import '../features/patient/presentation/screens/patient_shell_screen.dart';
 import '../features/patient/presentation/screens/add_prescription_screen.dart';
@@ -31,14 +35,13 @@ import '../features/emergency/presentation/screens/emergency_data_screen.dart';
 import '../features/emergency/presentation/screens/emergency_access_history_screen.dart';
 import '../features/patient/presentation/screens/vitals_history_screen.dart';
 import '../features/patient/presentation/screens/book_appointment_screen.dart';
-import '../features/shared/presentation/screens/chat_list_screen.dart';
-import '../features/shared/presentation/screens/chat_room_screen.dart';
 import '../features/doctor/presentation/screens/manage_availability_screen.dart';
 import '../features/shared/presentation/screens/splash_screen.dart';
 import '../features/shared/presentation/screens/profile_screen.dart';
 import '../features/shared/presentation/screens/notifications_screen.dart';
 import '../features/shared/models/user_profile.dart';
 import 'route_names.dart';
+import '../core/logging/app_logger.dart';
 
 class RouterNotifier extends ChangeNotifier {
   final Ref _ref;
@@ -48,6 +51,15 @@ class RouterNotifier extends ChangeNotifier {
       notifyListeners();
     });
     _ref.listen(currentProfileProvider, (previous, next) {
+      notifyListeners();
+    });
+    _ref.listen(isDeviceRegisteredProvider, (previous, next) {
+      notifyListeners();
+    });
+    _ref.listen(isKycVerifiedProvider, (previous, next) {
+      notifyListeners();
+    });
+    _ref.listen(isBiometricEnrolledProvider, (previous, next) {
       notifyListeners();
     });
   }
@@ -65,57 +77,107 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     debugLogDiagnostics: true,
     refreshListenable: routerNotifier,
     redirect: (context, state) {
+      // NOTE: Use ref.read() here — redirect is NOT a widget build method.
+      // Reactive re-evaluation is handled by RouterNotifier (refreshListenable),
+      // which listens to all relevant providers and calls notifyListeners().
       final authState = ref.read(authStateProvider);
       final profileAsync = ref.read(currentProfileProvider);
       final profile = profileAsync.valueOrNull;
-      final isAuthenticated = authState.valueOrNull != null;
+      final isAuthenticated = SupabaseService.instance.isAuthenticated;
 
-      final isAuthRoute = state.matchedLocation == RouteNames.signIn ||
+      final isDeviceRegisteredAsync = ref.read(isDeviceRegisteredProvider);
+      final isKycVerifiedAsync = ref.read(isKycVerifiedProvider);
+      final isBiometricEnrolledAsync = ref.read(isBiometricEnrolledProvider);
+
+      final isAuthRoute =
+          state.matchedLocation == RouteNames.signIn ||
           state.matchedLocation == RouteNames.signUp ||
           state.matchedLocation == RouteNames.roleSelection;
       final isSplash = state.matchedLocation == RouteNames.splash;
 
-      // If still loading, stay on splash
+      // If auth state is still loading, stay on splash
       if (authState.isLoading && isSplash) {
         return null;
       }
 
-      // Not authenticated - redirect to role selection (unless already on auth route)
-      if (!isAuthenticated && !isAuthRoute && !isSplash) {
-        // Allow KYC and device management screens without auth
-        final isKYCRoute = state.matchedLocation == RouteNames.kycVerification;
-        final isDeviceRoute = state.matchedLocation == RouteNames.deviceManagement;
-
-        if (!isKYCRoute && !isDeviceRoute) {
+      // Not authenticated — if on splash, let SplashScreen handle navigation.
+      // If on any other protected route, send to role selection.
+      if (!isAuthenticated) {
+        if (isSplash) {
+          return null; // SplashScreen._checkAuthAndNavigate() takes over
+        }
+        if (!isAuthRoute) {
           return RouteNames.roleSelection;
         }
+        return null;
       }
 
-      // Authenticated but on auth route - redirect to appropriate dashboard
-      if (isAuthenticated && isAuthRoute) {
-        if (profile == null) {
-          return null; // wait for profile to load
+      // Authenticated: wait for metadata providers to finish loading
+      final isMetadataLoading =
+          profileAsync.isLoading ||
+          isDeviceRegisteredAsync.isLoading ||
+          isKycVerifiedAsync.isLoading ||
+          isBiometricEnrolledAsync.isLoading;
+
+      if (isMetadataLoading) {
+        return null; // RouterNotifier will call notifyListeners() when they resolve
+      }
+
+      // If profile failed to load, send to role selection to avoid a white screen
+      if (profile == null || profileAsync.hasError) {
+        AppLogger.warning(
+          '[ROUTER] Profile null or error after loading — redirecting to role selection.',
+          category: LogCategory.auth,
+        );
+        return RouteNames.roleSelection;
+      }
+
+      final kycVerified = isKycVerifiedAsync.valueOrNull ?? false;
+
+      final isVerifying2FA =
+          state.matchedLocation == RouteNames.twoFactorVerification;
+      final isVerifyingKYC =
+          state.matchedLocation == RouteNames.kycVerification;
+      final isEnrollingBiometrics =
+          state.matchedLocation == RouteNames.biometricEnrollment;
+
+      // Gate 1: Two-Factor Authentication (Device Registration) - Bypassed/Removed completely
+      // (All accounts are considered pre-registered and bypass 2FA check)
+
+      // Gate 2: KYC Verification (Only for patients)
+      if (profile.role == 'patient' && !kycVerified) {
+        if (!isVerifyingKYC) {
+          return RouteNames.kycVerification;
         }
+        return null;
+      }
+
+      // Gate 3: Biometric Enrollment - Bypassed/Removed completely
+      // (Biometric features are disabled and bypass check)
+
+      // Fully verified — redirect from auth/verification screens to the dashboard
+      if (isAuthRoute ||
+          isVerifying2FA ||
+          isVerifyingKYC ||
+          isEnrollingBiometrics) {
         return _getDashboardRoute(profile);
       }
 
       // Enforce role-specific paths
-      if (isAuthenticated && profile != null) {
-        final path = state.matchedLocation;
-        final expectedPrefix = _rolePrefix(profile.role);
-        final isCommonRoute = path == RouteNames.profile ||
-            path == RouteNames.notifications ||
-            path == RouteNames.biometricEnrollment ||
-            path == RouteNames.kycVerification ||
-            path == RouteNames.deviceManagement ||
-            path == '/chat-list' ||
-            path.startsWith('/chat/');
+      final path = state.matchedLocation;
+      final expectedPrefix = _rolePrefix(profile.role);
+      final isCommonRoute =
+          path == RouteNames.profile ||
+          path == RouteNames.notifications ||
+          path == RouteNames.biometricEnrollment ||
+          path == RouteNames.kycVerification ||
+          path == RouteNames.deviceManagement ||
+          path == RouteNames.twoFactorVerification;
 
-        if (!isCommonRoute &&
-            expectedPrefix != null &&
-            !path.startsWith(expectedPrefix)) {
-          return _getDashboardRoute(profile);
-        }
+      if (!isCommonRoute &&
+          expectedPrefix != null &&
+          !path.startsWith(expectedPrefix)) {
+        return _getDashboardRoute(profile);
       }
 
       return null;
@@ -151,6 +213,38 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: RouteNames.twoFactorVerification,
+        name: 'twoFactorVerification',
+        builder: (context, state) {
+          final extras = state.extra as Map<String, dynamic>?;
+          final userId =
+              extras?['userId'] as String? ??
+              SupabaseService.instance.currentUser?.id ??
+              '';
+          final email =
+              extras?['email'] as String? ??
+              SupabaseService.instance.currentUser?.email ??
+              '';
+          final codeType =
+              extras?['codeType'] as TwoFactorCodeType? ??
+              TwoFactorCodeType.email;
+          return TwoFactorVerificationScreen(
+            userId: userId,
+            email: email,
+            codeType: codeType,
+            onVerified: () async {
+              await ref
+                  .read(authNotifierProvider.notifier)
+                  .completeTwoFactor(
+                    registerDevice: true,
+                    enableBiometric: true,
+                  );
+              ref.invalidate(isDeviceRegisteredProvider);
+            },
+          );
+        },
+      ),
+      GoRoute(
         path: RouteNames.biometricEnrollment,
         name: 'biometricEnrollment',
         builder: (context, state) {
@@ -180,22 +274,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'notifications',
         builder: (context, state) => const NotificationsScreen(),
       ),
-      // Chat routes — shared across patient, doctor, pharmacist
-      GoRoute(
-        path: '/chat-list',
-        name: 'chatList',
-        builder: (context, state) => const ChatListScreen(),
-      ),
-      GoRoute(
-        path: '/chat/:roomId',
-        name: 'chatRoom',
-        builder: (context, state) {
-          final roomId = state.pathParameters['roomId']!;
-          final otherName = state.extra as String? ?? 'Secure Chat';
-          return ChatRoomScreen(roomId: roomId, otherName: otherName);
-        },
-      ),
-
       // ── Patient Shell (persistent floating nav bar across 4 main tabs) ──
       ShellRoute(
         builder: (context, state, child) => PatientShellScreen(child: child),
@@ -264,7 +342,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const AddPrescriptionScreen(),
       ),
 
-
       // Doctor Routes
       GoRoute(
         path: RouteNames.doctorDashboard,
@@ -288,7 +365,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final extras = state.extra as Map<String, dynamic>?;
           final patientId = extras?['patientId'] as String? ?? '';
           final patientName = extras?['patientName'] as String? ?? '';
-          return PatientRecordScreen(patientId: patientId, patientName: patientName);
+          return PatientRecordScreen(
+            patientId: patientId,
+            patientName: patientName,
+          );
         },
       ),
       GoRoute(
@@ -305,7 +385,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.doctorHistory,
         name: 'doctorHistory',
-        builder: (context, state) => const PrescriptionHistoryScreen(),
+        builder: (context, state) {
+          final extras = state.extra as Map<String, dynamic>?;
+          final patientId = extras?['patientId'] as String?;
+          final patientName = extras?['patientName'] as String?;
+          return PrescriptionHistoryScreen(
+            patientId: patientId,
+            patientName: patientName,
+          );
+        },
       ),
 
       // Pharmacist Routes
@@ -353,11 +441,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const EmergencyAccessHistoryScreen(),
       ),
     ],
-    errorBuilder: (context, state) => Scaffold(
-      body: Center(
-        child: Text('Page not found: ${state.uri}'),
-      ),
-    ),
+    errorBuilder:
+        (context, state) =>
+            Scaffold(body: Center(child: Text('Page not found: ${state.uri}'))),
   );
 });
 
@@ -372,7 +458,6 @@ String _getDashboardRoute(UserProfile? profile) {
       return RouteNames.patientDashboard;
   }
 }
-
 
 String? _rolePrefix(String role) {
   switch (role) {

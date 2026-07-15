@@ -4,18 +4,39 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../../core/logging/app_logger.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 
+import 'package:iconsax/iconsax.dart';
 import 'package:uuid/uuid.dart';
+import 'package:caresync/core/design/cs_buttons.dart';
+import 'package:caresync/core/design/minimal_sheet_dialog.dart';
 import 'package:caresync/core/theme/app_colors.dart';
 import 'package:caresync/services/custom_biometric_service.dart';
 import 'package:caresync/services/kyc_service.dart';
 import 'package:caresync/features/shared/utils/image_quality_validator.dart';
+
+/// DM Sans text style for the dark immersive scan HUD (bundled font, no fetch).
+TextStyle _scan({
+  double? fontSize,
+  FontWeight? fontWeight,
+  Color? color,
+  double? letterSpacing,
+  double? height,
+  List<Shadow>? shadows,
+}) => TextStyle(
+  fontFamily: 'DM Sans',
+  fontSize: fontSize,
+  fontWeight: fontWeight,
+  color: color,
+  letterSpacing: letterSpacing,
+  height: height,
+  shadows: shadows,
+);
 
 class EnrollmentStep {
   final String id;
@@ -104,10 +125,10 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
   CameraController? _cameraController;
   List<CameraDescription>? _cameras;
   bool _isCameraInitialized = false;
-  
+
   int _currentStepIndex = 0;
   final Map<String, String> _capturedPoses = {};
-  
+
   String? _currentCapturedPath;
   bool _isCapturing = false;
   bool _isValidating = false;
@@ -123,9 +144,13 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
   Timer? _guidanceTimer;
 
   // Live quality validation flags from backend (Phase 5)
+  // ignore: unused_field
   bool _faceCentered = false;
+  // ignore: unused_field
   bool _lightingGood = false;
+  // ignore: unused_field
   bool _sharpnessGood = false;
+  // ignore: unused_field
   bool _poseValid = false;
   String _liveInstruction = 'Position your face in the circle';
 
@@ -140,7 +165,7 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
-    
+
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
@@ -179,19 +204,31 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
 
       _cameraController = CameraController(
         frontCamera,
-        ResolutionPreset.max, // Phase 5: maximum camera resolution
+        ResolutionPreset.high, // Better focus and frame-rate performance
         enableAudio: false,
       );
 
       await _cameraController!.initialize();
-      
+      try {
+        await _cameraController!.setZoomLevel(1.0);
+      } catch (e) {
+        AppLogger.warning(
+          '[BIO] Zoom setting not supported: $e',
+          category: LogCategory.biometric,
+        );
+      }
+
       if (mounted) {
         setState(() {
           _isCameraInitialized = true;
         });
       }
     } catch (e) {
-      debugPrint('[BIO] Error initializing camera: $e');
+      AppLogger.warning(
+        '[BIO] Error initializing camera',
+        category: LogCategory.biometric,
+        error: e,
+      );
       setState(() {
         _validationError = 'Camera initialization failed: $e';
       });
@@ -214,12 +251,18 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
     try {
       final cacheDir = await _getCacheDirectory();
       final sessionFile = File('${cacheDir.path}/session.json');
-      await sessionFile.writeAsString(jsonEncode({
-        'enrollment_session_id': _enrollmentSessionId,
-        'uploaded_urls': _uploadedUrls,
-      }));
+      await sessionFile.writeAsString(
+        jsonEncode({
+          'enrollment_session_id': _enrollmentSessionId,
+          'uploaded_urls': _uploadedUrls,
+        }),
+      );
     } catch (e) {
-      debugPrint('[BIO] Failed to save session: $e');
+      AppLogger.warning(
+        '[BIO] Failed to save session',
+        category: LogCategory.biometric,
+        error: e,
+      );
     }
   }
 
@@ -256,15 +299,25 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
           _currentStepIndex = firstUncompleted;
         });
 
-        debugPrint('[BIO] Restored session $_enrollmentSessionId. Resuming at step $_currentStepIndex.');
+        AppLogger.debug(
+          '[BIO] Restored session $_enrollmentSessionId. Resuming at step $_currentStepIndex.',
+          category: LogCategory.biometric,
+        );
       } else {
         _enrollmentSessionId = const Uuid().v4();
         await _saveSessionState();
-        debugPrint('[BIO] Initialized new session $_enrollmentSessionId.');
+        AppLogger.debug(
+          '[BIO] Initialized new session $_enrollmentSessionId.',
+          category: LogCategory.biometric,
+        );
       }
     } catch (e) {
       _enrollmentSessionId = const Uuid().v4();
-      debugPrint('[BIO] Failed to load session, initialized new $_enrollmentSessionId: $e');
+      AppLogger.warning(
+        '[BIO] Failed to load session, initialized new $_enrollmentSessionId',
+        category: LogCategory.biometric,
+        error: e,
+      );
     }
   }
 
@@ -278,12 +331,15 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
         return;
       }
 
-      if (_currentCapturedPath != null || _isCapturing || _isValidating || _isPoseAccepted) {
+      if (_currentCapturedPath != null ||
+          _isCapturing ||
+          _isValidating ||
+          _isPoseAccepted) {
         return;
       }
 
       final step = _steps[_currentStepIndex];
-      
+
       // Interpolate towards target pose (simulating alignment)
       _currentYaw += (step.targetYawVal - _currentYaw) * 0.15;
       _currentPitch += (step.targetPitchVal - _currentPitch) * 0.15;
@@ -299,20 +355,22 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
       final double devPitch = (step.targetPitchVal - _currentPitch).abs();
       final double devRoll = _currentRoll.abs();
 
-      double confidence = 100.0 - (devYaw * 1.5 + devPitch * 1.5 + devRoll * 2.0);
+      double confidence =
+          100.0 - (devYaw * 1.5 + devPitch * 1.5 + devRoll * 2.0);
       confidence = confidence.clamp(0.0, 100.0);
 
       setState(() {
         _currentPoseConfidence = confidence;
         _poseEligible = confidence >= 85.0;
-        
+
         // During local preview before capture, assume general environment checks are good:
         _faceCentered = true;
         _lightingGood = true;
         _sharpnessGood = true;
         _poseValid = _poseEligible;
-        
-        _liveInstruction = _poseEligible ? 'Hold still and capture!' : step.instruction;
+
+        _liveInstruction =
+            _poseEligible ? 'Hold still and capture!' : step.instruction;
       });
     });
   }
@@ -345,9 +403,10 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
     _liveInstruction = step.instruction;
   }
 
-
   Future<void> _captureAndValidate() async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) return;
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      return;
+    }
     if (_isCapturing || _isValidating) return;
 
     setState(() {
@@ -373,7 +432,9 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
       final localFile = File(originalPath);
       final localResult = await ImageQualityValidator.validateImage(localFile);
       if (!localResult.isValid) {
-        throw Exception(localResult.errorMessage ?? 'Local quality check failed.');
+        throw Exception(
+          localResult.errorMessage ?? 'Local quality check failed.',
+        );
       }
 
       // 3. EXIF orientation correction & compress (Phase 5)
@@ -386,16 +447,17 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
       final baked = img.bakeOrientation(decoded);
       // Compress only after correction, saving high resolution facial detail (quality 90)
       final compressedBytes = img.encodeJpg(baked, quality: 90);
-      
+
       final tempDir = await getTemporaryDirectory();
-      correctedPath = '${tempDir.path}/corrected_${_steps[_currentStepIndex].id}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      correctedPath =
+          '${tempDir.path}/corrected_${_steps[_currentStepIndex].id}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final correctedFile = File(correctedPath);
       await correctedFile.writeAsBytes(compressedBytes);
 
       // Clean up raw file
       _safeDeleteFile(originalPath);
       originalPath = null;
-      
+
       setState(() {
         _currentCapturedPath = correctedPath;
         _isValidating = false;
@@ -403,7 +465,11 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
 
       HapticFeedback.mediumImpact();
     } catch (e) {
-      debugPrint('[BIO] Capture processing failed: $e');
+      AppLogger.warning(
+        '[BIO] Capture processing failed',
+        category: LogCategory.biometric,
+        error: e,
+      );
       setState(() {
         _isCapturing = false;
         _isValidating = false;
@@ -433,19 +499,21 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
       );
 
       final userId = Supabase.instance.client.auth.currentUser?.id ?? 'unknown';
-      final deviceInfo = '${Platform.operatingSystem} ${Platform.operatingSystemVersion}';
+      final deviceInfo =
+          '${Platform.operatingSystem} ${Platform.operatingSystemVersion}';
       final captureTime = DateTime.now().toUtc().toIso8601String();
 
       // 2. Call backend validation & enrollment (with 30 seconds timeout, 1 retry inside enrollPatientDetailed)
-      final result = await CustomBiometricService.instance.enrollPatientDetailed(
-        userId: userId,
-        selfieUrl: url,
-        poseLabel: step.id,
-        enrollmentSessionId: _enrollmentSessionId,
-        deviceInfo: deviceInfo,
-        camera: 'front',
-        captureTime: captureTime,
-      );
+      final result = await CustomBiometricService.instance
+          .enrollPatientDetailed(
+            userId: userId,
+            selfieUrl: url,
+            poseLabel: step.id,
+            enrollmentSessionId: _enrollmentSessionId,
+            deviceInfo: deviceInfo,
+            camera: 'front',
+            captureTime: captureTime,
+          );
 
       if (result.status == BiometricResultStatus.success) {
         // Success! Save to local persistent cache
@@ -466,7 +534,7 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
         });
 
         HapticFeedback.mediumImpact();
-        
+
         // Auto-advance after 500ms
         Future.delayed(const Duration(milliseconds: 500), () {
           if (mounted) {
@@ -482,66 +550,54 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
           _lightingGood = quality['lighting_good'] == true;
           _sharpnessGood = quality['sharpness_good'] == true;
           _poseValid = quality['pose_valid'] == true;
-          _validationError = result.errorMessage ?? 'Biometric validation rejected.';
-          _liveInstruction = result.errorMessage ?? 'Please adjust and try again.';
+          _validationError =
+              result.errorMessage ?? 'Biometric validation rejected.';
+          _liveInstruction =
+              result.errorMessage ?? 'Please adjust and try again.';
         });
         HapticFeedback.heavyImpact();
       }
     } catch (e) {
-      debugPrint('[BIO] Upload/Validation failed: $e');
+      AppLogger.warning(
+        '[BIO] Upload/Validation failed',
+        category: LogCategory.biometric,
+        error: e,
+      );
       setState(() {
         _isValidating = false;
         _validationError = _extractErrorMessage(e);
       });
       HapticFeedback.heavyImpact();
-      
+
       // If upload fails, keep file locally and display the Retry Upload dialog
       _showUploadFailedDialog(file);
     }
   }
 
   void _showUploadFailedDialog(File file) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: Text(
-          'Upload Failed',
-          style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: Text(
-          'A connection issue occurred during upload. Would you like to retry uploading this photo or discard it and retake?',
-          style: GoogleFonts.plusJakartaSans(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context); // Close dialog
-              _retakePose();          // Discard and retake
-            },
-            child: Text(
-              'RETAKE',
-              style: GoogleFonts.plusJakartaSans(color: const Color(0xFFEF4444)),
-            ),
+    showAppSheet<void>(
+      context,
+      builder:
+          (ctx) => AppSheetContent(
+            icon: Iconsax.cloud_cross,
+            title: 'Upload Failed',
+            message:
+                'A connection issue occurred during upload. Would you like to retry uploading this photo or discard it and retake?',
+            children: [
+              CSTwoButtonRow(
+                cancelLabel: 'Retake',
+                confirmLabel: 'Retry Upload',
+                onCancel: () {
+                  Navigator.of(ctx).pop(); // Close sheet
+                  _retakePose(); // Discard and retake
+                },
+                onConfirm: () {
+                  Navigator.of(ctx).pop(); // Close sheet
+                  _uploadAndValidateCapturedImage(); // Retry same image
+                },
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context); // Close dialog
-              _uploadAndValidateCapturedImage(); // Retry same image
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blueAccent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: Text(
-              'RETRY UPLOAD',
-              style: GoogleFonts.plusJakartaSans(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -592,7 +648,9 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
   void _safeDeleteFile(String path) {
     try {
       final f = File(path);
-      if (f.existsSync()) f.deleteSync();
+      if (f.existsSync()) {
+        f.deleteSync();
+      }
     } catch (_) {}
   }
 
@@ -605,33 +663,42 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
   }
 
   Color get _circleColor {
-    if (_validationError != null) return const Color(0xFFEF4444); // Vibrant Red
-    if (_isPoseAccepted) return const Color(0xFF10B981); // Vibrant Emerald Green
-    return _poseEligible ? const Color(0xFF10B981) : const Color(0xFF3B82F6); // Tech Blue
+    if (_validationError != null) return AppColors.errorDarkMode; // Vibrant Red
+    if (_isPoseAccepted) {
+      return const Color(0xFF10B981); // Vibrant Emerald Green
+    }
+    return AppColors.accentColor; // CareSync Orange
   }
-
 
   @override
   Widget build(BuildContext context) {
     final step = _steps[_currentStepIndex];
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D0D), // Ink Black
+      backgroundColor: Colors.black, // Ink Black
       body: SafeArea(
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // ── LIVE PREVIEW / CAPTURED IMAGE ────────────────────────────
-            if (_currentCapturedPath != null)
-              Image.file(
-                File(_currentCapturedPath!),
-                fit: BoxFit.cover,
+            if (_isCameraInitialized && _cameraController != null)
+              Center(
+                child: AspectRatio(
+                  aspectRatio: 1 / _cameraController!.value.aspectRatio,
+                  child:
+                      _currentCapturedPath != null
+                          ? Image.file(
+                            File(_currentCapturedPath!),
+                            fit: BoxFit.cover,
+                          )
+                          : CameraPreview(_cameraController!),
+                ),
               )
-            else if (_isCameraInitialized && _cameraController != null)
-              CameraPreview(_cameraController!)
             else
               const Center(
-                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
               ),
 
             // ── MASK OVERLAY & CIRCULAR HOLE ─────────────────────────────
@@ -641,7 +708,10 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                 return CustomPaint(
                   painter: FaceGuidePainter(
                     circleColor: _circleColor,
-                    pulseFactor: _currentCapturedPath == null ? _pulseAnimation.value : 1.0,
+                    pulseFactor:
+                        _currentCapturedPath == null
+                            ? _pulseAnimation.value
+                            : 1.0,
                     progress: _currentStepIndex / _steps.length,
                     stepId: _currentCapturedPath == null ? step.id : 'none',
                   ),
@@ -668,20 +738,12 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                           margin: const EdgeInsets.symmetric(horizontal: 2),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(2),
-                            color: isCompleted
-                                ? const Color(0xFF10B981)
-                                : isActive
-                                    ? const Color(0xFF3B82F6)
+                            color:
+                                isCompleted
+                                    ? AppColors.accentColor
+                                    : isActive
+                                    ? AppColors.accentColor
                                     : Colors.white24,
-                            boxShadow: isActive
-                                ? [
-                                    BoxShadow(
-                                      color: const Color(0xFF3B82F6).withOpacity(0.5),
-                                      blurRadius: 4,
-                                      spreadRadius: 1,
-                                    )
-                                  ]
-                                : null,
                           ),
                         ),
                       );
@@ -702,12 +764,16 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                         child: IconButton(
                           padding: EdgeInsets.zero,
                           onPressed: () => Navigator.pop(context, null),
-                          icon: const Icon(Icons.close, color: Colors.white, size: 18),
+                          icon: const Icon(
+                            Icons.close,
+                            color: Colors.white,
+                            size: 18,
+                          ),
                         ),
                       ),
                       Text(
                         'BIOMETRIC VERIFICATION',
-                        style: GoogleFonts.plusJakartaSans(
+                        style: _scan(
                           color: Colors.white,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
@@ -715,7 +781,10 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white10,
                           borderRadius: BorderRadius.circular(12),
@@ -723,8 +792,8 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                         ),
                         child: Text(
                           'STEP ${_currentStepIndex + 1}/${_steps.length}',
-                          style: GoogleFonts.plusJakartaSans(
-                            color: Colors.white.withOpacity(0.8),
+                          style: _scan(
+                            color: Colors.white.withValues(alpha: 0.8),
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
                           ),
@@ -748,11 +817,16 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.5),
+                          color: Colors.black.withValues(alpha: 0.5),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.white.withOpacity(0.1)),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.1),
+                          ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -762,7 +836,10 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                               height: 8,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: _poseEligible ? AppColors.success : AppColors.warning,
+                                color:
+                                    _poseEligible
+                                        ? AppColors.accentColor
+                                        : Colors.white54,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -770,7 +847,7 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                               _poseEligible
                                   ? 'READY TO CAPTURE (${_currentPoseConfidence.toStringAsFixed(0)}% FIT)'
                                   : 'ALIGNING FACE (${_currentPoseConfidence.toStringAsFixed(0)}% FIT)',
-                              style: GoogleFonts.plusJakartaSans(
+                              style: _scan(
                                 color: Colors.white,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
@@ -799,9 +876,12 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 20,
+                          ),
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.6),
+                            color: Colors.black.withValues(alpha: 0.6),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(color: Colors.white12),
                           ),
@@ -813,14 +893,14 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                                 height: 24,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2.5,
-                                  color: Color(0xFF3B82F6),
+                                  color: AppColors.accentColor,
                                 ),
                               ),
                               const SizedBox(height: 12),
                               Text(
                                 'ANALYZING QUALITY',
-                                style: GoogleFonts.plusJakartaSans(
-                                  color: const Color(0xFF3B82F6),
+                                style: _scan(
+                                  color: AppColors.accentColor,
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
                                   letterSpacing: 1.2,
@@ -837,19 +917,26 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 20,
+                          ),
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.6),
+                            color: Colors.black.withValues(alpha: 0.6),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppColors.error.withOpacity(0.2)),
+                            border: Border.all(
+                              color: AppColors.errorDarkMode.withValues(
+                                alpha: 0.2,
+                              ),
+                            ),
                           ),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
                                 'VALIDATION FAILED',
-                                style: GoogleFonts.plusJakartaSans(
-                                  color: AppColors.error,
+                                style: _scan(
+                                  color: AppColors.errorDarkMode,
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
                                   letterSpacing: 1.2,
@@ -859,7 +946,7 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                               Text(
                                 _validationError!,
                                 textAlign: TextAlign.center,
-                                style: GoogleFonts.plusJakartaSans(
+                                style: _scan(
                                   color: Colors.white70,
                                   fontSize: 13,
                                   height: 1.4,
@@ -871,9 +958,11 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                                 child: ElevatedButton(
                                   onPressed: _retakePose,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.error,
+                                    backgroundColor: AppColors.errorDarkMode,
                                     foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
@@ -881,9 +970,7 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                                   ),
                                   child: Text(
                                     'RETAKE PHOTO',
-                                    style: GoogleFonts.plusJakartaSans(
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                    style: _scan(fontWeight: FontWeight.bold),
                                   ),
                                 ),
                               ),
@@ -892,15 +979,20 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                         ),
                       ),
                     )
-                  else if (_currentCapturedPath != null && !_isPoseAccepted && _validationError == null)
+                  else if (_currentCapturedPath != null &&
+                      !_isPoseAccepted &&
+                      _validationError == null)
                     ClipRRect(
                       borderRadius: BorderRadius.circular(20),
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 20,
+                          ),
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.6),
+                            color: Colors.black.withValues(alpha: 0.6),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(color: Colors.white12),
                           ),
@@ -909,7 +1001,7 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                             children: [
                               Text(
                                 'IMAGE CAPTURED',
-                                style: GoogleFonts.plusJakartaSans(
+                                style: _scan(
                                   color: Colors.white,
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
@@ -920,7 +1012,7 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                               Text(
                                 'Verify that your face is clear and matches the pose instruction.',
                                 textAlign: TextAlign.center,
-                                style: GoogleFonts.plusJakartaSans(
+                                style: _scan(
                                   color: Colors.white70,
                                   fontSize: 12,
                                 ),
@@ -933,15 +1025,23 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                                       onPressed: _retakePose,
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: Colors.white,
-                                        side: BorderSide(color: Colors.white.withOpacity(0.15)),
-                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                        side: BorderSide(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.15,
+                                          ),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 12,
+                                        ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
                                       ),
                                       child: Text(
                                         'RETAKE',
-                                        style: GoogleFonts.plusJakartaSans(
+                                        style: _scan(
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
@@ -950,19 +1050,24 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: ElevatedButton(
-                                      onPressed: _uploadAndValidateCapturedImage,
+                                      onPressed:
+                                          _uploadAndValidateCapturedImage,
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF3B82F6),
+                                        backgroundColor: AppColors.accentColor,
                                         foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 12,
+                                        ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
                                         elevation: 0,
                                       ),
                                       child: Text(
                                         'LOOKS GOOD',
-                                        style: GoogleFonts.plusJakartaSans(
+                                        style: _scan(
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
@@ -981,19 +1086,26 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 20,
+                          ),
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.6),
+                            color: Colors.black.withValues(alpha: 0.6),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppColors.success.withOpacity(0.2)),
+                            border: Border.all(
+                              color: AppColors.accentColor.withValues(
+                                alpha: 0.2,
+                              ),
+                            ),
                           ),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
                                 'VALIDATION PASSED',
-                                style: GoogleFonts.plusJakartaSans(
-                                  color: AppColors.success,
+                                style: _scan(
+                                  color: AppColors.accentColor,
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
                                   letterSpacing: 1.2,
@@ -1003,7 +1115,7 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                               Text(
                                 'Pose matched and image quality accepted.',
                                 textAlign: TextAlign.center,
-                                style: GoogleFonts.plusJakartaSans(
+                                style: _scan(
                                   color: Colors.white70,
                                   fontSize: 12,
                                 ),
@@ -1016,15 +1128,23 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                                       onPressed: _retakePose,
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: Colors.white,
-                                        side: BorderSide(color: Colors.white.withOpacity(0.15)),
-                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                        side: BorderSide(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.15,
+                                          ),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 12,
+                                        ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
                                       ),
                                       child: Text(
                                         'RETAKE',
-                                        style: GoogleFonts.plusJakartaSans(
+                                        style: _scan(
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
@@ -1035,17 +1155,21 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                                     child: ElevatedButton(
                                       onPressed: _acceptPose,
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.success,
+                                        backgroundColor: AppColors.accentColor,
                                         foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 12,
+                                        ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
                                         elevation: 0,
                                       ),
                                       child: Text(
                                         'CONTINUE',
-                                        style: GoogleFonts.plusJakartaSans(
+                                        style: _scan(
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
@@ -1061,26 +1185,42 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                   else
                     // Main Preview Action Control Overlay (Minimal Style, no heavy backdrop)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 16,
+                      ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF3B82F6).withOpacity(0.15),
+                              color: AppColors.accentColor.withValues(
+                                alpha: 0.15,
+                              ),
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.3)),
+                              border: Border.all(
+                                color: AppColors.accentColor.withValues(
+                                  alpha: 0.3,
+                                ),
+                              ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(step.icon, color: const Color(0xFF3B82F6), size: 14),
+                                Icon(
+                                  step.icon,
+                                  color: AppColors.accentColor,
+                                  size: 14,
+                                ),
                                 const SizedBox(width: 6),
                                 Text(
                                   step.title.toUpperCase(),
-                                  style: GoogleFonts.plusJakartaSans(
-                                    color: const Color(0xFF3B82F6),
+                                  style: _scan(
+                                    color: AppColors.accentColor,
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
                                     letterSpacing: 1.2,
@@ -1093,7 +1233,7 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                           Text(
                             _liveInstruction,
                             textAlign: TextAlign.center,
-                            style: GoogleFonts.plusJakartaSans(
+                            style: _scan(
                               color: Colors.white,
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -1101,7 +1241,7 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                               shadows: [
                                 Shadow(
                                   blurRadius: 4.0,
-                                  color: Colors.black.withOpacity(0.5),
+                                  color: Colors.black.withValues(alpha: 0.5),
                                   offset: const Offset(0, 2),
                                 ),
                               ],
@@ -1111,7 +1251,10 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                           // Custom Shutter Button
                           Center(
                             child: GestureDetector(
-                              onTap: (_isCapturing || !_poseEligible) ? null : _captureAndValidate,
+                              onTap:
+                                  (_isCapturing || !_poseEligible)
+                                      ? null
+                                      : _captureAndValidate,
                               child: AnimatedScale(
                                 scale: _poseEligible ? 1.05 : 1.0,
                                 duration: const Duration(milliseconds: 200),
@@ -1122,7 +1265,10 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     border: Border.all(
-                                      color: _poseEligible ? Colors.white : Colors.white24,
+                                      color:
+                                          _poseEligible
+                                              ? Colors.white
+                                              : Colors.white24,
                                       width: 4,
                                     ),
                                   ),
@@ -1131,12 +1277,22 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
                                     duration: const Duration(milliseconds: 200),
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: _poseEligible ? AppColors.success : Colors.white.withOpacity(0.15),
+                                      color:
+                                          _poseEligible
+                                              ? AppColors.accentColor
+                                              : Colors.white.withValues(
+                                                alpha: 0.15,
+                                              ),
                                     ),
                                     child: Center(
                                       child: Icon(
-                                        _poseEligible ? Icons.camera_alt_rounded : Icons.lock_rounded,
-                                        color: _poseEligible ? Colors.white : Colors.white30,
+                                        _poseEligible
+                                            ? Icons.camera_alt_rounded
+                                            : Icons.lock_rounded,
+                                        color:
+                                            _poseEligible
+                                                ? Colors.white
+                                                : Colors.white30,
                                         size: 24,
                                       ),
                                     ),
@@ -1177,41 +1333,66 @@ class FaceGuidePainter extends CustomPainter {
     final radius = size.width * 0.38;
 
     // 1. Draw dark background mask (hole in the center)
-    final path = Path()
-      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
-      ..addOval(Rect.fromCircle(center: center, radius: radius))
-      ..fillType = PathFillType.evenOdd;
+    final path =
+        Path()
+          ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
+          ..addOval(Rect.fromCircle(center: center, radius: radius))
+          ..fillType = PathFillType.evenOdd;
 
-    final maskPaint = Paint()
-      ..color = const Color(0x990D0D0D) // Softer, less bulky semi-transparent background (60% opacity)
-      ..style = PaintingStyle.fill;
+    final maskPaint =
+        Paint()
+          ..color = const Color(
+            0x990D0D0D,
+          ) // Softer, less bulky semi-transparent background (60% opacity)
+          ..style = PaintingStyle.fill;
 
     canvas.drawPath(path, maskPaint);
 
     // 2. Draw animated pulsing guide ring (outer glow)
-    final ringPaint = Paint()
-      ..color = circleColor.withOpacity(0.12)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
+    final ringPaint =
+        Paint()
+          ..color = circleColor.withValues(alpha: 0.12)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5;
     canvas.drawCircle(center, radius * pulseFactor, ringPaint);
 
     // 3. Draw clean inner indicator border (Apple Face ID style, solid and thin)
-    final innerPaint = Paint()
-      ..color = circleColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
+    final innerPaint =
+        Paint()
+          ..color = circleColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5;
     canvas.drawCircle(center, radius, innerPaint);
 
+    // If success (green) or error (red), draw a gorgeous soft outer glow around the ring
+    if (circleColor != AppColors.accentColor) {
+      final glowPaint =
+          Paint()
+            ..color = circleColor.withValues(alpha: 0.18)
+            ..style = PaintingStyle.stroke
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0)
+            ..strokeWidth = 4.0;
+      canvas.drawCircle(center, radius, glowPaint);
+    }
+
     // Draw high-precision radial ticks around the target circle
-    final tickPaint = Paint()
-      ..color = circleColor.withOpacity(0.25)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
     final double tickStartRadius = radius + 3;
-    final double tickEndRadius = radius + 7;
+    final double tickEndRadius = radius + 6;
     const int totalTicks = 80;
+    final int activeTicksCount = (progress * totalTicks).round();
     for (int i = 0; i < totalTicks; i++) {
       final double angle = (i * 2 * math.pi) / totalTicks;
+      final bool isActive = i < activeTicksCount;
+
+      final tickPaint =
+          Paint()
+            ..color =
+                isActive
+                    ? circleColor.withValues(alpha: 0.75)
+                    : Colors.white.withValues(alpha: 0.08)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = isActive ? 0.75 : 0.5;
+
       final Offset start = Offset(
         center.dx + tickStartRadius * math.cos(angle),
         center.dy + tickStartRadius * math.sin(angle),
@@ -1225,23 +1406,28 @@ class FaceGuidePainter extends CustomPainter {
 
     // 4. Draw premium outer progress circle arc with gradient shader
     final outerRect = Rect.fromCircle(center: center, radius: radius + 11);
-    
+
     // Draw the background progress track
-    final trackPaint = Paint()
-      ..color = Colors.white.withOpacity(0.08)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
+    final trackPaint =
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.08)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0;
     canvas.drawCircle(center, radius + 11, trackPaint);
 
-    final progressPaint = Paint()
-      ..shader = const SweepGradient(
-        colors: [Color(0xFF3B82F6), Color(0xFF10B981)], // Tech Blue to Emerald Green
-        stops: [0.0, 1.0],
-        transform: GradientRotation(-math.pi / 2),
-      ).createShader(outerRect)
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = 2.5;
+    final progressPaint =
+        Paint()
+          ..shader = const SweepGradient(
+            colors: [
+              AppColors.accentColor,
+              AppColors.accentColor,
+            ], // Tech Blue to Emerald Green
+            stops: [0.0, 1.0],
+            transform: GradientRotation(-math.pi / 2),
+          ).createShader(outerRect)
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = 2.5;
 
     if (progress > 0) {
       canvas.drawArc(
@@ -1254,70 +1440,44 @@ class FaceGuidePainter extends CustomPainter {
     }
 
     // 6. Draw lightweight local guidance arrows pointing outside the circle
-    final arrowPaint = Paint()
-      ..color = circleColor
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = 3.5;
-
-    final arrowPaint2 = Paint()
-      ..color = circleColor.withOpacity(0.4)
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = 2.5;
+    final double offset =
+        (pulseFactor - 1.0) * 200; // Smooth sliding offset (0.0 to 10.0px)
+    final arrowPaint =
+        Paint()
+          ..color = circleColor
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..strokeWidth = 2.0;
 
     if (stepId == 'left') {
-      // Chevron pointing left (user turns left)
-      final arrowPath = Path()
-        ..moveTo(center.dx - radius - 18, center.dy - 10)
-        ..lineTo(center.dx - radius - 28, center.dy)
-        ..lineTo(center.dx - radius - 18, center.dy + 10);
+      final arrowPath =
+          Path()
+            ..moveTo(center.dx - radius - 16 - offset, center.dy - 6)
+            ..lineTo(center.dx - radius - 22 - offset, center.dy)
+            ..lineTo(center.dx - radius - 16 - offset, center.dy + 6);
       canvas.drawPath(arrowPath, arrowPaint);
-
-      final arrowPath2 = Path()
-        ..moveTo(center.dx - radius - 28, center.dy - 8)
-        ..lineTo(center.dx - radius - 36, center.dy)
-        ..lineTo(center.dx - radius - 28, center.dy + 8);
-      canvas.drawPath(arrowPath2, arrowPaint2);
     } else if (stepId == 'right') {
-      // Chevron pointing right
-      final arrowPath = Path()
-        ..moveTo(center.dx + radius + 18, center.dy - 10)
-        ..lineTo(center.dx + radius + 28, center.dy)
-        ..lineTo(center.dx + radius + 18, center.dy + 10);
+      final arrowPath =
+          Path()
+            ..moveTo(center.dx + radius + 16 + offset, center.dy - 6)
+            ..lineTo(center.dx + radius + 22 + offset, center.dy)
+            ..lineTo(center.dx + radius + 16 + offset, center.dy + 6);
       canvas.drawPath(arrowPath, arrowPaint);
-
-      final arrowPath2 = Path()
-        ..moveTo(center.dx + radius + 28, center.dy - 8)
-        ..lineTo(center.dx + radius + 36, center.dy)
-        ..lineTo(center.dx + radius + 28, center.dy + 8);
-      canvas.drawPath(arrowPath2, arrowPaint2);
     } else if (stepId == 'up') {
-      // Chevron pointing up
-      final arrowPath = Path()
-        ..moveTo(center.dx - 10, center.dy - radius - 18)
-        ..lineTo(center.dx, center.dy - radius - 28)
-        ..lineTo(center.dx + 10, center.dy - radius - 18);
+      final arrowPath =
+          Path()
+            ..moveTo(center.dx - 6, center.dy - radius - 16 - offset)
+            ..lineTo(center.dx, center.dy - radius - 22 - offset)
+            ..lineTo(center.dx + 6, center.dy - radius - 16 - offset);
       canvas.drawPath(arrowPath, arrowPaint);
-
-      final arrowPath2 = Path()
-        ..moveTo(center.dx - 8, center.dy - radius - 28)
-        ..lineTo(center.dx, center.dy - radius - 36)
-        ..lineTo(center.dx + 8, center.dy - radius - 28);
-      canvas.drawPath(arrowPath2, arrowPaint2);
     } else if (stepId == 'down') {
-      // Chevron pointing down
-      final arrowPath = Path()
-        ..moveTo(center.dx - 10, center.dy + radius + 18)
-        ..lineTo(center.dx, center.dy + radius + 28)
-        ..lineTo(center.dx + 10, center.dy + radius + 18);
+      final arrowPath =
+          Path()
+            ..moveTo(center.dx - 6, center.dy + radius + 16 + offset)
+            ..lineTo(center.dx, center.dy + radius + 22 + offset)
+            ..lineTo(center.dx + 6, center.dy + radius + 16 + offset);
       canvas.drawPath(arrowPath, arrowPaint);
-
-      final arrowPath2 = Path()
-        ..moveTo(center.dx - 8, center.dy + radius + 28)
-        ..lineTo(center.dx, center.dy + radius + 36)
-        ..lineTo(center.dx + 8, center.dy + radius + 28);
-      canvas.drawPath(arrowPath2, arrowPaint2);
     }
   }
 

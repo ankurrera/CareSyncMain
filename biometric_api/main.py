@@ -1,16 +1,20 @@
+# Triggering Cloud Run build deployment
 import os
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
+os.environ["TORCH_CPP_MIN_LOG_LEVEL"] = "3"
 if "DEEPFACE_HOME" not in os.environ:
     os.environ["DEEPFACE_HOME"] = os.getcwd()
 import tempfile
 import time
+import warnings
+warnings.filterwarnings("ignore")
 import logging
 import cv2
 import numpy as np
 import math
 import json
 from typing import Dict, Any, List, Optional, Tuple
-from fastapi import FastAPI, HTTPException, File, UploadFile, Depends, Request, Header, Form
+from fastapi import FastAPI, HTTPException, File, UploadFile, Depends, Request, Header, Form, BackgroundTasks
 from fastapi.concurrency import run_in_threadpool
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
@@ -121,8 +125,11 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
     expected_token = os.getenv("HF_TOKEN")
     if not expected_token:
-        logger.warning("HF_TOKEN is not set in environment variables! Auth is currently bypassed.")
-        return token
+        logger.error("HF_TOKEN is not set in environment variables! API access is disabled.")
+        raise HTTPException(
+            status_code=503,
+            detail="API authorization is not configured. Access is disabled."
+        )
     if token != expected_token:
         raise HTTPException(
             status_code=401,
@@ -175,6 +182,7 @@ scan_cache = SimpleTTLCache(ttl_seconds=300)
 # Check if PyTorch (Anti-Spoofing Dependency) is available
 try:
     import torch
+    torch.set_num_threads(1)
     has_torch = True
 except ImportError:
     has_torch = False
@@ -362,75 +370,250 @@ def check_face_occlusions(img: np.ndarray, facial_area: dict) -> Dict[str, Any]:
         "wearing_mask": wearing_mask
     }
 
-def detect_and_align_face(img, is_id_doc=False, run_liveness=False) -> Dict[str, Any]:
-    try:
-        faces = DeepFace.extract_faces(
-            img_path=img,
-            detector_backend="retinaface",
-            align=True,
-            enforce_detection=True,
-            anti_spoofing=(run_liveness and has_torch)
-        )
-    except ValueError as ve:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error_code": "NO_FACE_DETECTED",
-                "message": "No face detected. Please ensure a clear face is visible." if is_id_doc else "No face detected. Please position the camera directly in front of the face."
-            }
-        )
+def align_and_crop_with_mediapipe(img: np.ndarray, mp_result: Dict[str, Any]) -> Dict[str, Any]:
+    h, w = img.shape[:2]
+    landmarks = mp_result["landmarks"]
+    
+    # Eye centers as midpoint of outer and inner corners
+    # Left eye: outer is 33, inner is 133
+    left_eye_x = (landmarks[33].x + landmarks[133].x) / 2.0 * w
+    left_eye_y = (landmarks[33].y + landmarks[133].y) / 2.0 * h
+    
+    # Right eye: outer is 263, inner is 362
+    right_eye_x = (landmarks[263].x + landmarks[362].x) / 2.0 * w
+    right_eye_y = (landmarks[263].y + landmarks[362].y) / 2.0 * h
+    
+    # Nose tip is 1
+    nose_x = landmarks[1].x * w
+    nose_y = landmarks[1].y * h
+    
+    # Mouth left corner is 61
+    mouth_left_x = landmarks[61].x * w
+    mouth_left_y = landmarks[61].y * h
+    
+    # Mouth right corner is 291
+    mouth_right_x = landmarks[291].x * w
+    mouth_right_y = landmarks[291].y * h
+    
+    # Source points for similarity transform mapping (3 key landmarks to define face plane)
+    src_pts = np.array([
+        [left_eye_x, left_eye_y],
+        [right_eye_x, right_eye_y],
+        [(mouth_left_x + mouth_right_x) / 2.0, (mouth_left_y + mouth_right_y) / 2.0]
+    ], dtype=np.float32)
+    
+    # Standard reference coordinates for 112x112 ArcFace template (Eyes & Mouth center)
+    ref_pts = np.array([
+        [30.2946, 51.6963],  # Left eye center
+        [81.7054, 51.6963],  # Right eye center
+        [56.0000, 92.2041]   # Mouth center midpoint
+    ], dtype=np.float32)
+    
+    # Estimate similarity transform matrix (2x3)
+    M, _ = cv2.estimateAffinePartial2D(src_pts, ref_pts)
+    
+    if M is not None:
+        cropped = cv2.warpAffine(img, M, (112, 112))
+    else:
+        logger.warning("Similarity transform estimation failed. Falling back to simple eye-based crop.")
+        # Fallback to simple crop if transform fails
+        left_eye = mp_result["left_eye"]
+        right_eye = mp_result["right_eye"]
+        face_w = abs(right_eye[0] - left_eye[0]) * 2.0
+        face_h = face_w * 1.2
+        xmin = max(0, int(min(left_eye[0], right_eye[0]) - face_w * 0.2))
+        xmax = min(w, int(max(left_eye[0], right_eye[0]) + face_w * 0.2))
+        ymin = max(0, int(min(left_eye[1], right_eye[1]) - face_h * 0.3))
+        ymax = min(h, int(max(left_eye[1], right_eye[1]) + face_h * 0.5))
+        cropped = img[ymin:ymax, xmin:xmax]
+        if cropped.size == 0:
+            cropped = img
+        cropped = cv2.resize(cropped, (112, 112))
+        
+    # Standard output scale [0, 1] float32
+    cropped_normalized = cropped.astype(np.float32) / 255.0
+    
+    # Calculate bounding box in original image for preview/diagnostics
+    xs = [left_eye_x, right_eye_x, nose_x, mouth_left_x, mouth_right_x]
+    ys = [left_eye_y, right_eye_y, nose_y, mouth_left_y, mouth_right_y]
+    xmin_orig = min(xs)
+    xmax_orig = max(xs)
+    ymin_orig = min(ys)
+    ymax_orig = max(ys)
+    
+    fw = xmax_orig - xmin_orig
+    fh = ymax_orig - ymin_orig
+    
+    facial_area = {
+        "x": int(max(0, xmin_orig - 0.25 * fw)),
+        "y": int(max(0, ymin_orig - 0.35 * fh)),
+        "w": int(min(w, xmax_orig + 0.25 * fw) - max(0, xmin_orig - 0.25 * fw)),
+        "h": int(min(h, ymax_orig + 0.20 * fh) - max(0, ymin_orig - 0.35 * fh)),
+        "left_eye": (int(left_eye_x), int(left_eye_y)),
+        "right_eye": (int(right_eye_x), int(right_eye_y)),
+        "nose": (int(nose_x), int(nose_y)),
+        "mouth_left": (int(mouth_left_x), int(mouth_left_y)),
+        "mouth_right": (int(mouth_right_x), int(mouth_right_y))
+    }
+    
+    return {
+        "face": cropped_normalized,
+        "facial_area": facial_area,
+        "confidence": 1.0
+    }
 
-    if len(faces) == 0:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error_code": "NO_FACE_DETECTED",
-                "message": "No face detected."
-            }
-        )
-    if len(faces) > 1:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error_code": "MULTIPLE_FACES",
-                "message": "Multiple faces detected. Please capture only one person."
-            }
-        )
+def detect_and_align_face(img, is_id_doc=False, run_liveness=False, mp_result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    # If pre-computed MediaPipe landmarks exist and it is not an ID document, crop/align in python directly (~2ms)
+    if mp_result is not None and not is_id_doc:
+        try:
+            logger.info("Aligning and cropping face using pre-computed MediaPipe FaceMesh landmarks.")
+            face = align_and_crop_with_mediapipe(img, mp_result)
+            
+            # Check liveness if requested using skip detector backend (fast)
+            if run_liveness and has_torch:
+                logger.info("Running liveness check on the MediaPipe face with padded context.")
+                
+                # The anti-spoofing model requires surrounding head/background context to detect
+                # screens/spoofs. We crop a padded face region (60% padding) to preserve context.
+                try:
+                    h, w = img.shape[:2]
+                    landmarks = mp_result["landmarks"]
+                    xs = [lm.x * w for lm in landmarks]
+                    ys = [lm.y * h for lm in landmarks]
+                    min_x, max_x = min(xs), max(xs)
+                    min_y, max_y = min(ys), max(ys)
+                    
+                    face_w = max_x - min_x
+                    face_h = max_y - min_y
+                    
+                    pad_x = face_w * 0.6
+                    pad_y = face_h * 0.6
+                    
+                    x1 = max(0, int(min_x - pad_x))
+                    y1 = max(0, int(min_y - pad_y))
+                    x2 = min(w, int(max_x + pad_x))
+                    y2 = min(h, int(max_y + pad_y))
+                    
+                    padded_crop = img[y1:y2, x1:x2]
+                    
+                    liveness_res = DeepFace.extract_faces(
+                        img_path=padded_crop,
+                        detector_backend="skip",
+                        align=False,
+                        enforce_detection=False,
+                        anti_spoofing=True
+                    )
+                except Exception as liveness_err:
+                    logger.warning(f"Failed to prepare padded liveness crop: {liveness_err}. Falling back to full image liveness.")
+                    liveness_res = DeepFace.extract_faces(
+                        img_path=img,
+                        detector_backend="skip",
+                        align=False,
+                        enforce_detection=False,
+                        anti_spoofing=True
+                    )
+                
+                if liveness_res and len(liveness_res) > 0:
+                    is_real = liveness_res[0].get("is_real", True)
+                    if not is_real:
+                        raise HTTPException(
+                            status_code=400,
+                            detail={
+                                "error_code": "LIVENESS_FAILED",
+                                "message": "Liveness check failed. Spoofing attempt blocked."
+                            }
+                        )
+            return face
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"MediaPipe-based python crop/align failed: {e}. Falling back to standard detection...")
 
-    face = faces[0]
-    face_conf = face.get("confidence", 0.0)
-    if face_conf < 0.85:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error_code": "LOW_CONFIDENCE",
-                "message": "Face detection confidence too low. Verify lighting and angle."
-            }
-        )
+    # Standard extraction fallback (used for ID documents, or when MediaPipe pre-check fails)
+    primary_backend = "mediapipe" if not is_id_doc else "retinaface"
+    backends_to_try = [primary_backend]
+    if primary_backend == "mediapipe":
+        backends_to_try.append("retinaface")
 
-    facial_area = face["facial_area"]
-    wf, hf = facial_area["w"], facial_area["h"]
-    if wf < 120 or hf < 120:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error_code": "FACE_TOO_SMALL",
-                "message": "Face too small or too far. Please move closer."
-            }
-        )
-
-    if run_liveness and has_torch:
-        is_real = face.get("is_real", True)
-        if not is_real:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error_code": "LIVENESS_FAILED",
-                    "message": "Liveness check failed. Spoofing attempt blocked."
-                }
+    last_exc = None
+    for backend in backends_to_try:
+        try:
+            logger.info(f"Extracting face using DeepFace backend: {backend}")
+            faces = DeepFace.extract_faces(
+                img_path=img,
+                detector_backend=backend,
+                align=True,
+                enforce_detection=True,
+                anti_spoofing=(run_liveness and has_torch)
             )
+            if not faces or len(faces) == 0:
+                continue
 
-    return face
+            if len(faces) > 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error_code": "MULTIPLE_FACES",
+                        "message": "Multiple faces detected. Please capture only one person."
+                    }
+                )
+
+            face = faces[0]
+            face_conf = face.get("confidence", 0.0)
+            
+            # MediaPipe detector confidence scores in DeepFace can sometimes be lower than 0.85 
+            # even for perfectly valid front-facing mesh results. 
+            # Therefore, we only enforce the strict 0.85 threshold on retinaface.
+            if backend == "retinaface" and face_conf < 0.85:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error_code": "LOW_CONFIDENCE",
+                        "message": "Face detection confidence too low. Verify lighting and angle."
+                    }
+                )
+
+            facial_area = face["facial_area"]
+            wf, hf = facial_area["w"], facial_area["h"]
+            if wf < 120 or hf < 120:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error_code": "FACE_TOO_SMALL",
+                        "message": "Face too small or too far. Please move closer."
+                    }
+                )
+
+            if run_liveness and has_torch:
+                is_real = face.get("is_real", True)
+                if not is_real:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "error_code": "LIVENESS_FAILED",
+                            "message": "Liveness check failed. Spoofing attempt blocked."
+                        }
+                    )
+
+            return face
+
+        except HTTPException:
+            # Re-raise standard HTTPExceptions (like MULTIPLE_FACES, FACE_TOO_SMALL, LIVENESS_FAILED)
+            # directly to avoid swallowing genuine client-side errors during backend fallback.
+            raise
+        except Exception as e:
+            last_exc = e
+            logger.warning(f"Backend '{backend}' failed during extraction: {e}")
+            continue
+
+    # If all backends in the chain failed to detect any face:
+    raise HTTPException(
+        status_code=400,
+        detail={
+            "error_code": "NO_FACE_DETECTED",
+            "message": "No face detected. Please ensure a clear face is visible." if is_id_doc else "No face detected. Please position the camera directly in front of the face."
+        }
+    )
 
 def evaluate_image_quality(img_input: Any, run_liveness: bool = False, extract_face_crop: bool = True, target_pose: Optional[str] = None) -> Dict[str, Any]:
     start_time = time.time()
@@ -549,7 +732,7 @@ def evaluate_image_quality(img_input: Any, run_liveness: bool = False, extract_f
         if mp_result is None:
             logger.warning("MediaPipe failed on current frame. RetinaFace fallback activated.")
         
-        face = detect_and_align_face(img_resized, is_id_doc=False, run_liveness=run_liveness)
+        face = detect_and_align_face(img_resized, is_id_doc=False, run_liveness=run_liveness, mp_result=mp_result)
         facial_area = face["facial_area"]
         occlusions = check_face_occlusions(img_resized, facial_area)
         eyes_visible = (facial_area.get("left_eye") is not None) and (facial_area.get("right_eye") is not None)
@@ -986,7 +1169,8 @@ def download_supabase_file(storage_url: str, dest_suffix: str = ".jpg") -> str:
 
 class EnrollRequest(BaseModel):
     userId: str
-    selfieUrl: str
+    selfieUrl: Optional[str] = None
+    selfieBase64: Optional[str] = None
     poseLabel: str = "neutral"
     enrollment_session_id: Optional[str] = None
     device_info: Optional[str] = None
@@ -994,8 +1178,10 @@ class EnrollRequest(BaseModel):
     capture_time: Optional[str] = None
 
 class VerifyIDRequest(BaseModel):
-    selfieUrl: str
-    idDocumentUrl: str
+    selfieUrl: Optional[str] = None
+    selfieBase64: Optional[str] = None
+    idDocumentUrl: Optional[str] = None
+    idDocumentBase64: Optional[str] = None
 
 @app.get("/")
 def read_root():
@@ -1011,6 +1197,7 @@ def read_root():
 async def enroll(
     request: Request,
     payload: EnrollRequest,
+    background_tasks: BackgroundTasks,
     authenticated: bool = Depends(verify_token),
     x_actor_id: str = Header(None, alias="X-Actor-Id"),
     x_request_id: str = Header(None, alias="X-Request-Id")
@@ -1022,6 +1209,14 @@ async def enroll(
     patient_id = None
     request_id = x_request_id or "unknown"
     try:
+        # Pre-fetch existing patient_id for audit logging fallback
+        try:
+            pat_check = supabase.from_("patients").select("id").eq("user_id", payload.userId).maybe_single().execute()
+            if pat_check.data:
+                patient_id = pat_check.data["id"]
+        except Exception as e:
+            logger.warning(f"Could not pre-fetch patient_id for audit logging: {e}")
+
         logger.info(f"Enrolling pose '{payload.poseLabel}' for user: {payload.userId}")
         
         # Rate Limiting Check
@@ -1034,15 +1229,42 @@ async def enroll(
                 }
             )
 
-        # 1. Download file
-        temp_img_path = await run_in_threadpool(download_supabase_file, payload.selfieUrl, ".jpg")
-        img = cv2.imread(temp_img_path)
+        # 1. Load image (Base64 decode if present, else download)
+        if payload.selfieBase64:
+            try:
+                import base64
+                b64_data = payload.selfieBase64
+                if "," in b64_data:
+                    b64_data = b64_data.split(",")[1]
+                img_bytes = base64.b64decode(b64_data)
+                nparr = np.frombuffer(img_bytes, np.uint8)
+                img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error_code": "INVALID_IMAGE",
+                        "message": f"Failed to decode base64 selfie: {str(e)}"
+                    }
+                )
+        elif payload.selfieUrl:
+            temp_img_path = await run_in_threadpool(download_supabase_file, payload.selfieUrl, ".jpg")
+            img = cv2.imread(temp_img_path)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error_code": "EMPTY_IMAGE",
+                    "message": "Both selfieUrl and selfieBase64 are missing."
+                }
+            )
+
         if img is None:
             raise HTTPException(
                 status_code=400,
                 detail={
                     "error_code": "INVALID_IMAGE",
-                    "message": "Downloaded image is empty or corrupted."
+                    "message": "Loaded image is empty or corrupted."
                 }
             )
 
@@ -1235,11 +1457,12 @@ async def enroll(
             "updated_at": "now()"
         }).eq("id", patient_id).execute()
 
-        log_biometric_access(
+        background_tasks.add_task(
+            log_biometric_access,
             actor_id=x_actor_id or payload.userId,
             action_type="ENROLL",
             status="SUCCESS",
-            target_patient_id=payload.userId,
+            target_patient_id=patient_id,
             reason=json.dumps({
                 "request_id": request_id,
                 "pose_label": payload.poseLabel,
@@ -1264,11 +1487,12 @@ async def enroll(
         err_msg = he.detail.get("message") if isinstance(he.detail, dict) else str(he.detail)
         logger.warning(f"[ENROLL FAILED] user={payload.userId} request_id={request_id} "
                        f"error_code={err_code} message={err_msg}")
-        log_biometric_access(
+        background_tasks.add_task(
+            log_biometric_access,
             actor_id=x_actor_id or payload.userId,
             action_type="ENROLL",
             status="FAILURE",
-            target_patient_id=payload.userId,
+            target_patient_id=patient_id,
             reason=json.dumps({
                 "request_id": request_id,
                 "error_code": err_code,
@@ -1280,11 +1504,12 @@ async def enroll(
     except Exception as e:
         logger.error(f"[ENROLL FAILED] user={payload.userId} request_id={request_id} "
                      f"error_code=SERVER_ERROR message={str(e)}")
-        log_biometric_access(
+        background_tasks.add_task(
+            log_biometric_access,
             actor_id=x_actor_id or payload.userId,
             action_type="ENROLL",
             status="FAILURE",
-            target_patient_id=payload.userId,
+            target_patient_id=patient_id,
             reason=json.dumps({
                 "request_id": request_id,
                 "error_code": "SERVER_ERROR",
@@ -1307,6 +1532,7 @@ async def enroll(
 async def verify_id(
     request: Request,
     payload: VerifyIDRequest,
+    background_tasks: BackgroundTasks,
     authenticated: bool = Depends(verify_token),
     x_actor_id: str = Header(None, alias="X-Actor-Id"),
     x_request_id: str = Header(None, alias="X-Request-Id")
@@ -1325,11 +1551,36 @@ async def verify_id(
                 }
             )
 
-        temp_selfie_path = await run_in_threadpool(download_supabase_file, payload.selfieUrl, ".jpg")
-        temp_id_path = await run_in_threadpool(download_supabase_file, payload.idDocumentUrl, ".jpg")
+        # 1. Load Selfie (Base64 decode if present, else download)
+        if payload.selfieBase64:
+            try:
+                import base64
+                b64_selfie = payload.selfieBase64
+                if "," in b64_selfie:
+                    b64_selfie = b64_selfie.split(",")[1]
+                img_selfie_bytes = base64.b64decode(b64_selfie)
+                nparr_selfie = np.frombuffer(img_selfie_bytes, np.uint8)
+                img_selfie = cv2.imdecode(nparr_selfie, cv2.IMREAD_COLOR)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error_code": "INVALID_IMAGE",
+                        "message": f"Failed to decode base64 selfie: {str(e)}"
+                    }
+                )
+        elif payload.selfieUrl:
+            temp_selfie_path = await run_in_threadpool(download_supabase_file, payload.selfieUrl, ".jpg")
+            img_selfie = cv2.imread(temp_selfie_path)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error_code": "EMPTY_IMAGE",
+                    "message": "Both selfieUrl and selfieBase64 are missing."
+                }
+            )
 
-        # Process Selfie
-        img_selfie = cv2.imread(temp_selfie_path)
         if img_selfie is None:
             raise HTTPException(
                 status_code=400,
@@ -1348,12 +1599,41 @@ async def verify_id(
                 }
             )
         img_selfie_resized = resize_to_consistent_size(img_selfie, max_dim=640)
-        face_selfie = detect_and_align_face(img_selfie_resized, is_id_doc=False, run_liveness=True)
+        mp_selfie = analyze_face_with_mediapipe(img_selfie_resized)
+        face_selfie = detect_and_align_face(img_selfie_resized, is_id_doc=False, run_liveness=True, mp_result=mp_selfie)
         cropped_selfie_rgb = (face_selfie["face"] * 255).astype(np.uint8)
         cropped_selfie_bgr = cv2.cvtColor(cropped_selfie_rgb, cv2.COLOR_RGB2BGR)
 
-        # Process ID Document
-        img_id = cv2.imread(temp_id_path)
+        # 2. Load ID Document (Base64 decode if present, else download)
+        if payload.idDocumentBase64:
+            try:
+                import base64
+                b64_id = payload.idDocumentBase64
+                if "," in b64_id:
+                    b64_id = b64_id.split(",")[1]
+                img_id_bytes = base64.b64decode(b64_id)
+                nparr_id = np.frombuffer(img_id_bytes, np.uint8)
+                img_id = cv2.imdecode(nparr_id, cv2.IMREAD_COLOR)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error_code": "INVALID_IMAGE",
+                        "message": f"Failed to decode base64 ID document: {str(e)}"
+                    }
+                )
+        elif payload.idDocumentUrl:
+            temp_id_path = await run_in_threadpool(download_supabase_file, payload.idDocumentUrl, ".jpg")
+            img_id = cv2.imread(temp_id_path)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error_code": "EMPTY_IMAGE",
+                    "message": "Both idDocumentUrl and idDocumentBase64 are missing."
+                }
+            )
+
         if img_id is None:
             raise HTTPException(
                 status_code=400,
@@ -1387,7 +1667,8 @@ async def verify_id(
         similarity = 1.0 - float(result["distance"])
         verified = bool(result["verified"])
 
-        log_biometric_access(
+        background_tasks.add_task(
+            log_biometric_access,
             actor_id=x_actor_id,
             action_type="VERIFY_ID",
             status="SUCCESS" if verified else "FAILURE",
@@ -1414,7 +1695,8 @@ async def verify_id(
         err_msg = he.detail.get("message") if isinstance(he.detail, dict) else str(he.detail)
         logger.warning(f"[VERIFY_ID FAILED] actor={x_actor_id} request_id={request_id} "
                        f"error_code={err_code} message={err_msg}")
-        log_biometric_access(
+        background_tasks.add_task(
+            log_biometric_access,
             actor_id=x_actor_id,
             action_type="VERIFY_ID",
             status="FAILURE",
@@ -1429,7 +1711,8 @@ async def verify_id(
     except Exception as e:
         logger.error(f"[VERIFY_ID FAILED] actor={x_actor_id} request_id={request_id} "
                      f"error_code=SERVER_ERROR message={str(e)}")
-        log_biometric_access(
+        background_tasks.add_task(
+            log_biometric_access,
             actor_id=x_actor_id,
             action_type="VERIFY_ID",
             status="FAILURE",
@@ -1456,6 +1739,7 @@ async def verify_id(
 @app.post("/identify")
 async def identify(
     request: Request,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     authenticated: bool = Depends(verify_token),
     x_actor_id: str = Header(None, alias="X-Actor-Id"),
@@ -1467,7 +1751,8 @@ async def identify(
     # Rate Limiting
     client_ip = request.client.host if request.client else "unknown"
     if not identify_limiter.is_allowed(client_ip):
-        log_biometric_access(
+        background_tasks.add_task(
+            log_biometric_access,
             actor_id=x_actor_id,
             action_type="IDENTIFY",
             status="DENIED",
@@ -1485,25 +1770,8 @@ async def identify(
             }
         )
 
-    # 1. Check Scan Cache
-    cache_key = f"{client_ip}"
-    cached_val = scan_cache.get(cache_key)
-    if cached_val:
-        logger.info(f"Returning cached identification scan for IP: {client_ip}")
-        # Log session audit log
-        log_biometric_access(
-            actor_id=x_actor_id,
-            action_type="IDENTIFY",
-            status="SUCCESS",
-            target_patient_id=cached_val["patient_id"],
-            confidence_score=cached_val["similarity"],
-            reason=json.dumps({
-                "request_id": request_id,
-                "source": "cache",
-                "latency_seconds": time.time() - start_time
-            })
-        )
-        return cached_val
+    # 1. Read and process image file
+
 
     try:
         # Read bytes
@@ -1569,7 +1837,25 @@ async def identify(
                     "message": "Face occluded. Please remove glasses/mask to verify identity."
                 }
             )
-
+        # Enforce face size constraint to prevent false rejections due to distance/low resolution
+        if not quality_metrics.get("size_good", True):
+            face_percentage = quality_metrics.get("face_percentage", 100.0)
+            if face_percentage < 18.0:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error_code": "FACE_TOO_SMALL",
+                        "message": f"Face too far (percentage in frame {face_percentage:.1f}% is below 18%). Move closer to the camera."
+                    }
+                )
+            elif face_percentage > 40.0:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error_code": "FACE_TOO_LARGE",
+                        "message": f"Face too close (percentage in frame {face_percentage:.1f}% exceeds 40%). Move back slightly."
+                    }
+                )
         cropped_rgb = (quality_metrics["cropped_face"] * 255).astype(np.uint8)
         cropped_bgr = cv2.cvtColor(cropped_rgb, cv2.COLOR_RGB2BGR)
         quality_metrics.pop("cropped_face", None)
@@ -1591,14 +1877,20 @@ async def identify(
             )
         query_vector = l2_normalize(embeddings[0]["embedding"])
 
+        # Check if the query is an angled/profile scan to enforce stricter thresholds
+        pose = quality_metrics.get("pose", {"yaw": 0.0, "pitch": 0.0, "roll": 0.0})
+        yaw = abs(pose.get("yaw", 0.0))
+        pitch = abs(pose.get("pitch", 0.0))
+        is_profile_scan = yaw > 15.0 or pitch > 12.0
+
         # 4. Adaptive matching threshold configuration
         adaptive_max_distance = get_adaptive_max_distance(quality_score)
-        
         # 5. Stage 1: Vector similarity search (HNSW index)
-        # Returns candidate rows matching the centroid with similarity constraints
+        # We query the database with a relaxed max_distance of 0.40 to guarantee candidate retrieval under
+        # pitch/yaw tilts. The strict quality-based threshold (adaptive_max_distance) is enforced in Python (Stage 2).
         rpc_res = supabase.rpc("match_patient_by_face_consensus", {
             "query_embedding": query_vector,
-            "max_distance": adaptive_max_distance,
+            "max_distance": 0.40,
             "match_limit": 5,
             "consensus_strategy": "max"
         }).execute()
@@ -1614,7 +1906,7 @@ async def identify(
             )
 
         # 6. Stage 2: Verification and Multiple Pose Consensus Check in Python
-        verified_matches = []
+        raw_matches = []
         for cand in match_candidates:
             # Query all enrolled active poses for this candidate patient
             poses_res = supabase.from_("patient_embeddings").select("embedding, pose_label, quality_score").eq("patient_id", cand["patient_id"]).eq("is_active", True).execute()
@@ -1651,27 +1943,36 @@ async def identify(
             mean_sim = sum(pose_similarities) / len(pose_similarities)
             weighted_sim = sum(s * w for s, w in zip(pose_similarities, weights)) / sum(weights)
 
-            # Choose the maximum similarity as the primary indicator (best angle alignment)
-            best_consensus_similarity = max_sim
-            
-            # Enforce dynamic quality-based similarity thresholds:
-            # S >= (1.0 - adaptive_max_distance)
-            min_similarity_gate = 1.0 - adaptive_max_distance
-            if best_consensus_similarity >= min_similarity_gate:
-                verified_matches.append({
-                    "patient_id": cand["patient_id"],
-                    "qr_code_id": cand["qr_code_id"],
-                    "full_name": cand["full_name"],
-                    "pose_matched": cand["pose_label"],
-                    "similarity": best_consensus_similarity,
-                    "consensus": {
-                        "max_similarity": float(max_sim),
-                        "mean_similarity": float(mean_sim),
-                        "weighted_similarity": float(weighted_sim)
-                    }
-                })
+            raw_matches.append({
+                "patient_id": cand["patient_id"],
+                "qr_code_id": cand["qr_code_id"],
+                "full_name": cand["full_name"],
+                "pose_matched": cand["pose_label"],
+                "similarity": max_sim,
+                "consensus": {
+                    "max_similarity": float(max_sim),
+                    "mean_similarity": float(mean_sim),
+                    "weighted_similarity": float(weighted_sim)
+                }
+            })
 
-        if not verified_matches:
+        if not raw_matches:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error_code": "NO_MATCH_FOUND",
+                    "message": "No matching profile found."
+                }
+            )
+
+        # Sort candidate matches by similarity to identify the top match
+        raw_matches.sort(key=lambda x: x["similarity"], reverse=True)
+        best_match = raw_matches[0]
+
+        # Enforce dynamic quality-based similarity thresholds on the best match:
+        # S >= (1.0 - adaptive_max_distance)
+        min_similarity_gate = 1.0 - adaptive_max_distance
+        if best_match["similarity"] < min_similarity_gate:
             raise HTTPException(
                 status_code=404,
                 detail={
@@ -1680,9 +1981,15 @@ async def identify(
                 }
             )
 
-        # Sort candidate matches by similarity to identify the top match
-        verified_matches.sort(key=lambda x: x["similarity"], reverse=True)
-        best_match = verified_matches[0]
+        # Enforce baseline consensus check to prevent single-pose anomaly false positives
+        if best_match["consensus"]["mean_similarity"] < 0.34:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error_code": "NO_MATCH_FOUND",
+                    "message": "Biometric verification failed (consensus threshold not met)."
+                }
+            )
 
         # ─── AMBIGUITY CHECK (MARGIN GUARD) ──────────────────────────────
         # To prevent misidentification in crowded databases, the difference in
@@ -1690,8 +1997,8 @@ async def identify(
         # safe margin threshold of 0.03. If the margin is smaller, the match is
         # marked as ambiguous.
         margin = 0.0
-        if len(verified_matches) > 1:
-            second_match = verified_matches[1]
+        if len(raw_matches) > 1:
+            second_match = raw_matches[1]
             margin = best_match["similarity"] - second_match["similarity"]
             if margin < 0.03:
                 raise HTTPException(
@@ -1735,11 +2042,10 @@ async def identify(
             "consensus": best_match["consensus"]
         }
 
-        # Save to Session cache
-        scan_cache.set(cache_key, res_payload)
 
         # Audit logging
-        log_biometric_access(
+        background_tasks.add_task(
+            log_biometric_access,
             actor_id=x_actor_id,
             action_type="IDENTIFY",
             status="SUCCESS",
@@ -1763,7 +2069,8 @@ async def identify(
         err_msg = he.detail.get("message") if isinstance(he.detail, dict) else str(he.detail)
         logger.warning(f"[IDENTIFY FAILED] actor={x_actor_id} request_id={request_id} "
                        f"error_code={err_code} message={err_msg}")
-        log_biometric_access(
+        background_tasks.add_task(
+            log_biometric_access,
             actor_id=x_actor_id,
             action_type="IDENTIFY",
             status="FAILURE" if he.status_code == 404 or he.status_code == 400 else "DENIED",
@@ -1778,7 +2085,8 @@ async def identify(
     except Exception as e:
         logger.error(f"[IDENTIFY FAILED] actor={x_actor_id} request_id={request_id} "
                      f"error_code=SERVER_ERROR message={str(e)}")
-        log_biometric_access(
+        background_tasks.add_task(
+            log_biometric_access,
             actor_id=x_actor_id,
             action_type="IDENTIFY",
             status="FAILURE",

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/design/circular_icon_button.dart';
+import '../../../../core/design/cs_buttons.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../routing/route_names.dart';
 import '../../providers/auth_provider.dart';
 
@@ -64,7 +67,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     super.dispose();
   }
 
-
   String get _roleTitle {
     switch (widget.role) {
       case 'doctor':
@@ -82,18 +84,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       initialDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
       firstDate: DateTime(1900),
       lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF0D0D0D),
-              onPrimary: Colors.white,
-              onSurface: Colors.black,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
     if (picked != null && picked != _selectedDateOfBirth) {
       setState(() {
@@ -109,24 +99,43 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await ref.read(authNotifierProvider.notifier).signUp(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-        fullName: _fullNameController.text.trim(),
-        phone: _phoneController.text.trim(),
-        role: widget.role,
-        hospitalName: widget.role == 'doctor' ? _hospitalController.text.trim() : null,
-        specialization: widget.role == 'doctor' ? _specializationController.text.trim() : null,
-        medicalRegNumber: widget.role == 'doctor' ? _medRegController.text.trim() : null,
-        pharmacyName: widget.role == 'pharmacist' ? _pharmacyNameController.text.trim() : null,
-        pharmacyAddress: widget.role == 'pharmacist' ? _pharmacyAddressController.text.trim() : null,
-        pharmacistLicenseNumber: widget.role == 'pharmacist' ? _pharmacistLicenseController.text.trim() : null,
-        gender: widget.role == 'patient' ? _selectedGender : null,
-        dateOfBirth: widget.role == 'patient' ? _selectedDateOfBirth : null,
-        weight: widget.role == 'patient' && _weightController.text.isNotEmpty
-            ? double.tryParse(_weightController.text)
-            : null,
-      );
+      await ref
+          .read(authNotifierProvider.notifier)
+          .signUp(
+            email: _emailController.text.trim(),
+            password: _passwordController.text,
+            fullName: _fullNameController.text.trim(),
+            phone: _phoneController.text.trim(),
+            role: widget.role,
+            hospitalName:
+                widget.role == 'doctor'
+                    ? _hospitalController.text.trim()
+                    : null,
+            specialization:
+                widget.role == 'doctor'
+                    ? _specializationController.text.trim()
+                    : null,
+            medicalRegNumber:
+                widget.role == 'doctor' ? _medRegController.text.trim() : null,
+            pharmacyName:
+                widget.role == 'pharmacist'
+                    ? _pharmacyNameController.text.trim()
+                    : null,
+            pharmacyAddress:
+                widget.role == 'pharmacist'
+                    ? _pharmacyAddressController.text.trim()
+                    : null,
+            pharmacistLicenseNumber:
+                widget.role == 'pharmacist'
+                    ? _pharmacistLicenseController.text.trim()
+                    : null,
+            gender: widget.role == 'patient' ? _selectedGender : null,
+            dateOfBirth: widget.role == 'patient' ? _selectedDateOfBirth : null,
+            weight:
+                widget.role == 'patient' && _weightController.text.isNotEmpty
+                    ? double.tryParse(_weightController.text)
+                    : null,
+          );
 
       if (mounted) {
         if (widget.role == 'patient') {
@@ -144,32 +153,42 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         bool showSignInAction = false;
 
         if (originalError.contains('over_email_send_rate_limit')) {
-          errorMessage = '⏱️ Too many sign-up attempts. Please wait a minute and try again.';
-        } else if (originalError.contains('User already registered') || originalError.contains('already registered')) {
-          errorMessage = '📧 This email is already registered. Try signing in instead.';
+          errorMessage =
+              '⏱️ Too many sign-up attempts. Please wait a minute and try again.';
+        } else if (originalError.contains('User already registered') ||
+            originalError.contains('already registered')) {
+          errorMessage =
+              '📧 This email is already registered. Try signing in instead.';
           showSignInAction = true;
-        } else if (originalError.contains('Invalid email') || originalError.contains('invalid email')) {
+        } else if (originalError.contains('Invalid email') ||
+            originalError.contains('invalid email')) {
           errorMessage = '📧 Please enter a valid email address.';
-        } else if (originalError.contains('Password') && originalError.contains('weak')) {
-          errorMessage = '🔒 Password is too weak. Use at least 8 characters with letters and numbers.';
+        } else if (originalError.contains('Password') &&
+            originalError.contains('weak')) {
+          errorMessage =
+              '🔒 Password is too weak. Use at least 8 characters with letters and numbers.';
         } else if (originalError.contains('Email not confirmed')) {
-          errorMessage = '📬 Please check your email and verify your account before signing in.';
-        } else if (originalError.contains('Network') || originalError.contains('network')) {
-          errorMessage = '📡 Network error. Please check your connection and try again.';
+          errorMessage =
+              '📬 Please check your email and verify your account before signing in.';
+        } else if (originalError.contains('Network') ||
+            originalError.contains('network')) {
+          errorMessage =
+              '📡 Network error. Please check your connection and try again.';
         }
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errorMessage),
-            backgroundColor: AppColors.error,
+            backgroundColor: context.tokens.error,
             duration: const Duration(seconds: 5),
-            action: showSignInAction
-                ? SnackBarAction(
-              label: 'Sign In',
-              textColor: Colors.white,
-              onPressed: () => context.pop(),
-            )
-                : null,
+            action:
+                showSignInAction
+                    ? SnackBarAction(
+                      label: 'Sign In',
+                      textColor: Colors.white,
+                      onPressed: () => context.pop(),
+                    )
+                    : null,
           ),
         );
       }
@@ -181,17 +200,20 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final t = context.tokens;
     final isDoctor = widget.role == 'doctor';
     final isPatient = widget.role == 'patient';
     final isPharmacist = widget.role == 'pharmacist';
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: t.scaffold,
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.pageMargin,
+            ),
             child: Form(
               key: _formKey,
               child: Column(
@@ -202,14 +224,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     alignment: Alignment.centerLeft,
                     child: Padding(
                       padding: const EdgeInsets.only(top: 12),
-                      child: IconButton(
-                        onPressed: () => context.pop(),
-                        icon: const Icon(Icons.arrow_back_rounded),
-                        style: IconButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(36, 36),
-                          alignment: Alignment.centerLeft,
-                        ),
+                      child: CircularIconButton(
+                        icon: Iconsax.arrow_left_2,
+                        onTap: () => context.pop(),
                       ),
                     ),
                   ),
@@ -220,56 +237,50 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                   Center(
                     child: Image.asset(
                       'assets/logo_foreground.png',
-                      height: 120,
-                      width: 120,
+                      height: 110,
+                      width: 110,
                       fit: BoxFit.contain,
                     ),
                   ),
-                  const SizedBox(height: 0),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 5),
-                    child: Text(
-                      'CARESYNC',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.plusJakartaSans(
-                        color: const Color(0xFF0D0D0D),
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 5,
-                        fontSize: 15,
-                      ),
+                  Text(
+                    'CARESYNC',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: t.textPrimary,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 5,
+                      fontSize: 16,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Center(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0D0D0D),
-                        borderRadius: BorderRadius.circular(6),
+                        color: t.tint,
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         '${_roleTitle.toUpperCase()} PORTAL',
-                        style: GoogleFonts.plusJakartaSans(
+                        style: t.monoMeta.copyWith(
                           fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
+                          color: t.accent,
                           letterSpacing: 1.5,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Text(
                     'Create your healthcare account',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 13,
-                      color: const Color(0xFF6B7280),
-                      letterSpacing: 0.1,
-                    ),
+                    style: TextStyle(fontSize: 13, color: t.textSecondary),
                   ),
 
-                  SizedBox(height: size.height * 0.04),
+                  SizedBox(height: size.height * 0.035),
 
                   // ── 2. INPUT FIELDS ─────────────────────────────
                   _buildLabel('Full Name'),
@@ -277,18 +288,16 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                   TextFormField(
                     controller: _fullNameController,
                     textCapitalization: TextCapitalization.words,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF0D0D0D),
-                    ),
-                    cursorColor: const Color(0xFF0D0D0D),
+                    style: _fieldStyle,
+                    cursorColor: t.accent,
                     decoration: _inputDecoration(
                       hint: 'Enter your full name',
-                      icon: Icons.person_outline_rounded,
+                      icon: Iconsax.user,
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) return 'Full name is required';
+                      if (value == null || value.isEmpty) {
+                        return 'Full name is required';
+                      }
                       return null;
                     },
                   ),
@@ -299,18 +308,16 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF0D0D0D),
-                    ),
-                    cursorColor: const Color(0xFF0D0D0D),
+                    style: _fieldStyle,
+                    cursorColor: t.accent,
                     decoration: _inputDecoration(
                       hint: 'Enter your email address',
-                      icon: Icons.email_outlined,
+                      icon: Iconsax.sms,
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) return 'Email is required';
+                      if (value == null || value.isEmpty) {
+                        return 'Email is required';
+                      }
                       if (!value.contains('@')) return 'Enter a valid email';
                       return null;
                     },
@@ -322,18 +329,16 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                   TextFormField(
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF0D0D0D),
-                    ),
-                    cursorColor: const Color(0xFF0D0D0D),
+                    style: _fieldStyle,
+                    cursorColor: t.accent,
                     decoration: _inputDecoration(
                       hint: 'Enter your phone number',
-                      icon: Icons.phone_outlined,
+                      icon: Iconsax.call,
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) return 'Phone number is required';
+                      if (value == null || value.isEmpty) {
+                        return 'Phone number is required';
+                      }
                       return null;
                     },
                   ),
@@ -344,24 +349,27 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     _buildLabel('Gender'),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF0D0D0D),
-                      ),
+                      style: _fieldStyle,
                       decoration: _inputDecoration(
                         hint: 'Select your gender',
-                        icon: Icons.people_outline_rounded,
+                        icon: Iconsax.people,
                       ),
-                      value: _selectedGender,
-                      dropdownColor: Colors.white,
+                      initialValue: _selectedGender,
+                      dropdownColor: t.card,
                       items: const [
                         DropdownMenuItem(value: 'Male', child: Text('Male')),
-                        DropdownMenuItem(value: 'Female', child: Text('Female')),
+                        DropdownMenuItem(
+                          value: 'Female',
+                          child: Text('Female'),
+                        ),
                         DropdownMenuItem(value: 'Other', child: Text('Other')),
                       ],
                       onChanged: (val) => setState(() => _selectedGender = val),
-                      validator: (val) => val == null ? 'Gender selection is required' : null,
+                      validator:
+                          (val) =>
+                              val == null
+                                  ? 'Gender selection is required'
+                                  : null,
                     ),
                     const SizedBox(height: 20),
 
@@ -372,16 +380,16 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                       child: AbsorbPointer(
                         child: TextFormField(
                           controller: _dobController,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF0D0D0D),
-                          ),
+                          style: _fieldStyle,
                           decoration: _inputDecoration(
                             hint: 'YYYY-MM-DD',
-                            icon: Icons.calendar_today_outlined,
+                            icon: Iconsax.calendar_1,
                           ),
-                          validator: (value) => (value == null || value.isEmpty) ? 'Date of birth is required' : null,
+                          validator:
+                              (value) =>
+                                  (value == null || value.isEmpty)
+                                      ? 'Date of birth is required'
+                                      : null,
                         ),
                       ),
                     ),
@@ -391,16 +399,14 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _weightController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF0D0D0D),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
                       ),
-                      cursorColor: const Color(0xFF0D0D0D),
+                      style: _fieldStyle,
+                      cursorColor: t.accent,
                       decoration: _inputDecoration(
                         hint: 'e.g. 70.5',
-                        icon: Icons.monitor_weight_outlined,
+                        icon: Iconsax.weight,
                       ),
                       validator: (value) {
                         if (value != null && value.isNotEmpty) {
@@ -421,17 +427,17 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     TextFormField(
                       controller: _hospitalController,
                       textCapitalization: TextCapitalization.words,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF0D0D0D),
-                      ),
-                      cursorColor: const Color(0xFF0D0D0D),
+                      style: _fieldStyle,
+                      cursorColor: t.accent,
                       decoration: _inputDecoration(
                         hint: 'Where do you practice?',
-                        icon: Icons.local_hospital_outlined,
+                        icon: Iconsax.hospital,
                       ),
-                      validator: (value) => (value == null || value.isEmpty) ? 'Hospital name is required' : null,
+                      validator:
+                          (value) =>
+                              (value == null || value.isEmpty)
+                                  ? 'Hospital name is required'
+                                  : null,
                     ),
                     const SizedBox(height: 20),
 
@@ -440,17 +446,17 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     TextFormField(
                       controller: _specializationController,
                       textCapitalization: TextCapitalization.words,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF0D0D0D),
-                      ),
-                      cursorColor: const Color(0xFF0D0D0D),
+                      style: _fieldStyle,
+                      cursorColor: t.accent,
                       decoration: _inputDecoration(
                         hint: 'e.g. Cardiologist, General Physician',
-                        icon: Icons.school_outlined,
+                        icon: Iconsax.teacher,
                       ),
-                      validator: (value) => (value == null || value.isEmpty) ? 'Specialization is required' : null,
+                      validator:
+                          (value) =>
+                              (value == null || value.isEmpty)
+                                  ? 'Specialization is required'
+                                  : null,
                     ),
                     const SizedBox(height: 20),
 
@@ -458,15 +464,11 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _medRegController,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF0D0D0D),
-                      ),
-                      cursorColor: const Color(0xFF0D0D0D),
+                      style: _fieldStyle,
+                      cursorColor: t.accent,
                       decoration: _inputDecoration(
                         hint: 'Enter medical registration ID',
-                        icon: Icons.badge_outlined,
+                        icon: Iconsax.card,
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -479,17 +481,17 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     TextFormField(
                       controller: _pharmacyNameController,
                       textCapitalization: TextCapitalization.words,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF0D0D0D),
-                      ),
-                      cursorColor: const Color(0xFF0D0D0D),
+                      style: _fieldStyle,
+                      cursorColor: t.accent,
                       decoration: _inputDecoration(
                         hint: 'e.g. CareSync Pharmacy, Walgreens',
-                        icon: Icons.local_pharmacy_outlined,
+                        icon: Iconsax.hospital,
                       ),
-                      validator: (value) => (value == null || value.isEmpty) ? 'Pharmacy name is required' : null,
+                      validator:
+                          (value) =>
+                              (value == null || value.isEmpty)
+                                  ? 'Pharmacy name is required'
+                                  : null,
                     ),
                     const SizedBox(height: 20),
 
@@ -498,17 +500,17 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     TextFormField(
                       controller: _pharmacyAddressController,
                       textCapitalization: TextCapitalization.words,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF0D0D0D),
-                      ),
-                      cursorColor: const Color(0xFF0D0D0D),
+                      style: _fieldStyle,
+                      cursorColor: t.accent,
                       decoration: _inputDecoration(
                         hint: 'Where is the pharmacy located?',
-                        icon: Icons.location_on_outlined,
+                        icon: Iconsax.location,
                       ),
-                      validator: (value) => (value == null || value.isEmpty) ? 'Pharmacy address is required' : null,
+                      validator:
+                          (value) =>
+                              (value == null || value.isEmpty)
+                                  ? 'Pharmacy address is required'
+                                  : null,
                     ),
                     const SizedBox(height: 20),
 
@@ -516,17 +518,17 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _pharmacistLicenseController,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF0D0D0D),
-                      ),
-                      cursorColor: const Color(0xFF0D0D0D),
+                      style: _fieldStyle,
+                      cursorColor: t.accent,
                       decoration: _inputDecoration(
                         hint: 'Enter your license ID',
-                        icon: Icons.badge_outlined,
+                        icon: Iconsax.card,
                       ),
-                      validator: (value) => (value == null || value.isEmpty) ? 'License number is required' : null,
+                      validator:
+                          (value) =>
+                              (value == null || value.isEmpty)
+                                  ? 'License number is required'
+                                  : null,
                     ),
                     const SizedBox(height: 20),
                   ],
@@ -536,27 +538,30 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF0D0D0D),
-                    ),
-                    cursorColor: const Color(0xFF0D0D0D),
+                    style: _fieldStyle,
+                    cursorColor: t.accent,
                     decoration: _inputDecoration(
                       hint: 'Create a password',
-                      icon: Icons.lock_outline_rounded,
+                      icon: Iconsax.lock_1,
                       suffix: IconButton(
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                        onPressed:
+                            () => setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
                         icon: Icon(
-                          _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                          color: const Color(0xFF9CA3AF),
+                          _obscurePassword ? Iconsax.eye_slash : Iconsax.eye,
+                          color: t.textSecondary,
                           size: 20,
                         ),
                       ),
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) return 'Password is required';
-                      if (value.length < 6) return 'Password must be at least 6 characters';
+                      if (value == null || value.isEmpty) {
+                        return 'Password is required';
+                      }
+                      if (value.length < 6) {
+                        return 'Password must be at least 6 characters';
+                      }
                       return null;
                     },
                   ),
@@ -567,27 +572,34 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                   TextFormField(
                     controller: _confirmPasswordController,
                     obscureText: _obscureConfirmPassword,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF0D0D0D),
-                    ),
-                    cursorColor: const Color(0xFF0D0D0D),
+                    style: _fieldStyle,
+                    cursorColor: t.accent,
                     decoration: _inputDecoration(
                       hint: 'Confirm your password',
-                      icon: Icons.lock_outline_rounded,
+                      icon: Iconsax.lock_1,
                       suffix: IconButton(
-                        onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                        onPressed:
+                            () => setState(
+                              () =>
+                                  _obscureConfirmPassword =
+                                      !_obscureConfirmPassword,
+                            ),
                         icon: Icon(
-                          _obscureConfirmPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                          color: const Color(0xFF9CA3AF),
+                          _obscureConfirmPassword
+                              ? Iconsax.eye_slash
+                              : Iconsax.eye,
+                          color: t.textSecondary,
                           size: 20,
                         ),
                       ),
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) return 'Password confirmation is required';
-                      if (value != _passwordController.text) return 'Passwords do not match';
+                      if (value == null || value.isEmpty) {
+                        return 'Password confirmation is required';
+                      }
+                      if (value != _passwordController.text) {
+                        return 'Passwords do not match';
+                      }
                       return null;
                     },
                   ),
@@ -595,41 +607,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                   const SizedBox(height: 32),
 
                   // ── 3. BUTTON ───────────────────────────────────
-                  GestureDetector(
-                    onTap: _isLoading ? null : _signUp,
-                    child: Container(
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0D0D0D),
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      alignment: Alignment.center,
-                      child: _isLoading
-                          ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                          : Text(
-                        'CREATE ACCOUNT',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ),
+                  CSPrimaryButton(
+                    label: 'Create Account',
+                    loading: _isLoading,
+                    onPressed: _signUp,
                   ),
 
                   const SizedBox(height: 28),
@@ -640,8 +621,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     children: [
                       Text(
                         "Already have an account? ",
-                        style: GoogleFonts.plusJakartaSans(
-                          color: const Color(0xFF6B7280),
+                        style: TextStyle(
+                          color: t.textSecondary,
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                         ),
@@ -650,8 +631,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                         onTap: () => context.pop(),
                         child: Text(
                           'Sign In',
-                          style: GoogleFonts.plusJakartaSans(
-                            color: const Color(0xFF0D0D0D),
+                          style: TextStyle(
+                            color: t.accent,
                             fontWeight: FontWeight.w800,
                             fontSize: 13,
                           ),
@@ -660,19 +641,23 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     ],
                   ),
 
-                  const SizedBox(height: 48),
+                  const SizedBox(height: 40),
 
                   // ── 5. SECURITY NOTE ────────────────────────────
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.shield_outlined, size: 13, color: Color(0xFF9CA3AF)),
+                      Icon(
+                        Iconsax.shield_tick,
+                        size: 13,
+                        color: t.textSecondary,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         'Secured with end-to-end encryption',
-                        style: GoogleFonts.plusJakartaSans(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: const Color(0xFF9CA3AF),
+                          color: t.textSecondary,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -689,13 +674,20 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     );
   }
 
+  TextStyle get _fieldStyle => TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
+    color: context.tokens.textPrimary,
+  );
+
   Widget _buildLabel(String text) {
+    final t = context.tokens;
     return Text(
       text.toUpperCase(),
-      style: GoogleFonts.plusJakartaSans(
+      style: t.monoMeta.copyWith(
         fontSize: 10,
-        fontWeight: FontWeight.w800,
-        color: const Color(0xFF374151),
+        fontWeight: FontWeight.w500,
+        color: t.textSecondary,
         letterSpacing: 1,
       ),
     );
@@ -706,37 +698,38 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     required IconData icon,
     Widget? suffix,
   }) {
+    final t = context.tokens;
     return InputDecoration(
       hintText: hint,
-      hintStyle: GoogleFonts.plusJakartaSans(
-        color: const Color(0xFF9CA3AF),
+      hintStyle: TextStyle(
+        color: t.textSecondary,
         fontSize: 14,
         fontWeight: FontWeight.w400,
       ),
-      prefixIcon: Icon(icon, color: const Color(0xFF6B7280), size: 18),
+      prefixIcon: Icon(icon, color: t.textSecondary, size: 18),
       suffixIcon: suffix,
       filled: true,
-      fillColor: Colors.white,
+      fillColor: t.card,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFD1D5DB), width: 1),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: t.divider, width: 1),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFD1D5DB), width: 1),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: t.divider, width: 1),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF0D0D0D), width: 1.5),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: t.error, width: 1),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: t.error, width: 1),
       ),
     );
   }

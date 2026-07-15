@@ -11,7 +11,8 @@ class Appointment with _$Appointment {
     @JsonKey(name: 'patient_id') required String patientId,
     @JsonKey(name: 'doctor_id') required String doctorId,
     @JsonKey(name: 'start_time') required DateTime startTime,
-    @Default('scheduled') String status, // 'scheduled', 'completed', 'cancelled'
+    @Default('scheduled')
+    String status, // 'scheduled', 'completed', 'cancelled'
     String? notes,
     @JsonKey(name: 'created_at') DateTime? createdAt,
     // Joined data
@@ -19,7 +20,8 @@ class Appointment with _$Appointment {
     UserProfile? doctor,
   }) = _Appointment;
 
-  factory Appointment.fromJson(Map<String, dynamic> json) => _$AppointmentFromJson(json);
+  factory Appointment.fromJson(Map<String, dynamic> json) =>
+      _$AppointmentFromJson(json);
 }
 
 @freezed
@@ -33,5 +35,6 @@ class DoctorAvailability with _$DoctorAvailability {
     @Default(true) @JsonKey(name: 'is_active') bool isActive,
   }) = _DoctorAvailability;
 
-  factory DoctorAvailability.fromJson(Map<String, dynamic> json) => _$DoctorAvailabilityFromJson(json);
+  factory DoctorAvailability.fromJson(Map<String, dynamic> json) =>
+      _$DoctorAvailabilityFromJson(json);
 }

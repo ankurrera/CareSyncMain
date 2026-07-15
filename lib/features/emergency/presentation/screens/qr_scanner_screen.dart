@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/design/circular_icon_button.dart';
+import '../../../../core/design/linear_fade_appbar.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../routing/route_names.dart';
 
 class QrScannerScreen extends ConsumerStatefulWidget {
@@ -41,9 +43,9 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
       final uri = Uri.parse(value);
       qrCodeId = uri.pathSegments.last;
     } else {
-      // Basic UUID validation (8-4-4-4-12 hex chars)
       final uuidRegex = RegExp(
-          r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+      );
       if (uuidRegex.hasMatch(value)) {
         qrCodeId = value;
       }
@@ -52,17 +54,15 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
     if (qrCodeId != null) {
       setState(() => _isProcessing = true);
       if (mounted) {
-        context
-            .push('${RouteNames.patientEmergencyView}/$qrCodeId')
-            .then((_) {
+        context.push('${RouteNames.patientEmergencyView}/$qrCodeId').then((_) {
           if (mounted) setState(() => _isProcessing = false);
         });
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Not a valid CareSync QR code'),
-          backgroundColor: AppColors.warning,
+        SnackBar(
+          content: const Text('Not a valid CareSync QR code'),
+          backgroundColor: context.tokens.accent,
         ),
       );
     }
@@ -71,35 +71,10 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Scan Patient QR',
-            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
-        actions: [
-          IconButton(
-            onPressed: () => _controller.toggleTorch(),
-            icon: ValueListenableBuilder(
-              valueListenable: _controller,
-              builder: (context, state, _) {
-                return Icon(
-                  state.torchState == TorchState.on
-                      ? Icons.flash_on_rounded
-                      : Icons.flash_off_rounded,
-                );
-              },
-            ),
-          ),
-          IconButton(
-            onPressed: () => _controller.switchCamera(),
-            icon: const Icon(Icons.cameraswitch_rounded),
-          ),
-        ],
-      ),
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
-          MobileScanner(
-            controller: _controller,
-            onDetect: _onDetect,
-          ),
+          MobileScanner(controller: _controller, onDetect: _onDetect),
           CustomPaint(
             painter: _ScannerOverlayPainter(),
             child: const SizedBox.expand(),
@@ -111,22 +86,54 @@ class _QrScannerScreenState extends ConsumerState<QrScannerScreen> {
             child: Column(
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text(
+                  child: const Text(
                     'Point camera at patient\'s\nCareSync QR code',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 15),
+                    style: TextStyle(
+                      fontFamily: 'DM Sans',
+                      color: Colors.white,
+                      fontSize: 15,
+                    ),
                   ),
                 ),
                 if (_isProcessing) ...[
                   const SizedBox(height: 16),
                   const CircularProgressIndicator(color: Colors.white),
                 ],
+              ],
+            ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: LinearFadeAppBar(
+              title: 'Scan Patient QR',
+              actions: [
+                ValueListenableBuilder(
+                  valueListenable: _controller,
+                  builder: (context, state, _) {
+                    return CircularIconButton(
+                      icon:
+                          state.torchState == TorchState.on
+                              ? Iconsax.flash_1
+                              : Iconsax.flash_slash,
+                      onTap: () => _controller.toggleTorch(),
+                    );
+                  },
+                ),
+                CircularIconButton(
+                  icon: Iconsax.camera,
+                  onTap: () => _controller.switchCamera(),
+                ),
               ],
             ),
           ),
@@ -145,20 +152,24 @@ class _ScannerOverlayPainter extends CustomPainter {
     final top = (size.height - windowSize) / 2 - 50;
     final rect = Rect.fromLTWH(left, top, windowSize, windowSize);
 
-    final path = Path()
-      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
-      ..addRRect(RRect.fromRectAndRadius(rect, const Radius.circular(20)))
-      ..fillType = PathFillType.evenOdd;
+    final path =
+        Path()
+          ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
+          ..addRRect(RRect.fromRectAndRadius(rect, const Radius.circular(20)))
+          ..fillType = PathFillType.evenOdd;
 
     canvas.drawPath(path, paint);
 
-    final bracketPaint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 4
-      ..style = PaintingStyle.stroke;
+    final bracketPaint =
+        Paint()
+          ..color = Colors.white
+          ..strokeWidth = 4
+          ..style = PaintingStyle.stroke;
 
     canvas.drawRRect(
-        RRect.fromRectAndRadius(rect, const Radius.circular(20)), bracketPaint);
+      RRect.fromRectAndRadius(rect, const Radius.circular(20)),
+      bracketPaint,
+    );
   }
 
   @override

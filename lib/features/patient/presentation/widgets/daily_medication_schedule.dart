@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
+import '../../../../core/design/squircle_card.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/loading_skeleton.dart';
 import '../../providers/patient_provider.dart';
 import '../../models/prescription.dart';
@@ -11,10 +13,12 @@ class DailyMedicationSchedule extends ConsumerStatefulWidget {
   const DailyMedicationSchedule({super.key});
 
   @override
-  ConsumerState<DailyMedicationSchedule> createState() => _DailyMedicationScheduleState();
+  ConsumerState<DailyMedicationSchedule> createState() =>
+      _DailyMedicationScheduleState();
 }
 
-class _DailyMedicationScheduleState extends ConsumerState<DailyMedicationSchedule> {
+class _DailyMedicationScheduleState
+    extends ConsumerState<DailyMedicationSchedule> {
   final Set<String> _checkedItems = {};
 
   @override
@@ -27,7 +31,6 @@ class _DailyMedicationScheduleState extends ConsumerState<DailyMedicationSchedul
           return _buildEmptyState();
         }
 
-        // Limit to top 3 items to prevent layout bloat on Dashboard
         final displayItems = items.take(3).toList();
 
         return Column(
@@ -40,160 +43,156 @@ class _DailyMedicationScheduleState extends ConsumerState<DailyMedicationSchedul
           }),
         );
       },
-      loading: () => const Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          LoadingSkeleton(height: 72, radius: 20),
-          SizedBox(height: 12),
-          LoadingSkeleton(height: 72, radius: 20),
-        ],
-      ),
+      loading:
+          () => const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              LoadingSkeleton(height: 72, radius: 20),
+              SizedBox(height: 12),
+              LoadingSkeleton(height: 72, radius: 20),
+            ],
+          ),
       error: (err, _) => _buildEmptyState(),
     );
   }
 
   Widget _buildMedicationCard(PrescriptionItem item, bool isChecked) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: isChecked ? const Color(0xFFFAFAFA) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isChecked ? const Color(0xFFE2E8F0) : const Color(0xFFF1F5F9),
-          width: 1.5,
-        ),
-        boxShadow: [
-          if (!isChecked)
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Premium Interactive Checkbox with Haptics
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                if (isChecked) {
-                  _checkedItems.remove(item.id);
-                } else {
-                  _checkedItems.add(item.id);
-                  HapticFeedback.lightImpact(); // Tactile feedback
-                }
-              });
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              width: 22,
-              height: 22,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isChecked ? const Color(0xFF10B981) : Colors.white,
-                border: Border.all(
-                  color: isChecked ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
-                  width: 1.5,
-                ),
-              ),
-              child: isChecked
-                  ? const Icon(Icons.check_rounded, size: 13, color: Colors.white)
-                  : null,
-            ),
-          ),
-          const SizedBox(width: 14),
-          // Medicine Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  item.medicineName,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14,
-                    color: isChecked ? const Color(0xFF94A3B8) : const Color(0xFF0F172A),
-                    decoration: isChecked ? TextDecoration.lineThrough : null,
+    final t = context.tokens;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: SquircleCard(
+        radius: AppSpacing.squircleGrouped,
+        color: isChecked ? t.scaffold : t.card,
+        borderSide: BorderSide(color: t.divider, width: 1.0),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Interactive Checkbox with haptics
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  if (isChecked) {
+                    _checkedItems.remove(item.id);
+                  } else {
+                    _checkedItems.add(item.id);
+                    HapticFeedback.lightImpact();
+                  }
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isChecked ? t.accent : t.card,
+                  border: Border.all(
+                    color: isChecked ? t.accent : t.divider,
+                    width: 1.5,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(
-                      Iconsax.info_circle,
-                      size: 11,
-                      color: isChecked ? const Color(0xFFCBD5E1) : const Color(0xFF64748B),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${item.dosage} • ${item.frequency}',
-                      style: GoogleFonts.plusJakartaSans(
-                        color: isChecked ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Status Pill Badge
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: isChecked ? const Color(0xFFECFDF5) : const Color(0xFFFFF4F0),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              isChecked ? 'Taken' : 'Due',
-              style: GoogleFonts.plusJakartaSans(
-                color: isChecked ? const Color(0xFF10B981) : const Color(0xFFFF5200),
-                fontWeight: FontWeight.w800,
-                fontSize: 10,
+                child:
+                    isChecked
+                        ? Icon(Icons.check_rounded, size: 13, color: t.accentOn)
+                        : null,
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 14),
+            // Medicine Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    item.medicineName,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: isChecked ? t.textSecondary : t.textPrimary,
+                      decoration: isChecked ? TextDecoration.lineThrough : null,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Iconsax.info_circle,
+                        size: 11,
+                        color: t.textSecondary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${item.dosage} • ${item.frequency}',
+                        style: TextStyle(
+                          color: t.textSecondary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Status Pill Badge
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: isChecked ? t.scaffold : t.tint,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                isChecked ? 'Taken' : 'Due',
+                style: TextStyle(
+                  color: isChecked ? t.textSecondary : t.accent,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 10,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildEmptyState() {
-    return Container(
+    final t = context.tokens;
+    return SquircleCard(
+      radius: AppSpacing.squircleGrouped,
+      borderSide: BorderSide(color: t.divider),
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Center(
+      child: SizedBox(
+        width: double.infinity,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Iconsax.document_text, color: Color(0xFF94A3B8), size: 28),
-            const SizedBox(height: 8),
+            Icon(
+              Iconsax.document_text,
+              size: 28,
+              color: t.textSecondary.withValues(alpha: 0.6),
+            ),
+            const SizedBox(height: 10),
             Text(
               'No medications scheduled today.',
-              style: GoogleFonts.plusJakartaSans(
-                color: const Color(0xFF64748B),
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
+              style: TextStyle(
+                color: t.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Your daily medicine schedule will appear here.',
+              style: TextStyle(
+                color: t.textSecondary.withValues(alpha: 0.8),
+                fontSize: 11,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ],

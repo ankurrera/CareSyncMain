@@ -11,7 +11,7 @@ class PatientVitals extends _$PatientVitals {
   FutureOr<List<Vital>> build() async {
     final patientId = await _getPatientId();
     if (patientId == null) return [];
-    
+
     return ref.read(vitalsServiceProvider).getVitals(patientId);
   }
 
@@ -30,13 +30,15 @@ class PatientVitals extends _$PatientVitals {
     final patientId = await _getPatientId();
     if (patientId == null) return;
 
-    await ref.read(vitalsServiceProvider).addVital(
-      patientId: patientId,
-      type: type.name.replaceAll(' ', '_').toLowerCase(),
-      value: value,
-      unit: unit,
-      recordedAt: recordedAt,
-    );
+    await ref
+        .read(vitalsServiceProvider)
+        .addVital(
+          patientId: patientId,
+          type: type.name.replaceAll(' ', '_').toLowerCase(),
+          value: value,
+          unit: unit,
+          recordedAt: recordedAt,
+        );
 
     ref.invalidateSelf();
   }

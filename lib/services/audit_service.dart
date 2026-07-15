@@ -1,5 +1,6 @@
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../core/logging/app_logger.dart';
 
 /// Service for logging audit trails
 class AuditService {
@@ -23,27 +24,25 @@ class AuditService {
     Map<String, dynamic>? metadata,
   }) async {
     try {
-      final userId = _supabase.auth.currentUser?.id;
-
-      await _supabase.from('audit_log').insert({
-        'user_id': userId,
-        'action': action.name,
-        'resource_type': resourceType,
-        'resource_id': resourceId,
-        'device_id': deviceId,
-        'ip_address': ipAddress,
-        'user_agent': userAgent,
-        'metadata': metadata,
-        'timestamp': DateTime.now().toIso8601String(),
-      });
+      await _supabase.rpc(
+        'log_audit_action_secure',
+        params: {
+          'p_action': action.name,
+          'p_resource_type': resourceType,
+          'p_resource_id': resourceId,
+          'p_device_id': deviceId,
+          'p_ip_address': ipAddress,
+          'p_user_agent': userAgent,
+          'p_metadata': metadata,
+        },
+      );
     } catch (e) {
-      // Silently fail - audit logging should not break the main flow
-      // In production, use proper logging framework
-      // ignore: avoid_print
-      assert(() {
-        debugPrint('Failed to log audit action: $e');
-        return true;
-      }());
+      // Silently fail — audit logging must not break the main flow.
+      AppLogger.warning(
+        'Failed to log audit action',
+        category: LogCategory.database,
+        error: e,
+      );
     }
   }
 
@@ -65,25 +64,16 @@ class AuditService {
   }
 
   /// Log user logout
-  Future<void> logLogout({
-    required String deviceId,
-  }) async {
-    await logAction(
-      action: AuditAction.logout,
-      deviceId: deviceId,
-    );
+  Future<void> logLogout({required String deviceId}) async {
+    await logAction(action: AuditAction.logout, deviceId: deviceId);
   }
 
   /// Log KYC upload
-  Future<void> logKYCUpload({
-    required String documentType,
-  }) async {
+  Future<void> logKYCUpload({required String documentType}) async {
     await logAction(
       action: AuditAction.kycUpload,
       resourceType: 'kyc_document',
-      metadata: {
-        'document_type': documentType,
-      },
+      metadata: {'document_type': documentType},
     );
   }
 
@@ -121,20 +111,13 @@ class AuditService {
     await logAction(
       action: AuditAction.deviceRegistered,
       deviceId: deviceId,
-      metadata: {
-        'device_name': deviceName,
-      },
+      metadata: {'device_name': deviceName},
     );
   }
 
   /// Log device revocation
-  Future<void> logDeviceRevocation({
-    required String deviceId,
-  }) async {
-    await logAction(
-      action: AuditAction.deviceRevoked,
-      deviceId: deviceId,
-    );
+  Future<void> logDeviceRevocation({required String deviceId}) async {
+    await logAction(action: AuditAction.deviceRevoked, deviceId: deviceId);
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -144,28 +127,24 @@ class AuditService {
   /// Get audit logs for current user
   Future<List<AuditLog>> getUserAuditLogs({
     int limit = 50,
+    int offset = 0,
     AuditAction? actionFilter,
   }) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return [];
 
-      // Build base query
-      final baseQuery = _supabase.from('audit_log').select().eq('user_id', userId);
+      var query = _supabase.from('audit_log').select().eq('user_id', userId);
 
-      // Build the complete query chain based on whether we have a filter
-      final response = actionFilter != null
-          ? await baseQuery
-          .eq('action', actionFilter.name)
-          .order('timestamp', ascending: false)
-          .limit(limit)
-          : await baseQuery
-          .order('timestamp', ascending: false)
-          .limit(limit);
+      if (actionFilter != null) {
+        query = query.eq('action', actionFilter.name);
+      }
 
-      return (response as List)
-          .map((json) => AuditLog.fromJson(json))
-          .toList();
+      final response = await query
+          .order('timestamp', ascending: false)
+          .range(offset, offset + limit - 1);
+
+      return (response as List).map((json) => AuditLog.fromJson(json)).toList();
     } on PostgrestException catch (e) {
       throw AuditException('Failed to get audit logs: ${e.message}');
     } catch (e) {
@@ -187,9 +166,7 @@ class AuditService {
           .order('timestamp', ascending: false)
           .limit(limit);
 
-      return (response as List)
-          .map((json) => AuditLog.fromJson(json))
-          .toList();
+      return (response as List).map((json) => AuditLog.fromJson(json)).toList();
     } catch (e) {
       return [];
     }
@@ -223,7 +200,7 @@ enum AuditAction {
 
   static AuditAction fromString(String action) {
     return AuditAction.values.firstWhere(
-          (e) => e.name == action,
+      (e) => e.name == action,
       orElse: () => AuditAction.login,
     );
   }
@@ -268,9 +245,10 @@ class AuditLog {
       deviceId: json['device_id'] as String?,
       ipAddress: json['ip_address'] as String?,
       userAgent: json['user_agent'] as String?,
-      metadata: json['metadata'] != null
-          ? Map<String, dynamic>.from(json['metadata'] as Map)
-          : null,
+      metadata:
+          json['metadata'] != null
+              ? Map<String, dynamic>.from(json['metadata'] as Map)
+              : null,
       timestamp: DateTime.parse(json['timestamp'] as String),
     );
   }

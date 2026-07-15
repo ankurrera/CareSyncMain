@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:iconsax/iconsax.dart';
 
+import '../../../../core/design/squircle_card.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../routing/route_names.dart';
 
 class RoleSelectionScreen extends StatelessWidget {
@@ -10,17 +13,23 @@ class RoleSelectionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final t = context.tokens;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: t.scaffold,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── TOP HERO SECTION (white card feel) ───────────────
+            // ── TOP HERO SECTION ─────────────────────────────────
             Container(
-              color: Colors.white,
-              padding: EdgeInsets.fromLTRB(28, size.height * 0.06, 28, size.height * 0.05),
+              color: t.card,
+              padding: EdgeInsets.fromLTRB(
+                28,
+                size.height * 0.06,
+                28,
+                size.height * 0.05,
+              ),
               child: Column(
                 children: [
                   Image.asset(
@@ -34,10 +43,10 @@ class RoleSelectionScreen extends StatelessWidget {
                     padding: const EdgeInsets.only(left: 5),
                     child: Text(
                       'CARESYNC',
-                      style: GoogleFonts.plusJakartaSans(
+                      style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
-                        color: const Color(0xFF0D0D0D),
+                        color: t.textPrimary,
                         letterSpacing: 5,
                       ),
                     ),
@@ -45,9 +54,9 @@ class RoleSelectionScreen extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     'Your unified healthcare companion',
-                    style: GoogleFonts.plusJakartaSans(
+                    style: TextStyle(
                       fontSize: 13,
-                      color: const Color(0xFF9CA3AF),
+                      color: t.textSecondary,
                       fontWeight: FontWeight.w400,
                     ),
                   ),
@@ -55,20 +64,14 @@ class RoleSelectionScreen extends StatelessWidget {
               ),
             ),
 
-            // ── DIVIDER ──────────────────────────────────────────
-            Container(height: 1, color: const Color(0xFFE5E7EB)),
+            Container(height: 1, color: t.divider),
 
-            // ── LABEL ────────────────────────────────────────────
+            // ── LABEL (mono section header) ──────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(28, 28, 28, 14),
               child: Text(
                 'CHOOSE YOUR PORTAL',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF374151),
-                  letterSpacing: 1.5,
-                ),
+                style: t.monoSectionHeader.copyWith(letterSpacing: 1.5),
               ),
             ),
 
@@ -82,7 +85,7 @@ class RoleSelectionScreen extends StatelessWidget {
                     role: 'patient',
                     title: 'Patient',
                     subtitle: 'Medical records, appointments & emergency pass',
-                    icon: Icons.person_outline_rounded,
+                    icon: Iconsax.user,
                     badgeLabel: 'PERSONAL',
                   ),
                   const SizedBox(height: 10),
@@ -91,7 +94,7 @@ class RoleSelectionScreen extends StatelessWidget {
                     role: 'doctor',
                     title: 'Doctor',
                     subtitle: 'Consultations, prescriptions & patient history',
-                    icon: Icons.medical_services_outlined,
+                    icon: Iconsax.health,
                     badgeLabel: 'CLINICAL',
                   ),
                   const SizedBox(height: 10),
@@ -100,7 +103,7 @@ class RoleSelectionScreen extends StatelessWidget {
                     role: 'pharmacist',
                     title: 'Pharmacist',
                     subtitle: 'Dispense medicines & verify patient records',
-                    icon: Icons.local_pharmacy_outlined,
+                    icon: Iconsax.hospital,
                     badgeLabel: 'PHARMACY',
                   ),
                 ],
@@ -115,14 +118,13 @@ class RoleSelectionScreen extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.lock_outline_rounded,
-                      size: 12, color: Color(0xFFD1D5DB)),
+                  Icon(Iconsax.lock_1, size: 12, color: t.textSecondary),
                   const SizedBox(width: 5),
                   Text(
                     'Protected by end-to-end encryption',
-                    style: GoogleFonts.plusJakartaSans(
+                    style: TextStyle(
                       fontSize: 11,
-                      color: const Color(0xFFD1D5DB),
+                      color: t.textSecondary,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -143,88 +145,74 @@ class RoleSelectionScreen extends StatelessWidget {
     required IconData icon,
     required String badgeLabel,
   }) {
-    return GestureDetector(
+    final t = context.tokens;
+    return SquircleCard(
+      radius: AppSpacing.squircleGrouped,
+      color: t.card,
+      borderSide: BorderSide(color: t.divider),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
       onTap: () => context.push(RouteNames.signIn, extra: role),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: t.tint,
+              borderRadius: BorderRadius.circular(12),
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3F4F6),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, size: 22, color: const Color(0xFF1F2937)),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        title,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF111827),
-                        ),
+            child: Icon(icon, size: 22, color: t.accent),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: t.textPrimary,
                       ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF3F4F6),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          badgeLabel,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 8,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF6B7280),
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 12,
-                      color: const Color(0xFF9CA3AF),
-                      height: 1.4,
                     ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: t.textSecondary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        badgeLabel,
+                        style: t.monoMeta.copyWith(
+                          fontSize: 8,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: t.textSecondary,
+                    height: 1.4,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: Color(0xFFD1D5DB),
-              size: 22,
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          Icon(Icons.chevron_right_rounded, color: t.textSecondary, size: 22),
+        ],
       ),
     );
   }

@@ -1,5 +1,7 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
 fastapi
 uvicorn
+tensorflow-cpu
 deepface
 supabase
 numpy
@@ -10,5 +12,5 @@ tf-keras
 python-dotenv
 scipy
 mediapipe==0.10.14
-torch>=2.0.0
+torch
 protobuf==4.25.3

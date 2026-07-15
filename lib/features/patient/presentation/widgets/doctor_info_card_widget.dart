@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/app_colors.dart';
+import 'package:iconsax/iconsax.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../models/prescription_input_models.dart';
 
 /// Widget for entering doctor/issuer details
@@ -41,7 +42,6 @@ class _DoctorInfoCardWidgetState extends State<DoctorInfoCardWidget> {
     );
     _signatureUploaded = widget.initialData?.signatureUploaded ?? false;
 
-    // Add listeners
     _doctorNameController.addListener(_notifyChange);
     _specializationController.addListener(_notifyChange);
     _hospitalController.addListener(_notifyChange);
@@ -60,9 +60,10 @@ class _DoctorInfoCardWidgetState extends State<DoctorInfoCardWidget> {
   void _notifyChange() {
     final doctorDetails = DoctorDetails(
       doctorName: _doctorNameController.text,
-      specialization: _specializationController.text.isNotEmpty 
-          ? _specializationController.text 
-          : null,
+      specialization:
+          _specializationController.text.isNotEmpty
+              ? _specializationController.text
+              : null,
       hospitalClinicName: _hospitalController.text,
       medicalRegistrationNumber: _regNumberController.text,
       signatureUploaded: _signatureUploaded,
@@ -81,11 +82,12 @@ class _DoctorInfoCardWidgetState extends State<DoctorInfoCardWidget> {
           decoration: _inputDecoration(
             'Dr. Full Name',
             'Doctor Name *',
-            Icons.person_outline,
+            Iconsax.user,
           ),
           validator: (value) {
-            if (value == null || value.trim().isEmpty) return 'Doctor name is required';
-            // Simple check for placeholders
+            if (value == null || value.trim().isEmpty) {
+              return 'Doctor name is required';
+            }
             final lower = value.trim().toLowerCase();
             if (['test', 'placeholder', 'na', 'n/a'].contains(lower)) {
               return 'Enter a valid name';
@@ -98,10 +100,10 @@ class _DoctorInfoCardWidgetState extends State<DoctorInfoCardWidget> {
         // Specialization
         TextFormField(
           controller: _specializationController,
-           decoration: _inputDecoration(
+          decoration: _inputDecoration(
             'e.g. Cardiologist',
             'Specialization',
-            Icons.work_outline,
+            Iconsax.briefcase,
           ),
         ),
         const SizedBox(height: 16),
@@ -109,13 +111,15 @@ class _DoctorInfoCardWidgetState extends State<DoctorInfoCardWidget> {
         // Hospital/Clinic Name *
         TextFormField(
           controller: _hospitalController,
-           decoration: _inputDecoration(
+          decoration: _inputDecoration(
             'Hospital / Clinic Name',
             'Hospital / Clinic Name *',
-            Icons.local_hospital_outlined,
+            Iconsax.hospital,
           ),
           validator: (value) {
-            if (value == null || value.trim().isEmpty) return 'Hospital name is required';
+            if (value == null || value.trim().isEmpty) {
+              return 'Hospital name is required';
+            }
             return null;
           },
         ),
@@ -124,44 +128,43 @@ class _DoctorInfoCardWidgetState extends State<DoctorInfoCardWidget> {
         // Medical Registration Number *
         TextFormField(
           controller: _regNumberController,
-           decoration: _inputDecoration(
+          decoration: _inputDecoration(
             'Registration Number',
             'Registration Number *',
-            Icons.verified_outlined,
+            Iconsax.verify,
           ),
           validator: (value) {
-            if (value == null || value.trim().isEmpty) return 'Registration number is required';
+            if (value == null || value.trim().isEmpty) {
+              return 'Registration number is required';
+            }
             return null;
           },
         ),
-        
-        // Optional: Signature status removed as it's not core for patient entry currently 
-        // or can be kept simple if needed. 
-        // For now, removing to clean up UI as requested "worst part".
       ],
     );
   }
 
   InputDecoration _inputDecoration(String hint, String label, IconData icon) {
+    final t = context.tokens;
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      prefixIcon: Icon(icon, size: 20, color: AppColors.textMain.withValues(alpha: 0.5)),
-      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+      prefixIcon: Icon(icon, size: 20, color: t.textSecondary),
+      hintStyle: TextStyle(color: t.textSecondary, fontSize: 14),
       filled: true,
-      fillColor: const Color(0xFFF9FAFB),
+      fillColor: t.scaffold,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: AppColors.borderSoft),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: t.divider),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
       ),
       isDense: true,
     );

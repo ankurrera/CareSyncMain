@@ -1,10 +1,10 @@
 # Flutter Client Architecture & Layouts 📱
 
-This document describes the design patterns, code structure, navigation, state management, and widgets of the CareSync Flutter client application.
+This document describes the clean-architecture patterns, code structure, navigation routing, Riverpod state management, and brand UI styling implemented in the CareSync Flutter client application.
 
 ---
 
-## 1. Feature-Driven Folder Structure
+## 1. Feature-Driven Clean Architecture
 
 CareSync uses a **Feature-Driven Architecture**. Code is organized by domain features rather than functional layers, which increases maintainability and scalability:
 
@@ -36,18 +36,16 @@ lib/
     └── shared/                     # Chat rooms, messaging threads, profiles, notifications
 ```
 
-Inside each feature directory, code is split into three clean layers:
+Each feature folder is organized into clean layers:
 * `models/`: Plain Dart data representations and JSON serialization logic.
 * `providers/`: Riverpod states, controllers, and dependency injections.
 * `presentation/`: Widget components and layout screens.
 
 ---
 
-## 2. State Management & Dependency Injection (Riverpod)
+## 2. State Management & Riverpod Caching (Sprint 1 & 2 Landmark)
 
-CareSync relies on **Flutter Riverpod** for state propagation and dependency injection. State mutation is handled using `StateNotifier` and asynchronous requests are wrapped inside `AsyncValue` to keep UI rendering reactive and loading states clean.
-
-### Core Providers Diagram
+CareSync uses **Riverpod** for reactive state propagation and dependency injection:
 
 ```mermaid
 flowchart TD
@@ -79,18 +77,16 @@ flowchart TD
     AppLifecycle --> AuthNotifier
 ```
 
-### Riverpod Usage Guidelines
-1. **Never read providers inside initialization methods (like `initState`)**: Use `ref.read` in callbacks or `ref.watch` in `build` to rebuild widgets reactively.
-2. **Provider Cleanups**: Use `.autoDispose` on short-lived states (like diagnostic scans or chat messages) to prevent memory leaks.
-3. **Dependency Injection**: Wrap third-party services in providers (like `secureStorageProvider`) to keep business logic easily testable.
+### Riverpod Best Practices & Caching
+1. **Riverpod Caching**: Data providers leverage `ref.keepAlive()` or `.autoDispose` caching strategies. This retains active queries in memory while navigated screens remain mounted, bypassing repeat database transactions and ensuring sub-20ms screen transitions.
+2. **Connectivity Observer (Sprint 1)**: An active network connectivity stream observer watches connection health. When offline, it blocks network-dependent calls, informs the user with subtle top-bar alerts, and fetches data directly from secure local cache variables.
+3. **No `ref.read` in build()**: Use `ref.watch` in build or inside other providers to maintain reactive rebuild bindings.
 
 ---
 
-## 3. Navigation & Role-Based Route Guards (GoRouter)
+## 3. Navigation & GoRouter Guards
 
 CareSync uses **GoRouter** to enable deep linking and nested shell navigation. The routing engine ensures that users can only visit screens matching their database roles.
-
-### Route Guard Validation Flow
 
 ```mermaid
 flowchart TD
@@ -116,28 +112,27 @@ flowchart TD
 
 ---
 
-## 4. UI Design System & Brand Styling
+## 4. UI Design System & Modular Widgets (Sprint 2 Landmark)
 
-CareSync has a customized design layout, leveraging dark themes, glassmorphism containers, and interactive micro-animations.
+All UI interfaces implement a unified design language:
 
-### Brand Color Tokens (`lib/core/theme/`)
-* **Primary (Accent)**: Teal (`Color(0xFF0D9488)`) representing safety, hygiene, and medical responsiveness.
-* **Dark Background**: Midnight Navy (`Color(0xFF0F172A)`) and Slate Gray (`Color(0xFF1E293B)`) to provide a premium feel.
+### Styling & Brand Color Tokens (`lib/core/theme/`)
+* **Primary (Accent)**: Orange (`Color(0xFFF95B00)`) representing high-visibility medical response, or Teal (`Color(0xFF0D9488)`) for clinical components.
+* **Dark Background**: Midnight Slate (`Color(0xFF0F172A)`) and Card Gray (`Color(0xFF1E293B)`) to provide a premium feel.
 * **Alert colors**:
   - Danger (DDI clashing, validation failure): Ruby Red (`Color(0xFFE11D48)`).
   - Warnings: Amber Orange (`Color(0xFFD97706)`).
   - Success: Emerald Green (`Color(0xFF059669)`).
 
-### Premium Reusable Widgets
-1. **`BiometricGuard`**: Encapsulates screens with an overlay prompt that intercepts rendering if the user has been inactive for more than 15 minutes, unlocking only on local biometric verification.
-2. **`AdaptiveCardContainer`**: Implements a glassmorphic look with thin white borders and blur filters (`BackdropFilter`) to display demographic details elegantly.
-3. **`LoadingSkeleton`**: Provides animated gradient placeholders for charts and prescription lists.
+### Reusable Shared Widgets
+To maintain consistency and reduce code churn:
+* **`SquircleCard`**: Custom card using the squircle standard with thin borders and subtle shadow offsets.
+* **`CSButton`**: Standard buttons (Primary, Secondary, Destructive, Outlined) with circular border radius configs matching the Design DNA.
+* **`BiometricGuard`**: Encapsulates screens with an overlay prompt that intercepts rendering if the user has been inactive for more than 15 minutes, unlocking only on local biometric verification.
 
 ---
 
 ## 5. Offline Support & Local Data Caching
 
-To guarantee reliability in medical dead zones, CareSync implements **offline-first parsing and caching**:
-1. **Symmetric QR Payloads**: When a patient generates an emergency QR code, vital data is compiled, encrypted using a symmetric key, and directly embedded into the QR graphic. Responders scan the code and decrypt the data entirely offline without making database requests.
-2. **Session Persistence**: Authentication tokens, active user profile details, and device trust states are written to `flutter_secure_storage` to allow immediate app startup without network checks.
-3. **Offline Chat Buffer**: Outgoing chat messages written while offline are logged in a local sqlite database and automatically synchronized using Supabase Realtime when the network is restored.
+* **Symmetric QR Payloads**: When a patient generates an emergency QR code, vital data is compiled, encrypted using a symmetric key, and directly embedded into the QR graphic. Responders scan the code and decrypt the data entirely offline without making database requests.
+* **Session Persistence**: Authentication tokens, active user profile details, and device trust states are written to `flutter_secure_storage` to allow immediate app startup without network checks.

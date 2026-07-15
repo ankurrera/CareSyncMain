@@ -129,12 +129,14 @@ class Prescription {
       patientEntered: json['patient_entered'] as bool? ?? false,
       status: json['status'] as String? ?? 'active',
       createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
-          : null,
-      items: itemsJson
-          ?.map((e) => PrescriptionItem.fromJson(e as Map<String, dynamic>))
-          .toList() ??
+      updatedAt:
+          json['updated_at'] != null
+              ? DateTime.parse(json['updated_at'] as String)
+              : null,
+      items:
+          itemsJson
+              ?.map((e) => PrescriptionItem.fromJson(e as Map<String, dynamic>))
+              .toList() ??
           [],
       doctor: doctorJson != null ? DoctorInfo.fromJson(doctorJson) : null,
       metadata: json['metadata'] as Map<String, dynamic>?,
@@ -158,7 +160,8 @@ class Prescription {
   }
 
   // Status helpers
-  PrescriptionStatus get prescriptionStatus => PrescriptionStatus.fromString(status);
+  PrescriptionStatus get prescriptionStatus =>
+      PrescriptionStatus.fromString(status);
   bool get isActive => status == 'active';
   bool get isCompleted => status == 'completed';
   bool get isCancelled => status == 'cancelled';
@@ -172,8 +175,12 @@ class Prescription {
     final validUntil = this.validUntil;
     final currentStatus = prescriptionStatus;
 
-    if (currentStatus == PrescriptionStatus.cancelled) return PrescriptionStatus.cancelled;
-    if (currentStatus == PrescriptionStatus.completed) return PrescriptionStatus.completed;
+    if (currentStatus == PrescriptionStatus.cancelled) {
+      return PrescriptionStatus.cancelled;
+    }
+    if (currentStatus == PrescriptionStatus.completed) {
+      return PrescriptionStatus.completed;
+    }
 
     if (prescriptionDate != null && prescriptionDate.isAfter(now)) {
       return PrescriptionStatus.upcoming;
@@ -185,7 +192,8 @@ class Prescription {
   }
 
   // Entry source
-  EntrySource get entrySource => patientEntered ? EntrySource.patient : EntrySource.doctor;
+  EntrySource get entrySource =>
+      patientEntered ? EntrySource.patient : EntrySource.doctor;
 
   // Verification status from metadata
   VerificationStatus get verificationStatus {
@@ -202,8 +210,11 @@ class Prescription {
 
   // Get prescription date from metadata
   DateTime? get prescriptionDate {
-    final metadataInfo = metadata?['metadata'] as Map<String, dynamic>?; // Fallback for old structure
-    final directDate = metadata?['prescription_date'] as String?; // New structure
+    final metadataInfo =
+        metadata?['metadata']
+            as Map<String, dynamic>?; // Fallback for old structure
+    final directDate =
+        metadata?['prescription_date'] as String?; // New structure
 
     // Check direct first, then nested
     if (directDate != null) return DateTime.tryParse(directDate);
@@ -243,8 +254,10 @@ class Prescription {
     if (notes == null || notes.trim().isEmpty) return null;
     // Check for placeholder values
     final lowerNotes = notes.trim().toLowerCase();
-    if (lowerNotes == 'mm' || lowerNotes == 'mmm' ||
-        lowerNotes == 'n/a' || lowerNotes == 'na') {
+    if (lowerNotes == 'mm' ||
+        lowerNotes == 'mmm' ||
+        lowerNotes == 'n/a' ||
+        lowerNotes == 'na') {
       return null; // Treat placeholders as no notes
     }
     return notes;
@@ -256,8 +269,10 @@ class Prescription {
     if (notes == null || notes.trim().isEmpty) return null;
     // Check for placeholder values
     final lowerNotes = notes.trim().toLowerCase();
-    if (lowerNotes == 'mm' || lowerNotes == 'mmm' ||
-        lowerNotes == 'n/a' || lowerNotes == 'na') {
+    if (lowerNotes == 'mm' ||
+        lowerNotes == 'mmm' ||
+        lowerNotes == 'n/a' ||
+        lowerNotes == 'na') {
       return null; // Treat placeholders as no notes
     }
     return notes;
@@ -317,9 +332,12 @@ class Prescription {
     }
     final lowerDiagnosis = diagnosis.trim().toLowerCase();
     // Check for common placeholder values
-    if (lowerDiagnosis == 'mm' || lowerDiagnosis == 'mmm' ||
-        lowerDiagnosis == 'n/a' || lowerDiagnosis == 'na' ||
-        lowerDiagnosis == 'test' || lowerDiagnosis == 'placeholder') {
+    if (lowerDiagnosis == 'mm' ||
+        lowerDiagnosis == 'mmm' ||
+        lowerDiagnosis == 'n/a' ||
+        lowerDiagnosis == 'na' ||
+        lowerDiagnosis == 'test' ||
+        lowerDiagnosis == 'placeholder') {
       return 'Incomplete diagnosis data';
     }
     return diagnosis;
@@ -383,11 +401,7 @@ class UploadInfo {
   final String? fileType;
   final int? fileSizeBytes;
 
-  const UploadInfo({
-    this.fileName,
-    this.fileType,
-    this.fileSizeBytes,
-  });
+  const UploadInfo({this.fileName, this.fileType, this.fileSizeBytes});
 
   factory UploadInfo.fromJson(Map<String, dynamic> json) {
     return UploadInfo(
@@ -530,8 +544,10 @@ class PrescriptionItem {
     if (instructions == null || instructions!.trim().isEmpty) return null;
     final lowerInstructions = instructions!.trim().toLowerCase();
     // Check for placeholder values
-    if (lowerInstructions == 'mm' || lowerInstructions == 'mmm' ||
-        lowerInstructions == 'n/a' || lowerInstructions == 'na' ||
+    if (lowerInstructions == 'mm' ||
+        lowerInstructions == 'mmm' ||
+        lowerInstructions == 'n/a' ||
+        lowerInstructions == 'na' ||
         lowerInstructions.contains('take food mmm') ||
         lowerInstructions.contains('take after food mmm')) {
       return null; // Treat placeholders as no instructions
@@ -546,11 +562,7 @@ class DoctorInfo {
   final String fullName;
   final String? email;
 
-  const DoctorInfo({
-    required this.id,
-    required this.fullName,
-    this.email,
-  });
+  const DoctorInfo({required this.id, required this.fullName, this.email});
 
   factory DoctorInfo.fromJson(Map<String, dynamic> json) {
     return DoctorInfo(

@@ -10,10 +10,16 @@ import '../../../services/device_service.dart';
 import '../../../services/audit_service.dart';
 import '../../../services/auth_controller.dart';
 import '../../shared/models/user_profile.dart';
+import '../../../core/logging/app_logger.dart';
+import '../../patient/providers/patient_provider.dart';
 
 // ... Providers (authStateProvider, currentProfileProvider, etc.) remain unchanged ...
-final authStateProvider = StreamProvider<User?>((ref) {
-  return SupabaseService.instance.authStateChanges.map((state) => state.session?.user);
+final authStateProvider = StreamProvider<User?>((ref) async* {
+  final supabase = SupabaseService.instance;
+  yield supabase.currentUser;
+  await for (final state in supabase.authStateChanges) {
+    yield state.session?.user;
+  }
 });
 
 final currentProfileProvider = FutureProvider<UserProfile?>((ref) async {
@@ -39,7 +45,19 @@ final biometricEnabledProvider = FutureProvider<bool>((ref) async {
 });
 
 final kycStatusProvider = FutureProvider<KYCVerification?>((ref) async {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return null;
   return await KYCService.instance.getKYCStatus();
+});
+
+final isDeviceRegisteredProvider = FutureProvider<bool>((ref) async {
+  return true;
+});
+
+final isBiometricEnrolledProvider = FutureProvider<bool>((ref) async {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return false;
+  return true;
 });
 
 /// Auth notifier for handling authentication operations
@@ -106,11 +124,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       final response = await _supabase.signUp(
         email: email,
         password: password,
-        data: {
-          'full_name': fullName,
-          'phone': phone,
-          'role': role,
-        },
+        data: {'full_name': fullName, 'phone': phone, 'role': role},
       );
 
       if (response.user == null) throw Exception('Failed to create account');
@@ -125,11 +139,13 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
         // Insert doctor specific fields if present
         if (hospitalName != null) 'hospital_clinic_name': hospitalName,
         if (specialization != null) 'specialization': specialization,
-        if (medicalRegNumber != null) 'medical_registration_number': medicalRegNumber,
+        if (medicalRegNumber != null)
+          'medical_registration_number': medicalRegNumber,
         // Insert pharmacist specific fields if present
         if (pharmacyName != null) 'pharmacy_name': pharmacyName,
         if (pharmacyAddress != null) 'pharmacy_address': pharmacyAddress,
-        if (pharmacistLicenseNumber != null) 'license_number': pharmacistLicenseNumber,
+        if (pharmacistLicenseNumber != null)
+          'license_number': pharmacistLicenseNumber,
       });
 
       // Pass patient data to role record creation
@@ -154,7 +170,10 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
   }
 
   // ... signIn, signInWithBiometric, completeTwoFactor, enrollBiometric, signOut remain unchanged ...
-  Future<SignInResult> signIn({required String email, required String password}) async {
+  Future<SignInResult> signIn({
+    required String email,
+    required String password,
+  }) async {
     state = const AsyncValue.loading();
     try {
       final response = await _supabase.signIn(email: email, password: password);
@@ -170,22 +189,29 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       ref.invalidate(biometricEnabledProvider);
       ref.invalidate(currentProfileProvider);
 
-      final isDeviceRegistered = await _deviceService.isDeviceRegistered();
-      if (!isDeviceRegistered) {
-        state = AsyncValue.data(response.user);
-        return SignInResult(user: response.user, requiresTwoFactor: true, requiresKyc: false, requiresBiometric: false, email: email);
-      }
+      final profile = await ref.read(currentProfileProvider.future);
+      final isPatient = profile?.role == 'patient';
 
-      final kycVerified = await _kycService.isKYCVerified(userId);
+      final kycVerified = !isPatient || await _kycService.isKYCVerified(userId);
       if (!kycVerified) {
         state = AsyncValue.data(response.user);
-        return SignInResult(user: response.user, requiresTwoFactor: false, requiresKyc: true, requiresBiometric: false);
+        return SignInResult(
+          user: response.user,
+          requiresTwoFactor: false,
+          requiresKyc: true,
+          requiresBiometric: false,
+        );
       }
 
       await _deviceService.updateDeviceLastUsed();
       state = AsyncValue.data(response.user);
 
-      return SignInResult(user: response.user, requiresTwoFactor: false, requiresKyc: false, requiresBiometric: false);
+      return SignInResult(
+        user: response.user,
+        requiresTwoFactor: false,
+        requiresKyc: false,
+        requiresBiometric: false,
+      );
     } catch (e, st) {
       state = AsyncValue.error(e, st);
       rethrow;
@@ -196,7 +222,10 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
     try {
       final isEnabled = await _storage.isBiometricEnabled();
       if (!isEnabled) return false;
-      final authenticated = await _biometric.authenticate(reason: 'Authenticate to sign in', biometricOnly: true);
+      final authenticated = await _biometric.authenticate(
+        reason: 'Authenticate to sign in',
+        biometricOnly: true,
+      );
       if (!authenticated) return false;
       final refreshToken = await _storage.getRefreshToken();
       if (refreshToken == null) return false;
@@ -218,7 +247,10 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
     }
   }
 
-  Future<void> completeTwoFactor({required bool registerDevice, required bool enableBiometric}) async {
+  Future<void> completeTwoFactor({
+    required bool registerDevice,
+    required bool enableBiometric,
+  }) async {
     try {
       if (registerDevice) {
         await _deviceService.registerDevice(biometricEnabled: enableBiometric);
@@ -244,30 +276,46 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
   }
 
   Future<void> signOut() async {
-    await _supabase.signOut();
-    await _storage.clearSession();
-    state = const AsyncValue.data(null);
+    try {
+      await _supabase.signOut();
+    } catch (e, stack) {
+      AppLogger.error(
+        'Error during Supabase signOut',
+        error: e,
+        stackTrace: stack,
+      );
+    } finally {
+      await _storage.clearSession();
+      ref.invalidate(authStateProvider);
+      ref.invalidate(currentProfileProvider);
+      ref.invalidate(patientDataProvider);
+      ref.invalidate(kycStatusProvider);
+      state = const AsyncValue.data(null);
+    }
   }
 
   Future<void> _createRoleRecord(
-      String role, {
-        DateTime? dateOfBirth,
-        double? weight,
-        String? pharmacyName,
-        String? pharmacyAddress,
-        String? pharmacistLicenseNumber,
-      }) async {
+    String role, {
+    DateTime? dateOfBirth,
+    double? weight,
+    String? pharmacyName,
+    String? pharmacyAddress,
+    String? pharmacistLicenseNumber,
+  }) async {
     switch (role) {
       case 'patient':
-      // Add patient specific medical data here
+        // Add patient specific medical data here
         await _supabase.upsertPatientData({
           'qr_code_id': const Uuid().v4(),
-          if (dateOfBirth != null) 'date_of_birth': dateOfBirth.toIso8601String(),
+          if (dateOfBirth != null)
+            'date_of_birth': dateOfBirth.toIso8601String(),
           if (weight != null) 'weight': weight,
         });
         break;
       case 'doctor':
-        await _supabase.client.from('doctors').upsert({'user_id': _supabase.currentUserId});
+        await _supabase.client.from('doctors').upsert({
+          'user_id': _supabase.currentUserId,
+        }, onConflict: 'user_id');
         break;
       case 'pharmacist':
         await _supabase.client.from('pharmacists').upsert({
@@ -275,7 +323,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
           'pharmacy_name': pharmacyName,
           'pharmacy_address': pharmacyAddress,
           'license_number': pharmacistLicenseNumber,
-        });
+        }, onConflict: 'user_id');
         break;
     }
   }
@@ -298,6 +346,7 @@ class SignInResult {
   });
 }
 
-final authNotifierProvider = StateNotifierProvider<AuthNotifier, AsyncValue<User?>>((ref) {
-  return AuthNotifier(ref);
-});
+final authNotifierProvider =
+    StateNotifierProvider<AuthNotifier, AsyncValue<User?>>((ref) {
+      return AuthNotifier(ref);
+    });

@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:iconsax/iconsax.dart';
 
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/design/confirm_sheet.dart';
+import '../../../../core/design/cs_buttons.dart';
+import '../../../../core/design/linear_fade_appbar.dart';
+import '../../../../core/design/squircle_card.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../services/emergency_access_service.dart';
+import '../../../../routing/screen_titles.dart';
 
 /// Screen for requesting emergency "break glass" access to patient records
 class EmergencyAccessScreen extends ConsumerStatefulWidget {
@@ -26,7 +32,6 @@ class _EmergencyAccessScreenState extends ConsumerState<EmergencyAccessScreen> {
   final _notesController = TextEditingController();
   bool _isLoading = false;
 
-  // Predefined emergency access reasons
   final List<String> _emergencyReasons = [
     'Life-threatening emergency',
     'Critical care required',
@@ -47,48 +52,57 @@ class _EmergencyAccessScreenState extends ConsumerState<EmergencyAccessScreen> {
   Future<void> _requestAccess() async {
     if (_selectedReason == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a reason for emergency access'),
-          backgroundColor: AppColors.warning,
+        SnackBar(
+          content: const Text('Please select a reason for emergency access'),
+          backgroundColor: context.tokens.accent,
         ),
       );
       return;
     }
 
-    // Show confirmation dialog
-    final confirmed = await _showConfirmationDialog();
+    final confirmed = await showConfirmSheet(
+      context,
+      icon: Iconsax.warning_2,
+      title: 'Confirm Emergency Access',
+      message:
+          'You are requesting emergency "break glass" access to patient records.\n\n'
+          'Patient: ${widget.patientName}\n'
+          'Reason: $_selectedReason\n'
+          'Duration: 15 minutes\n\n'
+          'This action will be logged and the patient will be notified.',
+      confirmLabel: 'Confirm & Proceed',
+      destructive: true,
+    );
     if (!confirmed) return;
 
     setState(() => _isLoading = true);
 
     try {
-      // Request emergency access with biometric authentication
-      final accessId = await EmergencyAccessService.instance.requestEmergencyAccess(
-        patientId: widget.patientId,
-        reason: _selectedReason!,
-        additionalNotes: _notesController.text.trim().isNotEmpty
-            ? _notesController.text.trim()
-            : null,
-      );
+      final accessId = await EmergencyAccessService.instance
+          .requestEmergencyAccess(
+            patientId: widget.patientId,
+            reason: _selectedReason!,
+            additionalNotes:
+                _notesController.text.trim().isNotEmpty
+                    ? _notesController.text.trim()
+                    : null,
+          );
 
       if (accessId != null && mounted) {
-        // Notify patient
         await EmergencyAccessService.instance.notifyPatient(
           widget.patientId,
           accessId,
         );
 
         if (!mounted) return;
-        // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Emergency access granted for 15 minutes'),
-            backgroundColor: AppColors.success,
-            duration: Duration(seconds: 3),
+          SnackBar(
+            content: const Text('Emergency access granted for 15 minutes'),
+            backgroundColor: context.tokens.accent,
+            duration: const Duration(seconds: 3),
           ),
         );
 
-        // Return to previous screen with success indicator
         Navigator.of(context).pop(true);
       }
     } on EmergencyAccessException catch (e) {
@@ -96,7 +110,7 @@ class _EmergencyAccessScreenState extends ConsumerState<EmergencyAccessScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.message),
-            backgroundColor: AppColors.error,
+            backgroundColor: context.tokens.error,
           ),
         );
       }
@@ -105,7 +119,7 @@ class _EmergencyAccessScreenState extends ConsumerState<EmergencyAccessScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: $e'),
-            backgroundColor: AppColors.error,
+            backgroundColor: context.tokens.error,
           ),
         );
       }
@@ -114,82 +128,11 @@ class _EmergencyAccessScreenState extends ConsumerState<EmergencyAccessScreen> {
     }
   }
 
-  Future<bool> _showConfirmationDialog() async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.warning_rounded, color: AppColors.warning),
-                SizedBox(width: 12),
-                Text('Confirm Emergency Access'),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'You are requesting emergency "break glass" access to patient records.',
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.warningLight,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Patient: ${widget.patientName}',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 4),
-                      Text('Reason: $_selectedReason'),
-                      const SizedBox(height: 4),
-                      const Text('Duration: 15 minutes'),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'This action will be logged and the patient will be notified.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.red,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.warning,
-                ),
-                child: const Text('Confirm & Proceed'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Emergency Access'),
-        backgroundColor: AppColors.warning,
-      ),
+    final t = context.tokens;
+    return CSScaffold(
+      title: ScreenTitles.patientEmergency,
       body: SingleChildScrollView(
         padding: AppSpacing.screenPadding,
         child: Column(
@@ -197,40 +140,32 @@ class _EmergencyAccessScreenState extends ConsumerState<EmergencyAccessScreen> {
           children: [
             const SizedBox(height: 16),
             // Warning banner
-            Container(
+            SquircleCard(
+              radius: AppSpacing.squircleGrouped,
+              color: t.error.withValues(alpha: 0.08),
+              borderSide: BorderSide(color: t.error.withValues(alpha: 0.3)),
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.errorLight,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
-              ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.warning_amber_rounded,
-                    color: AppColors.error,
-                    size: 28,
-                  ),
+                  Icon(Iconsax.warning_2, color: t.error, size: 28),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Emergency "Break Glass" Access',
                           style: TextStyle(
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w700,
                             fontSize: 16,
+                            color: t.textPrimary,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           'This feature is for life-threatening emergencies only. All access is logged and audited.',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.red.shade900,
-                          ),
+                          style: TextStyle(fontSize: 14, color: t.error),
                         ),
                       ],
                     ),
@@ -240,36 +175,22 @@ class _EmergencyAccessScreenState extends ConsumerState<EmergencyAccessScreen> {
             ),
             const SizedBox(height: 32),
             // Patient info
-            const Text(
-              'Patient Information',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            _label('Patient Information'),
             const SizedBox(height: 12),
-            Container(
+            SquircleCard(
+              radius: AppSpacing.squircleGrouped,
+              borderSide: BorderSide(color: t.divider),
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                ),
-              ),
               child: Row(
                 children: [
                   Container(
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: AppColors.patient.withValues(alpha: 0.1),
+                      color: t.tint,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
-                      Icons.person_rounded,
-                      color: AppColors.patient,
-                    ),
+                    child: Icon(Iconsax.user, color: t.accent),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -278,19 +199,17 @@ class _EmergencyAccessScreenState extends ConsumerState<EmergencyAccessScreen> {
                       children: [
                         Text(
                           widget.patientName,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
+                            color: t.textPrimary,
                           ),
                         ),
                         Text(
                           'ID: ${widget.patientId.substring(0, 8)}...',
                           style: TextStyle(
                             fontSize: 13,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.6),
+                            color: t.textSecondary,
                           ),
                         ),
                       ],
@@ -301,34 +220,23 @@ class _EmergencyAccessScreenState extends ConsumerState<EmergencyAccessScreen> {
             ),
             const SizedBox(height: 32),
             // Reason selection
-            const Text(
-              'Emergency Reason',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            _label('Emergency Reason'),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Select the reason for emergency access',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-              ),
+              style: TextStyle(fontSize: 14, color: t.textSecondary),
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _selectedReason,
+              initialValue: _selectedReason,
               decoration: const InputDecoration(
                 hintText: 'Select reason',
-                prefixIcon: Icon(Icons.emergency_rounded),
+                prefixIcon: Icon(Iconsax.warning_2),
               ),
-              items: _emergencyReasons.map((reason) {
-                return DropdownMenuItem(
-                  value: reason,
-                  child: Text(reason),
-                );
-              }).toList(),
+              items:
+                  _emergencyReasons.map((reason) {
+                    return DropdownMenuItem(value: reason, child: Text(reason));
+                  }).toList(),
               onChanged: (value) {
                 setState(() => _selectedReason = value);
               },
@@ -341,13 +249,7 @@ class _EmergencyAccessScreenState extends ConsumerState<EmergencyAccessScreen> {
             ),
             const SizedBox(height: 24),
             // Additional notes
-            const Text(
-              'Additional Notes (Optional)',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            _label('Additional Notes (Optional)'),
             const SizedBox(height: 12),
             TextFormField(
               controller: _notesController,
@@ -358,64 +260,54 @@ class _EmergencyAccessScreenState extends ConsumerState<EmergencyAccessScreen> {
             ),
             const SizedBox(height: 32),
             // Access details
-            Container(
+            SquircleCard(
+              radius: AppSpacing.squircleGrouped,
+              color: t.tint,
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.infoLight,
-                borderRadius: BorderRadius.circular(12),
-              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.info_outline_rounded, color: AppColors.info),
+                      Icon(Iconsax.info_circle, color: t.accent),
                       const SizedBox(width: 8),
                       Text(
                         'Access Details',
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: Colors.blue.shade900,
+                          color: t.accent,
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _buildDetailRow(Icons.access_time_rounded, 'Duration', '15 minutes'),
-                  _buildDetailRow(Icons.fingerprint_rounded, 'Authentication',
-                      'Biometric required'),
+                  _buildDetailRow(Iconsax.clock, 'Duration', '15 minutes'),
                   _buildDetailRow(
-                      Icons.history_rounded, 'Audit', 'Fully logged'),
-                  _buildDetailRow(Icons.notifications_rounded, 'Patient',
-                      'Will be notified'),
+                    Iconsax.finger_scan,
+                    'Authentication',
+                    'Biometric required',
+                  ),
+                  _buildDetailRow(
+                    Iconsax.document_text,
+                    'Audit',
+                    'Fully logged',
+                  ),
+                  _buildDetailRow(
+                    Iconsax.notification,
+                    'Patient',
+                    'Will be notified',
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 32),
             // Request button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _isLoading ? null : _requestAccess,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.warning,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                icon: _isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.emergency_rounded),
-                label: Text(
-                  _isLoading ? 'Requesting Access...' : 'Request Emergency Access',
-                  style: const TextStyle(fontSize: 16),
-                ),
-              ),
+            CSDestructiveButton(
+              label:
+                  _isLoading
+                      ? 'Requesting Access...'
+                      : 'Request Emergency Access',
+              onPressed: _isLoading ? null : _requestAccess,
             ),
             const SizedBox(height: 24),
           ],
@@ -424,26 +316,33 @@ class _EmergencyAccessScreenState extends ConsumerState<EmergencyAccessScreen> {
     );
   }
 
+  Widget _label(String text) => Text(
+    text,
+    style: TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+      color: context.tokens.textPrimary,
+    ),
+  );
+
   Widget _buildDetailRow(IconData icon, String label, String value) {
+    final t = context.tokens;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: Colors.blue.shade700),
+          Icon(icon, size: 18, color: t.accent),
           const SizedBox(width: 8),
           Text(
             '$label: ',
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.blue.shade900,
-            ),
+            style: TextStyle(fontSize: 13, color: t.textSecondary),
           ),
           Text(
             value,
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: Colors.blue.shade900,
+              color: t.textPrimary,
             ),
           ),
         ],

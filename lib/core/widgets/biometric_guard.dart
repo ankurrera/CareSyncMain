@@ -25,7 +25,8 @@ class BiometricGuard extends StatefulWidget {
   State<BiometricGuard> createState() => _BiometricGuardState();
 }
 
-class _BiometricGuardState extends State<BiometricGuard> with WidgetsBindingObserver {
+class _BiometricGuardState extends State<BiometricGuard>
+    with WidgetsBindingObserver {
   bool _isAuthenticated = false;
   bool _isAuthenticating = false;
 
@@ -54,7 +55,9 @@ class _BiometricGuardState extends State<BiometricGuard> with WidgetsBindingObse
     }
 
     // Re-authenticate on resume if needed
-    if (widget.strictMode && state == AppLifecycleState.resumed && !_isAuthenticated) {
+    if (widget.strictMode &&
+        state == AppLifecycleState.resumed &&
+        !_isAuthenticated) {
       _checkBiometricStatus();
     }
   }
@@ -77,7 +80,8 @@ class _BiometricGuardState extends State<BiometricGuard> with WidgetsBindingObse
     setState(() => _isAuthenticating = true);
 
     try {
-      final isAvailable = await BiometricService.instance.isBiometricAvailable();
+      final isAvailable =
+          await BiometricService.instance.isBiometricAvailable();
 
       if (!isAvailable) {
         if (mounted) {
@@ -116,21 +120,22 @@ class _BiometricGuardState extends State<BiometricGuard> with WidgetsBindingObse
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Biometric Unavailable'),
-        content: const Text(
-          'Biometric authentication is not available on this device.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pop(); // Go back
-            },
-            child: const Text('Go Back'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Biometric Unavailable'),
+            content: const Text(
+              'Biometric authentication is not available on this device.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pop(); // Go back
+                },
+                child: const Text('Go Back'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -138,26 +143,27 @@ class _BiometricGuardState extends State<BiometricGuard> with WidgetsBindingObse
     showDialog(
       context: context,
       barrierDismissible: false, // Force user to choose
-      builder: (context) => AlertDialog(
-        title: const Text('Authentication Failed'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pop(); // Go back
-            },
-            child: const Text('Cancel'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Authentication Failed'),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pop(); // Go back
+                },
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _authenticate(); // Retry
+                },
+                child: const Text('Try Again'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _authenticate(); // Retry
-            },
-            child: const Text('Try Again'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -187,14 +193,21 @@ class _BiometricGuardState extends State<BiometricGuard> with WidgetsBindingObse
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.lock_outline_rounded, size: 64, color: Colors.grey),
+              const Icon(
+                Icons.lock_outline_rounded,
+                size: 64,
+                color: Colors.grey,
+              ),
               const SizedBox(height: 24),
               const Text(
                 'Authentication Required',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              Text(widget.reason, style: TextStyle(color: Colors.grey.shade600)),
+              Text(
+                widget.reason,
+                style: TextStyle(color: Colors.grey.shade600),
+              ),
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 onPressed: _authenticate,
@@ -217,5 +230,70 @@ Future<bool> showBiometricAuthDialog({
   String reason = 'Please authenticate to continue',
   bool allowBiometricOnly = true,
 }) async {
-  return true;
+  try {
+    final isAvailable = await BiometricService.instance.isBiometricAvailable();
+    if (!isAvailable) {
+      if (!context.mounted) return false;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          final t = Theme.of(context);
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Row(
+              children: [
+                Icon(Icons.verified_user, color: t.primaryColor, size: 24),
+                const SizedBox(width: 10),
+                const Text(
+                  'Clinical Signature',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            content: const Text(
+              'Biometrics are not set up or available on this device. Would you like to digitally sign this prescription using your active clinical session authority?',
+              style: TextStyle(fontSize: 13, height: 1.4),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(color: t.colorScheme.secondary),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: t.primaryColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                ),
+                child: const Text('Confirm & Sign'),
+              ),
+            ],
+          );
+        },
+      );
+      return confirmed ?? false;
+    }
+
+    return await BiometricService.instance.authenticate(
+      reason: reason,
+      biometricOnly: allowBiometricOnly,
+    );
+  } on BiometricException {
+    return false;
+  } catch (_) {
+    return false;
+  }
 }

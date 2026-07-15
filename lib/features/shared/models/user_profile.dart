@@ -48,9 +48,10 @@ class UserProfile {
       avatarUrl: json['avatar_url'] as String?,
       gender: json['gender'] as String?, // Added
       createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
-          : null,
+      updatedAt:
+          json['updated_at'] != null
+              ? DateTime.parse(json['updated_at'] as String)
+              : null,
       hospitalName: json['hospital_clinic_name'] as String?,
       specialization: json['specialization'] as String?,
       medicalRegNumber: json['medical_registration_number'] as String?,

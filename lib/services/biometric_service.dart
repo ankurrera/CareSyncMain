@@ -1,6 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
+
+import '../core/logging/app_logger.dart';
 
 /// Service for handling biometric authentication
 class BiometricService {
@@ -17,7 +18,10 @@ class BiometricService {
       final canAuthenticate = await _localAuth.isDeviceSupported();
       return canAuthenticateWithBiometrics && canAuthenticate;
     } on PlatformException catch (e) {
-      debugPrint('[BIO] Error checking biometric availability: ${e.message}');
+      AppLogger.warning(
+        '[BIO] Error checking biometric availability: ${e.message}',
+        category: LogCategory.biometric,
+      );
       return false;
     }
   }
@@ -28,7 +32,10 @@ class BiometricService {
     try {
       return await _localAuth.isDeviceSupported();
     } on PlatformException catch (e) {
-      debugPrint('[BIO] Error checking device support: ${e.message}');
+      AppLogger.warning(
+        '[BIO] Error checking device support: ${e.message}',
+        category: LogCategory.biometric,
+      );
       return false;
     }
   }
@@ -119,4 +126,3 @@ class BiometricException implements Exception {
   @override
   String toString() => message;
 }
-

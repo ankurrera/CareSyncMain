@@ -1,19 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/design/linear_fade_appbar.dart';
+import '../../../../core/design/minimal_sheet_dialog.dart';
+import '../../../../core/design/squircle_card.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../services/emergency_audit_service.dart';
+import '../../../../routing/screen_titles.dart';
 
 /// Provider to fetch immutable audit logs from database
-final emergencyLogsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
+final emergencyLogsProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
   final supabase = Supabase.instance.client;
   final currentUser = supabase.auth.currentUser;
   if (currentUser == null) return [];
 
-  // Attempt background sync of offline logs first
   try {
     await EmergencyAuditService.instance.flushQueue();
   } catch (_) {}
@@ -38,13 +44,12 @@ class EmergencyAccessHistoryScreen extends ConsumerStatefulWidget {
 class _EmergencyAccessHistoryScreenState
     extends ConsumerState<EmergencyAccessHistoryScreen> {
   final _searchController = TextEditingController();
-  
-  // Filters state
+
   String _selectedMethod = 'All';
   String _selectedRole = 'All';
   String _selectedStatus = 'All';
   String _selectedReason = 'All';
-  
+
   bool _isFilterExpanded = false;
 
   @override
@@ -53,7 +58,6 @@ class _EmergencyAccessHistoryScreenState
     super.dispose();
   }
 
-  // Analyzes logs for suspicious warning flags
   Map<String, dynamic> _analyzeAnomaly(Map<String, dynamic> log) {
     final List<String> issues = [];
     final status = log['access_status'] as String? ?? 'Success';
@@ -67,155 +71,208 @@ class _EmergencyAccessHistoryScreenState
     if (method == 'Face Recognition' && confidence < 75.0 && confidence > 0) {
       issues.add('Low facial registration similarity index ($confidence%)');
     }
-    if (country != 'Unknown' && country != 'United States' && country != 'US' && country != 'India') {
+    if (country != 'Unknown' &&
+        country != 'United States' &&
+        country != 'US' &&
+        country != 'India') {
       issues.add('Access origin flags unexpected territory ($country)');
     }
 
-    return {
-      'isSuspicious': issues.isNotEmpty,
-      'reasons': issues,
-    };
+    return {'isSuspicious': issues.isNotEmpty, 'reasons': issues};
   }
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     final logsAsync = ref.watch(emergencyLogsProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC), // Pure clinical gray canvas
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFF8FAFC),
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: Color(0xFF0F172A)),
-          onPressed: () => Navigator.of(context).pop(),
+    return CSScaffold(
+      title: ScreenTitles.patientEmergencyAudit,
+      actions: [
+        IconButton(
+          onPressed: () => ref.invalidate(emergencyLogsProvider),
+          icon: Icon(Iconsax.refresh, color: t.textSecondary, size: 18),
         ),
-        title: Text(
-          'Emergency Access Audit',
-          style: GoogleFonts.plusJakartaSans(
-            color: const Color(0xFF0F172A),
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            letterSpacing: -0.2,
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: () => ref.invalidate(emergencyLogsProvider),
-            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF475569), size: 18),
-          ),
-        ],
-      ),
+      ],
       body: logsAsync.when(
         data: (logs) {
-          final filteredLogs = logs.where((log) {
-            final search = _searchController.text.trim().toLowerCase();
-            if (search.isNotEmpty) {
-              final docName = (log['accessed_by_name'] as String? ?? '').toLowerCase();
-              final hosp = (log['hospital_name'] as String? ?? '').toLowerCase();
-              final role = (log['accessed_by_role'] as String? ?? '').toLowerCase();
-              final uid = (log['accessed_by_user_id'] as String? ?? '').toLowerCase();
-              
-              if (!docName.contains(search) &&
-                  !hosp.contains(search) &&
-                  !role.contains(search) &&
-                  !uid.contains(search)) {
-                return false;
-              }
-            }
+          final filteredLogs =
+              logs.where((log) {
+                final search = _searchController.text.trim().toLowerCase();
+                if (search.isNotEmpty) {
+                  final docName =
+                      (log['accessed_by_name'] as String? ?? '').toLowerCase();
+                  final hosp =
+                      (log['hospital_name'] as String? ?? '').toLowerCase();
+                  final role =
+                      (log['accessed_by_role'] as String? ?? '').toLowerCase();
+                  final uid =
+                      (log['accessed_by_user_id'] as String? ?? '')
+                          .toLowerCase();
 
-            if (_selectedMethod != 'All' && log['authentication_method'] != _selectedMethod) {
-              return false;
-            }
+                  if (!docName.contains(search) &&
+                      !hosp.contains(search) &&
+                      !role.contains(search) &&
+                      !uid.contains(search)) {
+                    return false;
+                  }
+                }
 
-            if (_selectedRole != 'All' && log['accessed_by_role'] != _selectedRole.toLowerCase()) {
-              return false;
-            }
+                if (_selectedMethod != 'All' &&
+                    log['authentication_method'] != _selectedMethod) {
+                  return false;
+                }
 
-            if (_selectedStatus != 'All' && log['access_status'] != _selectedStatus) {
-              return false;
-            }
+                if (_selectedRole != 'All' &&
+                    log['accessed_by_role'] != _selectedRole.toLowerCase()) {
+                  return false;
+                }
 
-            if (_selectedReason != 'All' && log['reason_for_access'] != _selectedReason) {
-              return false;
-            }
+                if (_selectedStatus != 'All' &&
+                    log['access_status'] != _selectedStatus) {
+                  return false;
+                }
 
-            return true;
-          }).toList();
+                if (_selectedReason != 'All' &&
+                    log['reason_for_access'] != _selectedReason) {
+                  return false;
+                }
+
+                return true;
+              }).toList();
 
           return Column(
             children: [
               _buildAnalyticsSection(logs),
               _buildSearchFilterSection(),
               Expanded(
-                child: filteredLogs.isEmpty
-                    ? _buildEmptyState()
-                    : _buildTimelineList(filteredLogs),
+                child:
+                    filteredLogs.isEmpty
+                        ? _buildEmptyState()
+                        : _buildTimelineList(filteredLogs),
               ),
             ],
           );
         },
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: Color(0xFFFF5200), strokeWidth: 2.5),
-        ),
-        error: (err, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(
-              'Failed to retrieve audit log ledger: $err',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.plusJakartaSans(color: Colors.redAccent, fontWeight: FontWeight.bold),
+        loading:
+            () => Center(
+              child: CircularProgressIndicator(
+                color: t.accent,
+                strokeWidth: 2.5,
+              ),
             ),
-          ),
+        error:
+            (err, _) => Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'Failed to retrieve audit log ledger: $err',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: t.error, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+      ),
+    );
+  }
+
+  Widget _buildAnalyticsSection(List<Map<String, dynamic>> logs) {
+    final t = context.tokens;
+    int totalAccesses = logs.length;
+    int failedCount =
+        logs
+            .where(
+              (l) =>
+                  l['access_status'] == 'Failed' ||
+                  l['access_status'] == 'Denied',
+            )
+            .length;
+    int suspiciousCount =
+        logs.where((l) => _analyzeAnomaly(l)['isSuspicious'] == true).length;
+    int qrCount =
+        logs.where((l) => l['authentication_method'] == 'QR Code').length;
+    int faceCount =
+        logs
+            .where((l) => l['authentication_method'] == 'Face Recognition')
+            .length;
+    int overrideCount =
+        logs
+            .where(
+              (l) => l['authentication_method'] == 'Manual Emergency Override',
+            )
+            .length;
+
+    return SizedBox(
+      height: 96,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 14, bottom: 4),
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          children: [
+            _buildStatCard(
+              'Total Accesses',
+              totalAccesses.toString(),
+              '30 Days',
+              t.accent,
+              Iconsax.security,
+            ),
+            _buildStatCard(
+              'Failed Attempts',
+              failedCount.toString(),
+              'Denied access',
+              t.error,
+              Iconsax.warning_2,
+            ),
+            _buildStatCard(
+              'Suspicious Alerts',
+              suspiciousCount.toString(),
+              'Anomalies flagged',
+              t.accent,
+              Iconsax.shield_search,
+            ),
+            _buildStatCard(
+              'QR Scans',
+              qrCount.toString(),
+              'Quick lookup',
+              t.accent,
+              Iconsax.scan,
+            ),
+            _buildStatCard(
+              'Biometrics Match',
+              faceCount.toString(),
+              'Face recognition',
+              t.accent,
+              Iconsax.frame_1,
+            ),
+            _buildStatCard(
+              'Emergency Override',
+              overrideCount.toString(),
+              'Manual override',
+              t.accent,
+              Iconsax.lock_slash,
+            ),
+          ],
         ),
       ),
     );
   }
 
-  // Analytics Panel with premium curated cards
-  Widget _buildAnalyticsSection(List<Map<String, dynamic>> logs) {
-    int totalAccesses = logs.length;
-    int failedCount = logs.where((l) => l['access_status'] == 'Failed' || l['access_status'] == 'Denied').length;
-    int suspiciousCount = logs.where((l) => _analyzeAnomaly(l)['isSuspicious'] == true).length;
-    int qrCount = logs.where((l) => l['authentication_method'] == 'QR Code').length;
-    int faceCount = logs.where((l) => l['authentication_method'] == 'Face Recognition').length;
-    int overrideCount = logs.where((l) => l['authentication_method'] == 'Manual Emergency Override').length;
-
-    return Container(
-      height: 96,
-      margin: const EdgeInsets.only(top: 14, bottom: 4),
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        children: [
-          _buildStatCard('Total Accesses', totalAccesses.toString(), '30 Days', const Color(0xFF0F172A), const Color(0xFFF1F5F9), Iconsax.security),
-          _buildStatCard('Failed Attempts', failedCount.toString(), 'Denied access', const Color(0xFFDC2626), const Color(0xFFFEF2F2), Iconsax.warning_2),
-          _buildStatCard('Suspicious Alerts', suspiciousCount.toString(), 'Anomalies flagged', const Color(0xFFD97706), const Color(0xFFFFFBEB), Iconsax.shield_search),
-          _buildStatCard('QR Scans', qrCount.toString(), 'Quick lookup', const Color(0xFF0D9488), const Color(0xFFF0FDFA), Iconsax.scan),
-          _buildStatCard('Biometrics Match', faceCount.toString(), 'Face recognition', const Color(0xFF2563EB), const Color(0xFFEFF6FF), Iconsax.frame_1),
-          _buildStatCard('Emergency Override', overrideCount.toString(), 'Manual override', const Color(0xFF7C3AED), const Color(0xFFFAF5FF), Iconsax.lock_slash),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatCard(String label, String value, String subtitle, Color textColor, Color bgColor, IconData icon) {
+  Widget _buildStatCard(
+    String label,
+    String value,
+    String subtitle,
+    Color color,
+    IconData icon,
+  ) {
+    final t = context.tokens;
     return Container(
       width: 144,
       margin: const EdgeInsets.only(right: 12),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: bgColor,
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: textColor.withOpacity(0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -228,32 +285,32 @@ class _EmergencyAccessHistoryScreenState
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.plusJakartaSans(
+                  style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: textColor.withOpacity(0.75),
+                    color: t.textSecondary,
                   ),
                 ),
               ),
-              Icon(icon, size: 13, color: textColor),
+              Icon(icon, size: 13, color: color),
             ],
           ),
           const Spacer(),
           Text(
             value,
-            style: GoogleFonts.plusJakartaSans(
+            style: TextStyle(
               fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: textColor,
+              fontWeight: FontWeight.w900,
+              color: color,
             ),
           ),
           const SizedBox(height: 1),
           Text(
             subtitle,
-            style: GoogleFonts.plusJakartaSans(
+            style: TextStyle(
               fontSize: 9,
               fontWeight: FontWeight.w600,
-              color: textColor.withOpacity(0.6),
+              color: t.textSecondary,
             ),
           ),
         ],
@@ -261,8 +318,8 @@ class _EmergencyAccessHistoryScreenState
     );
   }
 
-  // Modern search bar & filter
   Widget _buildSearchFilterSection() {
+    final t = context.tokens;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
       child: Column(
@@ -273,16 +330,26 @@ class _EmergencyAccessHistoryScreenState
                 child: Container(
                   height: 44,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9), // soft background
+                    color: t.card,
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: t.divider),
                   ),
                   child: TextField(
                     controller: _searchController,
                     onChanged: (_) => setState(() {}),
+                    cursorColor: t.accent,
                     decoration: InputDecoration(
                       hintText: 'Search by provider, clinic, role...',
-                      hintStyle: GoogleFonts.plusJakartaSans(color: const Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.w500),
-                      prefixIcon: const Icon(Iconsax.search_normal_1, size: 16, color: Color(0xFF94A3B8)),
+                      hintStyle: TextStyle(
+                        color: t.textSecondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      prefixIcon: Icon(
+                        Iconsax.search_normal_1,
+                        size: 16,
+                        color: t.textSecondary,
+                      ),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(vertical: 12),
                     ),
@@ -291,18 +358,23 @@ class _EmergencyAccessHistoryScreenState
               ),
               const SizedBox(width: 8),
               GestureDetector(
-                onTap: () => setState(() => _isFilterExpanded = !_isFilterExpanded),
+                onTap:
+                    () =>
+                        setState(() => _isFilterExpanded = !_isFilterExpanded),
                 child: Container(
                   height: 44,
                   width: 44,
                   decoration: BoxDecoration(
-                    color: _isFilterExpanded ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                    color: _isFilterExpanded ? t.accent : t.card,
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _isFilterExpanded ? t.accent : t.divider,
+                    ),
                   ),
                   child: Icon(
                     Iconsax.filter,
                     size: 16,
-                    color: _isFilterExpanded ? Colors.white : const Color(0xFF475569),
+                    color: _isFilterExpanded ? t.accentOn : t.textSecondary,
                   ),
                 ),
               ),
@@ -310,16 +382,10 @@ class _EmergencyAccessHistoryScreenState
           ),
           if (_isFilterExpanded) ...[
             const SizedBox(height: 10),
-            Container(
+            SquircleCard(
+              radius: AppSpacing.squircleGrouped,
+              borderSide: BorderSide(color: t.divider),
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFF1F5F9)),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.01), blurRadius: 10, offset: const Offset(0, 4)),
-                ],
-              ),
               child: Column(
                 children: [
                   Row(
@@ -328,7 +394,12 @@ class _EmergencyAccessHistoryScreenState
                         child: _buildFilterDropdown(
                           'Auth Method',
                           _selectedMethod,
-                          ['All', 'Face Recognition', 'QR Code', 'Manual Emergency Override'],
+                          [
+                            'All',
+                            'Face Recognition',
+                            'QR Code',
+                            'Manual Emergency Override',
+                          ],
                           (val) => setState(() => _selectedMethod = val!),
                         ),
                       ),
@@ -359,7 +430,14 @@ class _EmergencyAccessHistoryScreenState
                         child: _buildFilterDropdown(
                           'Access Reason',
                           _selectedReason,
-                          ['All', 'Emergency Treatment', 'Trauma', 'Cardiac Arrest', 'Stroke', 'Unknown Patient'],
+                          [
+                            'All',
+                            'Emergency Treatment',
+                            'Trauma',
+                            'Cardiac Arrest',
+                            'Stroke',
+                            'Unknown Patient',
+                          ],
                           (val) => setState(() => _selectedReason = val!),
                         ),
                       ),
@@ -374,30 +452,48 @@ class _EmergencyAccessHistoryScreenState
     );
   }
 
-  Widget _buildFilterDropdown(String label, String value, List<String> items, ValueChanged<String?> onChanged) {
+  Widget _buildFilterDropdown(
+    String label,
+    String value,
+    List<String> items,
+    ValueChanged<String?> onChanged,
+  ) {
+    final t = context.tokens;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label.toUpperCase(),
-          style: GoogleFonts.plusJakartaSans(fontSize: 8, fontWeight: FontWeight.bold, color: const Color(0xFF94A3B8)),
+          style: t.monoMeta.copyWith(
+            fontSize: 8,
+            fontWeight: FontWeight.w700,
+            color: t.textSecondary,
+          ),
         ),
         const SizedBox(height: 4),
         Container(
           height: 38,
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
+            color: t.scaffold,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            border: Border.all(color: t.divider),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: value,
               isExpanded: true,
-              icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF64748B)),
-              style: GoogleFonts.plusJakartaSans(color: const Color(0xFF1E293B), fontSize: 11, fontWeight: FontWeight.w600),
-              items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+              icon: Icon(Icons.arrow_drop_down, color: t.textSecondary),
+              dropdownColor: t.card,
+              style: TextStyle(
+                color: t.textPrimary,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+              items:
+                  items
+                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                      .toList(),
               onChanged: onChanged,
             ),
           ),
@@ -406,8 +502,8 @@ class _EmergencyAccessHistoryScreenState
     );
   }
 
-  // Timeline list grouped by Date category
   Widget _buildTimelineList(List<Map<String, dynamic>> logs) {
+    final t = context.tokens;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
@@ -446,10 +542,10 @@ class _EmergencyAccessHistoryScreenState
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
             child: Text(
               groupName.toUpperCase(),
-              style: GoogleFonts.plusJakartaSans(
+              style: t.monoSectionHeader.copyWith(
                 fontSize: 10,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFFFF5200),
+                fontWeight: FontWeight.w700,
+                color: t.accent,
                 letterSpacing: 1.0,
               ),
             ),
@@ -471,6 +567,7 @@ class _EmergencyAccessHistoryScreenState
   }
 
   Widget _buildAuditLogCard(Map<String, dynamic> log) {
+    final t = context.tokens;
     final method = log['authentication_method'] as String? ?? 'QR Code';
     final name = log['accessed_by_name'] as String? ?? 'Unknown Provider';
     final role = log['accessed_by_role'] as String? ?? 'unknown';
@@ -479,21 +576,19 @@ class _EmergencyAccessHistoryScreenState
     final tsStr = log['timestamp'] as String?;
     final ts = tsStr != null ? DateTime.parse(tsStr) : DateTime.now();
     final timeStr = DateFormat('h:mm a').format(ts);
-    final location = [log['city'], log['state']].where((e) => e != null && e != 'Unknown').join(', ');
+    final location = [
+      log['city'],
+      log['state'],
+    ].where((e) => e != null && e != 'Unknown').join(', ');
 
     final anomaly = _analyzeAnomaly(log);
     final isSuspicious = anomaly['isSuspicious'] == true;
 
-    Color statusColor;
-    IconData statusIcon;
-
-    if (status == 'Success') {
-      statusColor = const Color(0xFF10B981);
-      statusIcon = Icons.check_circle_outline_rounded;
-    } else {
-      statusColor = const Color(0xFFEF4444);
-      statusIcon = Icons.error_outline_rounded;
-    }
+    final statusColor = status == 'Success' ? t.accent : t.error;
+    final statusIcon =
+        status == 'Success'
+            ? Icons.check_circle_rounded
+            : Icons.error_outline_rounded;
 
     IconData methodIcon;
     if (method == 'Face Recognition') {
@@ -504,108 +599,122 @@ class _EmergencyAccessHistoryScreenState
       methodIcon = Iconsax.lock_slash;
     }
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isSuspicious ? const Color(0xFFFEE2E2) : const Color(0xFFF1F5F9),
-          width: 1,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: SquircleCard(
+        radius: AppSpacing.squircleGrouped,
+        borderSide: BorderSide(
+          color: isSuspicious ? t.error.withValues(alpha: 0.3) : t.divider,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.015),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: InkWell(
+        padding: const EdgeInsets.all(14),
         onTap: () => _showAuditDetails(log),
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: isSuspicious ? const Color(0xFFFEE2E2) : const Color(0xFFF8FAFC),
-                child: Icon(methodIcon, size: 15, color: isSuspicious ? const Color(0xFFEF4444) : const Color(0xFF64748B)),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundColor:
+                  isSuspicious ? t.error.withValues(alpha: 0.1) : t.scaffold,
+              child: Icon(
+                methodIcon,
+                size: 15,
+                color: isSuspicious ? t.error : t.textSecondary,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          name,
-                          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13.5, color: const Color(0xFF0F172A)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        name,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13.5,
+                          color: t.textPrimary,
                         ),
+                      ),
+                      Text(
+                        timeStr,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 10,
+                          color: t.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${role.toUpperCase()} • $hosp',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 10.5,
+                      color: t.textSecondary,
+                    ),
+                  ),
+                  if (location.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Iconsax.location,
+                          size: 10.5,
+                          color: t.textSecondary,
+                        ),
+                        const SizedBox(width: 4),
                         Text(
-                          timeStr,
-                          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600, fontSize: 10, color: const Color(0xFF94A3B8)),
+                          location,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: t.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${role.toUpperCase()} • $hosp',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600, fontSize: 10.5, color: const Color(0xFF64748B)),
-                    ),
-                    if (location.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(Icons.location_on_outlined, size: 10.5, color: Color(0xFF94A3B8)),
-                          const SizedBox(width: 4),
-                          Text(
-                            location,
-                            style: GoogleFonts.plusJakartaSans(fontSize: 10, color: const Color(0xFF94A3B8), fontWeight: FontWeight.w500),
-                          ),
-                        ],
-                      ),
-                    ],
-                    if (isSuspicious) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFEE2E2),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          anomaly['reasons'][0],
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.plusJakartaSans(
-                            color: const Color(0xFFB91C1C),
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
                   ],
-                ),
+                  if (isSuspicious) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: t.error.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        anomaly['reasons'][0],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: t.error,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-              const SizedBox(width: 8),
-              Icon(statusIcon, color: statusColor, size: 16),
-            ],
-          ),
+            ),
+            const SizedBox(width: 8),
+            Icon(statusIcon, color: statusColor, size: 16),
+          ],
         ),
       ),
     );
   }
 
-  // Premium empty state design
   Widget _buildEmptyState() {
+    final t = context.tokens;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 40),
@@ -615,19 +724,23 @@ class _EmergencyAccessHistoryScreenState
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: t.card,
                 shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFFF1F5F9), width: 2),
+                border: Border.all(color: t.divider, width: 2),
               ),
-              child: const Icon(Iconsax.shield_security, size: 44, color: Color(0xFF94A3B8)),
+              child: Icon(
+                Iconsax.shield_security,
+                size: 44,
+                color: t.textSecondary,
+              ),
             ),
             const SizedBox(height: 20),
             Text(
               'No Audit Logs Found',
-              style: GoogleFonts.plusJakartaSans(
+              style: TextStyle(
                 fontSize: 15,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF1E293B),
+                fontWeight: FontWeight.w900,
+                color: t.textPrimary,
                 letterSpacing: -0.2,
               ),
             ),
@@ -635,9 +748,9 @@ class _EmergencyAccessHistoryScreenState
             Text(
               'All emergency accesses will be immutably recorded here. Currently, no access history exists for your profile.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.plusJakartaSans(
+              style: TextStyle(
                 fontSize: 12.5,
-                color: const Color(0xFF64748B),
+                color: t.textSecondary,
                 fontWeight: FontWeight.w500,
                 height: 1.5,
               ),
@@ -648,7 +761,6 @@ class _EmergencyAccessHistoryScreenState
     );
   }
 
-  // Details inspector sheet modal
   void _showAuditDetails(Map<String, dynamic> log) {
     final method = log['authentication_method'] as String? ?? 'QR Code';
     final name = log['accessed_by_name'] as String? ?? 'Unknown Provider';
@@ -657,7 +769,7 @@ class _EmergencyAccessHistoryScreenState
     final org = log['organization_name'] as String? ?? 'CareSync Org';
     final status = log['access_status'] as String? ?? 'Success';
     final scope = log['view_scope'] as String? ?? 'Emergency ID Only';
-    
+
     final tsStr = log['timestamp'] as String?;
     final ts = tsStr != null ? DateTime.parse(tsStr) : DateTime.now();
     final dateStr = DateFormat('MMMM d, yyyy').format(ts);
@@ -678,221 +790,239 @@ class _EmergencyAccessHistoryScreenState
     final anomaly = _analyzeAnomaly(log);
     final isSuspicious = anomaly['isSuspicious'] == true;
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.85,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          children: [
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(top: 12, bottom: 8),
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(2)),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Audit Record Details',
-                    style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A)),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF64748B)),
-                    style: IconButton.styleFrom(
-                      backgroundColor: const Color(0xFFF1F5F9),
-                      padding: const EdgeInsets.all(6),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1, color: Color(0xFFE2E8F0)),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(24),
-                children: [
-                  if (isSuspicious) ...[
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEE2E2),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFFCA5A5)),
+    showAppSheet<void>(
+      context,
+      showHandle: false,
+      builder: (ctx) {
+        final t = ctx.tokens;
+        return SizedBox(
+          height: MediaQuery.of(ctx).size.height * 0.8,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Audit Record Details', style: t.sheetTitle),
+                    IconButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      icon: Icon(
+                        Icons.close_rounded,
+                        size: 20,
+                        color: t.textSecondary,
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.error_rounded, color: Color(0xFFEF4444), size: 18),
-                              const SizedBox(width: 8),
-                              Text(
-                                'SECURITY WARNING FLAGS',
-                                style: GoogleFonts.plusJakartaSans(
-                                  color: const Color(0xFFB91C1C),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.5,
+                      style: IconButton.styleFrom(
+                        backgroundColor: t.scaffold,
+                        padding: const EdgeInsets.all(6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(height: 1, color: t.divider),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.all(24),
+                  children: [
+                    if (isSuspicious) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: t.error.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: t.error.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Iconsax.warning_2,
+                                  color: t.error,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'SECURITY WARNING FLAGS',
+                                  style: TextStyle(
+                                    color: t.error,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            ...anomaly['reasons'].map<Widget>(
+                              (reason) => Padding(
+                                padding: const EdgeInsets.only(
+                                  top: 2,
+                                  left: 26,
+                                ),
+                                child: Text(
+                                  '• $reason',
+                                  style: TextStyle(
+                                    color: t.error,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          ...anomaly['reasons'].map<Widget>((reason) => Padding(
-                            padding: const EdgeInsets.only(top: 2, left: 26),
-                            child: Text(
-                              '• $reason',
-                              style: GoogleFonts.plusJakartaSans(
-                                color: const Color(0xFF7F1D1D),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                              ),
                             ),
-                          )).toList(),
-                        ],
+                          ],
+                        ),
                       ),
+                      const SizedBox(height: 20),
+                    ],
+                    _buildDetailsHeader('VERIFIED PROVIDER DETAILS'),
+                    _buildDetailTile(
+                      title: 'Name',
+                      value: name,
+                      subtitle: 'Verified Identity: Yes',
+                      icon: Iconsax.profile_tick,
+                    ),
+                    _buildDetailTile(
+                      title: 'System Role',
+                      value: role.toUpperCase(),
+                      subtitle: 'Authentication Status: Success',
+                      icon: Iconsax.shield_tick,
+                    ),
+                    _buildDetailTile(
+                      title: 'Organization',
+                      value: '$hosp ($org)',
+                      subtitle: 'Clinical Network Registry verified',
+                      icon: Iconsax.hospital,
                     ),
                     const SizedBox(height: 20),
-                  ],
-                  _buildDetailsHeader('VERIFIED PROVIDER DETAILS'),
-                  _buildDetailTile(
-                    title: 'Name',
-                    value: name,
-                    subtitle: 'Verified Identity: Yes',
-                    icon: Icons.assignment_ind_outlined,
-                  ),
-                  _buildDetailTile(
-                    title: 'System Role',
-                    value: role.toUpperCase(),
-                    subtitle: 'Authentication Status: Success',
-                    icon: Icons.shield_outlined,
-                  ),
-                  _buildDetailTile(
-                    title: 'Organization',
-                    value: '$hosp ($org)',
-                    subtitle: 'Clinical Network Registry verified',
-                    icon: Icons.local_hospital_outlined,
-                  ),
-                  const SizedBox(height: 20),
-                  _buildDetailsHeader('VERIFICATION MECHANISM'),
-                  _buildDetailTile(
-                    title: 'Method',
-                    value: method,
-                    subtitle: 'Scope: $scope',
-                    icon: Icons.key_outlined,
-                  ),
-                  if (confidence != null && confidence > 0) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Face Similarity Match Score',
-                                style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: const Color(0xFF64748B)),
-                              ),
-                              Text(
-                                '${confidence.toStringAsFixed(1)}%',
-                                style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.bold, color: confidence < 75 ? Colors.red : Colors.green),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: confidence / 100.0,
-                              minHeight: 6,
-                              backgroundColor: const Color(0xFFF1F5F9),
-                              color: confidence < 75 ? Colors.red : Colors.green,
+                    _buildDetailsHeader('VERIFICATION MECHANISM'),
+                    _buildDetailTile(
+                      title: 'Method',
+                      value: method,
+                      subtitle: 'Scope: $scope',
+                      icon: Iconsax.key,
+                    ),
+                    if (confidence != null && confidence > 0) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Face Similarity Match Score',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: t.textSecondary,
+                                  ),
+                                ),
+                                Text(
+                                  '${confidence.toStringAsFixed(1)}%',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: confidence < 75 ? t.error : t.accent,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 6),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: confidence / 100.0,
+                                minHeight: 6,
+                                backgroundColor: t.divider,
+                                color: confidence < 75 ? t.error : t.accent,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
+                    ],
+                    const SizedBox(height: 12),
+                    _buildDetailsHeader('TIMELINE & GEOLOCATION'),
+                    _buildDetailTile(
+                      title: 'Timestamp',
+                      value: '$dateStr at $timeStr',
+                      subtitle: 'Server NTP time synchronized',
+                      icon: Iconsax.clock,
+                    ),
+                    _buildDetailTile(
+                      title: 'Access Point Coordinates',
+                      value:
+                          lat != null && long != null ? '$lat, $long' : 'N/A',
+                      subtitle: '$city, $state, $country (IP: $ip)',
+                      icon: Iconsax.location,
+                    ),
+                    const SizedBox(height: 20),
+                    _buildDetailsHeader('DEVICE AUDIT FINGERPRINT'),
+                    _buildDetailTile(
+                      title: 'Model & OS',
+                      value: '$deviceName ($devicePlatform)',
+                      subtitle: 'Security patches verified',
+                      icon: Iconsax.mobile,
+                    ),
+                    _buildDetailTile(
+                      title: 'Hardware UUID Signature',
+                      value: deviceId,
+                      subtitle: 'Immutable device fingerprint',
+                      icon: Iconsax.finger_scan,
+                    ),
+                    const SizedBox(height: 20),
+                    _buildDetailsHeader('ACCESS STATUS OUTCOME'),
+                    _buildDetailTile(
+                      title: 'Record Status',
+                      value: status.toUpperCase(),
+                      subtitle: 'Ledger Hash: ${log['id']}',
+                      icon: Iconsax.cloud_change,
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  _buildDetailsHeader('TIMELINE & GEOLOCATION'),
-                  _buildDetailTile(
-                    title: 'Timestamp',
-                    value: '$dateStr at $timeStr',
-                    subtitle: 'Server NTP time synchronized',
-                    icon: Icons.schedule_rounded,
-                  ),
-                  _buildDetailTile(
-                    title: 'Access Point Coordinates',
-                    value: lat != null && long != null ? '$lat, $long' : 'N/A',
-                    subtitle: '$city, $state, $country (IP: $ip)',
-                    icon: Icons.pin_drop_outlined,
-                  ),
-                  const SizedBox(height: 20),
-                  _buildDetailsHeader('DEVICE AUDIT FINGERPRINT'),
-                  _buildDetailTile(
-                    title: 'Model & OS',
-                    value: '$deviceName ($devicePlatform)',
-                    subtitle: 'Security patches verified',
-                    icon: Icons.phone_android_outlined,
-                  ),
-                  _buildDetailTile(
-                    title: 'Hardware UUID Signature',
-                    value: deviceId,
-                    subtitle: 'Immutable device fingerprint',
-                    icon: Icons.fingerprint_rounded,
-                  ),
-                  const SizedBox(height: 20),
-                  _buildDetailsHeader('ACCESS STATUS OUTCOME'),
-                  _buildDetailTile(
-                    title: 'Record Status',
-                    value: status.toUpperCase(),
-                    subtitle: 'Ledger Hash: ${log['id']}',
-                    icon: Icons.cloud_done_outlined,
-                  ),
-                ],
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 
   Widget _buildDetailsHeader(String title) {
+    final t = context.tokens;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10, left: 4),
       child: Text(
         title,
-        style: GoogleFonts.plusJakartaSans(
+        style: t.monoSectionHeader.copyWith(
           fontSize: 9,
-          fontWeight: FontWeight.w800,
-          color: const Color(0xFFFF5200),
+          fontWeight: FontWeight.w700,
+          color: t.accent,
           letterSpacing: 0.8,
         ),
       ),
     );
   }
 
-  Widget _buildDetailTile({required String title, required String value, required String subtitle, required IconData icon}) {
+  Widget _buildDetailTile({
+    required String title,
+    required String value,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    final t = context.tokens;
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: const Color(0xFF64748B)),
+          Icon(icon, size: 16, color: t.textSecondary),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -900,16 +1030,28 @@ class _EmergencyAccessHistoryScreenState
               children: [
                 Text(
                   title,
-                  style: GoogleFonts.plusJakartaSans(fontSize: 10, fontWeight: FontWeight.bold, color: const Color(0xFF94A3B8)),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: t.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.bold, color: const Color(0xFF1E293B)),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: t.textPrimary,
+                  ),
                 ),
                 Text(
                   subtitle,
-                  style: GoogleFonts.plusJakartaSans(fontSize: 10, color: const Color(0xFF64748B), fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: t.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),

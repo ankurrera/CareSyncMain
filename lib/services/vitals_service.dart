@@ -10,6 +10,7 @@ class VitalsService {
   final EncryptionService _encryption;
 
   Future<List<Vital>> getVitals(String patientId) async {
+    if (patientId.isEmpty) return [];
     final response = await _supabase.client
         .from('vitals')
         .select()
@@ -44,8 +45,5 @@ class VitalsService {
 }
 
 final vitalsServiceProvider = Provider((ref) {
-  return VitalsService(
-    SupabaseService.instance,
-    EncryptionService.instance,
-  );
+  return VitalsService(SupabaseService.instance, EncryptionService.instance);
 });

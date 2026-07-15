@@ -1,6 +1,7 @@
 import 'dart:math';
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../core/logging/app_logger.dart';
 
 /// Service for handling Two-Factor Authentication (2FA)
 class TwoFactorService {
@@ -10,7 +11,6 @@ class TwoFactorService {
   final _supabase = Supabase.instance.client;
   static const int _codeLength = 6;
   static const int _codeExpiryMinutes = 10;
-  static const int _maxAttempts = 3;
 
   // ─────────────────────────────────────────────────────────────────────────
   // CODE GENERATION
@@ -67,14 +67,13 @@ class TwoFactorService {
     // 2. Firebase Cloud Functions
     // 3. AWS SES
     // 4. Direct SMTP
-    
-    // For development, log the code (REMOVE IN PRODUCTION)
-    // ignore: avoid_print
-    assert(() {
-      debugPrint('📧 2FA Code for $email: $code');
-      return true;
-    }());
-    
+
+    // In debug only, log the OTP code for local development.
+    AppLogger.debug(
+      '📧 2FA Code for $email: $code',
+      category: LogCategory.auth,
+    );
+
     // In production, call your email service:
     // await _supabase.functions.invoke('send-2fa-email', body: {
     //   'email': email,
@@ -124,14 +123,13 @@ class TwoFactorService {
     // 2. AWS SNS
     // 3. Firebase Cloud Messaging
     // 4. Vonage (Nexmo)
-    
-    // For development, log the code (REMOVE IN PRODUCTION)
-    // ignore: avoid_print
-    assert(() {
-      debugPrint('📱 2FA Code for $phoneNumber: $code');
-      return true;
-    }());
-    
+
+    // In debug only, log the OTP code for local development.
+    AppLogger.debug(
+      '📱 2FA Code for $phoneNumber: $code',
+      category: LogCategory.auth,
+    );
+
     // In production, call your SMS service:
     // await _supabase.functions.invoke('send-2fa-sms', body: {
     //   'phone': phoneNumber,
@@ -143,67 +141,23 @@ class TwoFactorService {
   // CODE VERIFICATION
   // ─────────────────────────────────────────────────────────────────────────
 
-  /// Verify 2FA code
   Future<bool> verifyCode({
     required String userId,
     required String code,
     required TwoFactorCodeType codeType,
   }) async {
     try {
-      // Get the most recent unverified code for this user
-      final response = await _supabase
-          .from('two_factor_codes')
-          .select()
-          .eq('user_id', userId)
-          .eq('code_type', codeType.name)
-          .eq('verified', false)
-          .order('created_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
-
-      if (response == null) {
-        throw TwoFactorException('No verification code found');
-      }
-
-      final codeData = response;
-      final storedCode = codeData['code'] as String;
-      final expiresAt = DateTime.parse(codeData['expires_at'] as String);
-      final attempts = codeData['attempts'] as int;
-      final codeId = codeData['id'] as String;
-
-      // Check if code has expired
-      if (DateTime.now().isAfter(expiresAt)) {
-        throw TwoFactorException('Verification code has expired');
-      }
-
-      // Check if max attempts exceeded
-      if (attempts >= _maxAttempts) {
-        throw TwoFactorException('Maximum verification attempts exceeded');
-      }
-
-      // Verify code
-      if (code == storedCode) {
-        // Mark as verified
-        await _supabase.from('two_factor_codes').update({
-          'verified': true,
-          'verified_at': DateTime.now().toIso8601String(),
-        }).eq('id', codeId);
-
-        return true;
-      } else {
-        // Increment attempts
-        await _supabase.from('two_factor_codes').update({
-          'attempts': attempts + 1,
-        }).eq('id', codeId);
-
-        throw TwoFactorException(
-          'Invalid verification code (${_maxAttempts - attempts - 1} attempts remaining)',
-        );
-      }
+      final response = await _supabase.rpc(
+        'verify_two_factor_code',
+        params: {
+          'p_user_id': userId,
+          'p_code': code,
+          'p_code_type': codeType.name,
+        },
+      );
+      return response == true;
     } on PostgrestException catch (e) {
-      throw TwoFactorException('Failed to verify code: ${e.message}');
-    } on TwoFactorException {
-      rethrow;
+      throw TwoFactorException(e.message);
     } catch (e) {
       throw TwoFactorException('Failed to verify code: $e');
     }
@@ -217,7 +171,7 @@ class TwoFactorService {
   // 1. Generate a secret key for the user
   // 2. Generate a QR code with the secret
   // 3. Verify TOTP codes using the secret
-  // 
+  //
   // This requires additional dependencies like:
   // - otp (for TOTP generation/verification)
   // - qr_flutter (for QR code generation)
@@ -237,13 +191,12 @@ class TwoFactorService {
           .delete()
           .lt('expires_at', oneHourAgo.toIso8601String());
     } catch (e) {
-      // Silently fail - this is a cleanup operation
-      // In production, use proper logging framework
-      // ignore: avoid_print
-      assert(() {
-        debugPrint('Failed to cleanup expired codes: $e');
-        return true;
-      }());
+      // Silently fail — this is a background cleanup operation.
+      AppLogger.warning(
+        'Failed to cleanup expired 2FA codes',
+        category: LogCategory.database,
+        error: e,
+      );
     }
   }
 
@@ -253,15 +206,16 @@ class TwoFactorService {
     required TwoFactorCodeType codeType,
   }) async {
     try {
-      final response = await _supabase
-          .from('two_factor_codes')
-          .select()
-          .eq('user_id', userId)
-          .eq('code_type', codeType.name)
-          .eq('verified', false)
-          .gt('expires_at', DateTime.now().toIso8601String())
-          .limit(1)
-          .maybeSingle();
+      final response =
+          await _supabase
+              .from('two_factor_codes')
+              .select()
+              .eq('user_id', userId)
+              .eq('code_type', codeType.name)
+              .eq('verified', false)
+              .gt('expires_at', DateTime.now().toIso8601String())
+              .limit(1)
+              .maybeSingle();
 
       return response != null;
     } catch (e) {

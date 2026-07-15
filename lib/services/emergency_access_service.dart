@@ -1,5 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../core/logging/app_logger.dart';
 import 'biometric_service.dart';
 import 'audit_service.dart';
 
@@ -30,11 +30,12 @@ class EmergencyAccessService {
     }
 
     // Get user role from profile
-    final profile = await _supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', currentUser.id)
-        .single();
+    final profile =
+        await _supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', currentUser.id)
+            .single();
 
     final role = profile['role'] as String;
 
@@ -47,7 +48,7 @@ class EmergencyAccessService {
 
     // Require biometric authentication
     final isAvailable = await _biometric.isBiometricAvailable();
-    
+
     if (!isAvailable) {
       throw EmergencyAccessException(
         'Biometric authentication is not available',
@@ -64,23 +65,25 @@ class EmergencyAccessService {
     }
 
     // Create emergency access record
-    final accessRecord = await _supabase
-        .from('emergency_access')
-        .insert({
-          'requester_id': currentUser.id,
-          'requester_role': role,
-          'patient_id': patientId,
-          'reason': reason,
-          'additional_notes': additionalNotes,
-          'granted_at': DateTime.now().toIso8601String(),
-          'expires_at': DateTime.now()
-              .add(const Duration(minutes: _accessTimeoutMinutes))
-              .toIso8601String(),
-          'biometric_verified': true,
-          'status': 'active',
-        })
-        .select()
-        .single();
+    final accessRecord =
+        await _supabase
+            .from('emergency_access')
+            .insert({
+              'requester_id': currentUser.id,
+              'requester_role': role,
+              'patient_id': patientId,
+              'reason': reason,
+              'additional_notes': additionalNotes,
+              'granted_at': DateTime.now().toIso8601String(),
+              'expires_at':
+                  DateTime.now()
+                      .add(const Duration(minutes: _accessTimeoutMinutes))
+                      .toIso8601String(),
+              'biometric_verified': true,
+              'status': 'active',
+            })
+            .select()
+            .single();
 
     final accessId = accessRecord['id'] as String;
 
@@ -97,10 +100,10 @@ class EmergencyAccessService {
       },
     );
 
-    assert(() {
-      debugPrint('[EMERGENCY] Emergency access granted: $accessId');
-      return true;
-    }());
+    AppLogger.info(
+      '[EMERGENCY] Emergency access granted: $accessId',
+      category: LogCategory.emergency,
+    );
 
     return accessId;
   }
@@ -113,21 +116,23 @@ class EmergencyAccessService {
     try {
       final now = DateTime.now().toIso8601String();
 
-      final result = await _supabase
-          .from('emergency_access')
-          .select('id')
-          .eq('requester_id', currentUser.id)
-          .eq('patient_id', patientId)
-          .eq('status', 'active')
-          .gt('expires_at', now)
-          .maybeSingle();
+      final result =
+          await _supabase
+              .from('emergency_access')
+              .select('id')
+              .eq('requester_id', currentUser.id)
+              .eq('patient_id', patientId)
+              .eq('status', 'active')
+              .gt('expires_at', now)
+              .maybeSingle();
 
       return result != null;
     } catch (e) {
-      assert(() {
-        debugPrint('[EMERGENCY] Error checking access: $e');
-        return true;
-      }());
+      AppLogger.warning(
+        '[EMERGENCY] Error checking access',
+        category: LogCategory.emergency,
+        error: e,
+      );
       return false;
     }
   }
@@ -147,15 +152,13 @@ class EmergencyAccessService {
       action: AuditAction.emergencyAccessRevoked,
       resourceType: 'emergency_access',
       resourceId: accessId,
-      metadata: {
-        'revoked_at': DateTime.now().toIso8601String(),
-      },
+      metadata: {'revoked_at': DateTime.now().toIso8601String()},
     );
 
-    assert(() {
-      debugPrint('[EMERGENCY] Emergency access revoked: $accessId');
-      return true;
-    }());
+    AppLogger.info(
+      '[EMERGENCY] Emergency access revoked: $accessId',
+      category: LogCategory.emergency,
+    );
   }
 
   /// Auto-revoke expired emergency access records
@@ -165,16 +168,14 @@ class EmergencyAccessService {
 
     await _supabase
         .from('emergency_access')
-        .update({
-          'status': 'expired',
-        })
+        .update({'status': 'expired'})
         .eq('status', 'active')
         .lt('expires_at', now);
 
-    assert(() {
-      debugPrint('[EMERGENCY] Expired emergency access records revoked');
-      return true;
-    }());
+    AppLogger.info(
+      '[EMERGENCY] Expired emergency access records revoked',
+      category: LogCategory.emergency,
+    );
   }
 
   /// Get active emergency access records for current user
@@ -187,7 +188,9 @@ class EmergencyAccessService {
 
       final results = await _supabase
           .from('emergency_access')
-          .select('*, profiles!emergency_access_patient_id_fkey(full_name, email)')
+          .select(
+            '*, profiles!emergency_access_patient_id_fkey(full_name, email)',
+          )
           .eq('requester_id', currentUser.id)
           .eq('status', 'active')
           .gt('expires_at', now)
@@ -197,10 +200,11 @@ class EmergencyAccessService {
           .map((json) => EmergencyAccessRecord.fromJson(json))
           .toList();
     } catch (e) {
-      assert(() {
-        debugPrint('[EMERGENCY] Error fetching access records: $e');
-        return true;
-      }());
+      AppLogger.warning(
+        '[EMERGENCY] Error fetching access records',
+        category: LogCategory.emergency,
+        error: e,
+      );
       return [];
     }
   }
@@ -213,7 +217,9 @@ class EmergencyAccessService {
     try {
       final results = await _supabase
           .from('emergency_access')
-          .select('*, profiles!emergency_access_requester_id_fkey(full_name, email, role)')
+          .select(
+            '*, profiles!emergency_access_requester_id_fkey(full_name, email, role)',
+          )
           .eq('patient_id', patientId)
           .order('granted_at', ascending: false)
           .limit(limit);
@@ -222,10 +228,11 @@ class EmergencyAccessService {
           .map((json) => EmergencyAccessRecord.fromJson(json))
           .toList();
     } catch (e) {
-      assert(() {
-        debugPrint('[EMERGENCY] Error fetching access history: $e');
-        return true;
-      }());
+      AppLogger.warning(
+        '[EMERGENCY] Error fetching access history',
+        category: LogCategory.emergency,
+        error: e,
+      );
       return [];
     }
   }
@@ -240,10 +247,10 @@ class EmergencyAccessService {
     // - SMS notification
     // - In-app notification
 
-    assert(() {
-      debugPrint('[EMERGENCY] Patient notification hook called for patient: $patientId');
-      return true;
-    }());
+    AppLogger.debug(
+      '[EMERGENCY] Patient notification hook called for patient: $patientId',
+      category: LogCategory.emergency,
+    );
 
     // For now, just create an audit log entry
     await _audit.logAction(
@@ -301,15 +308,17 @@ class EmergencyAccessRecord {
       additionalNotes: json['additional_notes'] as String?,
       grantedAt: DateTime.parse(json['granted_at'] as String),
       expiresAt: DateTime.parse(json['expires_at'] as String),
-      revokedAt: json['revoked_at'] != null
-          ? DateTime.parse(json['revoked_at'] as String)
-          : null,
+      revokedAt:
+          json['revoked_at'] != null
+              ? DateTime.parse(json['revoked_at'] as String)
+              : null,
       biometricVerified: json['biometric_verified'] as bool? ?? false,
       status: json['status'] as String,
       patientInfo: json['profiles'] as Map<String, dynamic>?,
-      requesterInfo: json.containsKey('profiles')
-          ? json['profiles'] as Map<String, dynamic>?
-          : null,
+      requesterInfo:
+          json.containsKey('profiles')
+              ? json['profiles'] as Map<String, dynamic>?
+              : null,
     );
   }
 

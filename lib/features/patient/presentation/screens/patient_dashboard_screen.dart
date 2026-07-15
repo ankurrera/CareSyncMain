@@ -1,175 +1,146 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
 
+import '../../../../core/design/minimal_sheet_dialog.dart';
+import '../../../../core/design/squircle_card.dart';
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../routing/route_names.dart';
-import '../../../family/providers/family_provider.dart';
-import '../widgets/family_member_list.dart';
+import '../../../auth/providers/auth_provider.dart';
 import '../widgets/daily_medication_schedule.dart';
 import '../widgets/vitals_summary_card.dart';
 import '../../../shared/presentation/widgets/appointment_list_widget.dart';
 import '../../providers/patient_provider.dart';
+import '../../providers/appointment_provider.dart';
 
 class PatientDashboardScreen extends ConsumerStatefulWidget {
   const PatientDashboardScreen({super.key});
 
   @override
-  ConsumerState<PatientDashboardScreen> createState() => _PatientDashboardScreenState();
+  ConsumerState<PatientDashboardScreen> createState() =>
+      _PatientDashboardScreenState();
 }
 
-class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen> {
+class _PatientDashboardScreenState
+    extends ConsumerState<PatientDashboardScreen> {
   bool _hasPrompted = false;
+  bool _isVerifiedUser = false;
 
   void _showBiometricSetupPrompt() {
     if (_hasPrompted) return;
     _hasPrompted = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      showModalBottomSheet(
-        context: context,
-        useRootNavigator: true,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (context) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(28),
-              topRight: Radius.circular(28),
+      if (!mounted) return;
+      final t = context.tokens;
+      showAppSheet<void>(
+        context,
+        builder:
+            (ctx) => AppSheetContent(
+              icon: Iconsax.security_safe,
+              title: 'Setup Face ID',
+              message:
+                  'Your emergency biometric profile is not set up. Register your face scan so that first responders can instantly identify you and access your emergency ID in case of a critical medical situation.',
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: t.divider),
+                          foregroundColor: t.textPrimary,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Remind Later',
+                          style: TextStyle(
+                            fontFamily: 'DM Sans',
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          context.push(RouteNames.kycVerification);
+                        },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: t.accent,
+                          foregroundColor: t.accentOn,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Enroll Now',
+                          style: TextStyle(
+                            fontFamily: 'DM Sans',
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ),
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 48,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE2E8F0),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFFFF4F0),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Iconsax.security_safe,
-                      color: Color(0xFFFF5200),
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      'Setup Face ID',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF121212),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              Text(
-                'Your emergency biometric profile is not set up. Register your face scan so that first responders can instantly identify you and access your emergency ID in case of a critical medical situation.',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 14,
-                  color: const Color(0xFF64748B),
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 28),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFFE2E8F0)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: Text(
-                        'Remind Later',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF64748B),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        context.push(RouteNames.kycVerification);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF5200),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: Text(
-                        'Enroll Now',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
       );
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final profile = ref.watch(activeContextProfileProvider);
+    final t = context.tokens;
+    final profile = ref.watch(currentProfileProvider);
     final isKycVerifiedAsyncValue = ref.watch(isKycVerifiedProvider);
     final isKycVerified = isKycVerifiedAsyncValue.valueOrNull ?? false;
 
     final patientDataAsync = ref.watch(patientDataProvider);
     final hasFaceScan = patientDataAsync.valueOrNull?.faceScanUrl != null;
+    final doctorsAsync = ref.watch(patientDoctorsProvider);
 
-    // Ask for the data modally if user profile loaded, not verified, and has no face scan
-    if (isKycVerifiedAsyncValue.hasValue && patientDataAsync.hasValue && !isKycVerified && !hasFaceScan && !_hasPrompted) {
+    // Cache verified states to prevent dialog races during logouts/transitions
+    if (isKycVerified || hasFaceScan) {
+      _isVerifiedUser = true;
+    }
+
+    // Ask for the data modally if user is logged in, KYC loaded, not verified, and has no face scan
+    if (profile.valueOrNull != null &&
+        patientDataAsync.valueOrNull != null &&
+        isKycVerifiedAsyncValue.hasValue &&
+        patientDataAsync.hasValue &&
+        !isKycVerified &&
+        !_isVerifiedUser &&
+        !hasFaceScan &&
+        !_hasPrompted) {
       _showBiometricSetupPrompt();
     }
 
     const todayDate = 'Monday, 7 Apr 2026';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: t.scaffold,
       body: SingleChildScrollView(
         physics: const ClampingScrollPhysics(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── 1. LIGHT HERO HEADER ─────────────────────────────────────────
+            // ── 1. HERO HEADER ───────────────────────────────────────────────
             Container(
               width: double.infinity,
-              color: Colors.white,
+              color: t.card,
               child: SafeArea(
                 bottom: false,
                 child: Padding(
@@ -186,20 +157,23 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: const Color(0xFFE5E7EB),
+                                  color: t.divider,
                                   width: 1.5,
                                 ),
                               ),
                               child: CircleAvatar(
                                 radius: 22,
-                                backgroundColor: const Color(0xFFFF5200).withValues(alpha: 0.1),
+                                backgroundColor: t.tint,
                                 child: Text(
-                                  profile.valueOrNull?.fullName.isNotEmpty == true
-                                      ? profile.valueOrNull!.fullName.substring(0, 1).toUpperCase()
+                                  profile.valueOrNull?.fullName.isNotEmpty ==
+                                          true
+                                      ? profile.valueOrNull!.fullName
+                                          .substring(0, 1)
+                                          .toUpperCase()
                                       : 'A',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    color: const Color(0xFFFF5200),
-                                    fontWeight: FontWeight.bold,
+                                  style: TextStyle(
+                                    color: t.accent,
+                                    fontWeight: FontWeight.w700,
                                     fontSize: 16,
                                   ),
                                 ),
@@ -212,10 +186,10 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Hi, ${profile.valueOrNull?.fullName.split(' ').first ?? 'Ankur'}',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    color: const Color(0xFF111827),
-                                    fontWeight: FontWeight.bold,
+                                  'Hi, ${profile.valueOrNull?.fullName.split(' ').first ?? 'there'}',
+                                  style: TextStyle(
+                                    color: t.textPrimary,
+                                    fontWeight: FontWeight.w700,
                                     fontSize: 18,
                                     letterSpacing: -0.3,
                                   ),
@@ -223,8 +197,8 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
                                 const SizedBox(height: 2),
                                 Text(
                                   todayDate,
-                                  style: GoogleFonts.plusJakartaSans(
-                                    color: const Color(0xFF6B7280),
+                                  style: TextStyle(
+                                    color: t.textSecondary,
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -233,113 +207,97 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
                             ),
                           ),
                           GestureDetector(
-                            onTap: () => context.push('/chat-list'),
-                            child: Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: const Color(0xFFE5E7EB)),
-                              ),
-                              child: const Icon(Iconsax.message_2, color: Color(0xFF374151), size: 20),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          GestureDetector(
                             onTap: () => context.push(RouteNames.notifications),
                             child: Container(
                               width: 40,
                               height: 40,
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: t.card,
                                 shape: BoxShape.circle,
-                                border: Border.all(color: const Color(0xFFE5E7EB)),
+                                border: Border.all(color: t.divider),
                               ),
-                              child: const Icon(Iconsax.notification, color: Color(0xFF374151), size: 20),
+                              child: Icon(
+                                Iconsax.notification,
+                                color: t.textPrimary,
+                                size: 20,
+                              ),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 20),
 
-                      // Emergency Access Pass Card (V2 light styling)
-                      Container(
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFFE5E7EB)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.02),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () => context.push(RouteNames.patientQrCode),
-                            borderRadius: BorderRadius.circular(20),
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFFF5200).withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(20),
-                                          border: Border.all(color: const Color(0xFFFF5200).withValues(alpha: 0.2)),
-                                        ),
-                                        child: Text(
-                                          'EMERGENCY PASS',
-                                          style: GoogleFonts.plusJakartaSans(
-                                            color: const Color(0xFFFF5200),
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w800,
-                                            letterSpacing: 0.8,
-                                          ),
-                                        ),
-                                      ),
-                                      const Icon(Iconsax.barcode, color: Color(0xFF374151), size: 20),
-                                    ],
+                      // Emergency Access Pass Card
+                      SquircleCard(
+                        radius: AppSpacing.squircleGrouped,
+                        borderSide: BorderSide(color: t.divider),
+                        padding: const EdgeInsets.all(20),
+                        onTap: () => context.push(RouteNames.patientQrCode),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 3,
                                   ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    'Emergency ID Access',
-                                    style: GoogleFonts.plusJakartaSans(
-                                      color: const Color(0xFF111827),
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: -0.2,
+                                  decoration: BoxDecoration(
+                                    color: t.tint,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: t.accent.withValues(alpha: 0.2),
                                     ),
                                   ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    children: [
-                                      const Icon(Iconsax.scan, size: 12, color: Color(0xFF6B7280)),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Tap to generate QR code or scan face',
-                                        style: GoogleFonts.plusJakartaSans(
-                                          color: const Color(0xFF6B7280),
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
+                                  child: Text(
+                                    'EMERGENCY PASS',
+                                    style: t.monoMeta.copyWith(
+                                      color: t.accent,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.8,
+                                    ),
                                   ),
-                                ],
+                                ),
+                                Icon(
+                                  Iconsax.barcode,
+                                  color: t.textPrimary,
+                                  size: 20,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Emergency ID Access',
+                              style: TextStyle(
+                                color: t.textPrimary,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -0.2,
                               ),
                             ),
-                          ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Icon(
+                                  Iconsax.scan,
+                                  size: 12,
+                                  color: t.textSecondary,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Tap to generate QR code or scan face',
+                                  style: TextStyle(
+                                    color: t.textSecondary,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -347,7 +305,7 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
                 ),
               ),
             ),
-            Container(height: 1, color: const Color(0xFFE5E7EB)),
+            Container(height: 1, color: t.divider),
 
             // ── 2. SCROLLABLE CONTENT BODY ────────────────────────────────────
             Padding(
@@ -355,24 +313,21 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                   // Biometrics caution banner (contextual warning)
-                  if (patientDataAsync.hasValue && !isKycVerified && !hasFaceScan) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF4F0),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFFFF5200).withOpacity(0.2)),
+                  // Biometrics caution banner (contextual warning)
+                  if (patientDataAsync.hasValue &&
+                      !isKycVerified &&
+                      !hasFaceScan) ...[
+                    SquircleCard(
+                      radius: AppSpacing.squircleGrouped,
+                      color: t.tint,
+                      borderSide: BorderSide(
+                        color: t.accent.withValues(alpha: 0.2),
                       ),
+                      padding: const EdgeInsets.all(16),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(
-                            Iconsax.warning_2,
-                            color: Color(0xFFFF5200),
-                            size: 20,
-                          ),
+                          Icon(Iconsax.warning_2, color: t.accent, size: 20),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
@@ -380,17 +335,17 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
                               children: [
                                 Text(
                                   'Facial Scan Missing',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    color: const Color(0xFF121212),
+                                  style: TextStyle(
+                                    color: t.textPrimary,
                                     fontSize: 14,
-                                    fontWeight: FontWeight.bold,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   'Set up biometrics now to ensure first responders can identify you during an emergency.',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    color: const Color(0xFF64748B),
+                                  style: TextStyle(
+                                    color: t.textSecondary,
                                     fontSize: 11,
                                     height: 1.4,
                                     fontWeight: FontWeight.w500,
@@ -398,22 +353,25 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
                                 ),
                                 const SizedBox(height: 12),
                                 InkWell(
-                                  onTap: () => context.push(RouteNames.kycVerification),
+                                  onTap:
+                                      () => context.push(
+                                        RouteNames.kycVerification,
+                                      ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
                                         'Start Enrollment',
-                                        style: GoogleFonts.plusJakartaSans(
-                                          color: const Color(0xFFFF5200),
+                                        style: TextStyle(
+                                          color: t.accent,
                                           fontSize: 12,
-                                          fontWeight: FontWeight.bold,
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
                                       const SizedBox(width: 4),
-                                      const Icon(
+                                      Icon(
                                         Iconsax.arrow_right_1,
-                                        color: Color(0xFFFF5200),
+                                        color: t.accent,
                                         size: 12,
                                       ),
                                     ],
@@ -428,131 +386,85 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
                     const SizedBox(height: 20),
                   ],
 
-                  // Profiles list (Family Switcher Carousel)
-                  const FamilyMemberList(),
-                  const SizedBox(height: 16),
-
                   // Today's Medications Checklist
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "Today's Medications",
-                        style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF121212)),
-                      ),
-                      TextButton(
-                        onPressed: () => context.push(RouteNames.patientPrescriptions),
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(0, 0),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          'View All',
-                          style: GoogleFonts.plusJakartaSans(
-                            color: const Color(0xFFFF5200),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
+                  _sectionHeader(
+                    context,
+                    "Today's Medications",
+                    'View All',
+                    () => context.push(RouteNames.patientPrescriptions),
                   ),
                   const SizedBox(height: 12),
                   const DailyMedicationSchedule(),
                   const SizedBox(height: 24),
 
                   // Patient Status (Vitals Grid)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "Patient Status",
-                        style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF121212)),
-                      ),
-                      TextButton(
-                        onPressed: () => context.push('/patient/vitals-history'),
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(0, 0),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          'See History',
-                          style: GoogleFonts.plusJakartaSans(
-                            color: const Color(0xFFFF5200),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
+                  _sectionHeader(
+                    context,
+                    'Patient Status',
+                    'See History',
+                    () => context.push('/patient/vitals-history'),
                   ),
                   const SizedBox(height: 12),
                   const VitalsSummaryCard(),
                   const SizedBox(height: 24),
 
                   // Upcoming Appointments
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Upcoming Appointments',
-                        style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF121212)),
-                      ),
-                      TextButton(
-                        onPressed: () => context.push('/patient/book-appointment'),
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(0, 0),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          'Book New',
-                          style: GoogleFonts.plusJakartaSans(
-                            color: const Color(0xFFFF5200),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
+                  _sectionHeader(
+                    context,
+                    'Upcoming Appointments',
+                    'Book New',
+                    () => context.push('/patient/book-appointment'),
                   ),
                   const SizedBox(height: 12),
                   const AppointmentListWidget(),
                   const SizedBox(height: 24),
 
                   // My Doctors List
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "My Doctors",
-                        style: GoogleFonts.plusJakartaSans(fontSize: 15, fontWeight: FontWeight.bold, color: const Color(0xFF121212)),
-                      ),
-                      TextButton(
-                        onPressed: () {},
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(0, 0),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          'See All',
-                          style: GoogleFonts.plusJakartaSans(
-                            color: const Color(0xFFFF5200),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
+                  _sectionHeader(context, 'My Doctors', 'See All', () {}),
+                  const SizedBox(height: 12),
+                  doctorsAsync.when(
+                    data: (doctors) {
+                      if (doctors.isEmpty) {
+                        return _buildEmptyDoctorsState(context);
+                      }
+                      return ListView.separated(
+                        shrinkWrap: true,
+                        padding: EdgeInsets.zero,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: doctors.length > 3 ? 3 : doctors.length,
+                        separatorBuilder:
+                            (context, index) => const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          final doc = doctors[index];
+                          final initials =
+                              doc.fullName.isNotEmpty
+                                  ? doc.fullName
+                                      .split(' ')
+                                      .map((e) => e[0])
+                                      .take(2)
+                                      .join()
+                                      .toUpperCase()
+                                  : 'D';
+                          return _buildDoctorItem(
+                            doc.fullName,
+                            '${doc.specialization ?? 'General Physician'} • ${doc.hospitalName ?? 'CareSync Clinic'}',
+                            initials,
+                            context,
+                          );
+                        },
+                      );
+                    },
+                    loading:
+                        () => const Center(child: CircularProgressIndicator()),
+                    error:
+                        (err, _) => Center(
+                          child: Text(
+                            'Error loading doctors: $err',
+                            style: TextStyle(color: t.error, fontSize: 12),
                           ),
                         ),
-                      ),
-                    ],
                   ),
-                  const SizedBox(height: 12),
-                  _buildDoctorItem('Dr. Priya Sharma', 'Cardiologist • 12 yrs exp.', 'PS', context),
-                  const SizedBox(height: 10),
-                  _buildDoctorItem('Dr. Rohan Verma', 'General Physician • 8 yrs exp.', 'RV', context),
-                  
+
                   const SizedBox(height: 120),
                 ],
               ),
@@ -563,45 +475,67 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
     );
   }
 
-  Widget _buildDoctorItem(String name, String subtitle, String initials, BuildContext context) {
-    // Generate role-matched accent theme (Violet or Indigo based on initials hash)
-    final colors = [
-      const Color(0xFF8B5CF6), // Violet
-      const Color(0xFF6366F1), // Indigo
-    ];
-    final accentColor = colors[initials.hashCode.abs() % colors.length];
-    final boxBg = accentColor.withValues(alpha: 0.08);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.015),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+  Widget _sectionHeader(
+    BuildContext context,
+    String title,
+    String action,
+    VoidCallback onTap,
+  ) {
+    final t = context.tokens;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: t.textPrimary,
           ),
-        ],
-      ),
+        ),
+        GestureDetector(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+            child: Text(
+              action,
+              style: TextStyle(
+                color: t.accent,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDoctorItem(
+    String name,
+    String subtitle,
+    String initials,
+    BuildContext context,
+  ) {
+    final t = context.tokens;
+
+    return SquircleCard(
+      radius: AppSpacing.squircleGrouped,
+      borderSide: BorderSide(color: t.divider),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         children: [
           // Styled Avatar
           Container(
             width: 36,
             height: 36,
-            decoration: BoxDecoration(
-              color: boxBg,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: t.tint, shape: BoxShape.circle),
             child: Center(
               child: Text(
                 initials,
-                style: GoogleFonts.plusJakartaSans(
-                  color: accentColor,
-                  fontWeight: FontWeight.w800,
+                style: TextStyle(
+                  color: t.accent,
+                  fontWeight: FontWeight.w700,
                   fontSize: 12,
                 ),
               ),
@@ -615,17 +549,17 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
               children: [
                 Text(
                   name,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontWeight: FontWeight.w800,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
                     fontSize: 14,
-                    color: const Color(0xFF0F172A),
+                    color: t.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   subtitle,
-                  style: GoogleFonts.plusJakartaSans(
-                    color: const Color(0xFF64748B),
+                  style: TextStyle(
+                    color: t.textSecondary,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -633,22 +567,48 @@ class _PatientDashboardScreenState extends ConsumerState<PatientDashboardScreen>
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          // Message Circle Button
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: boxBg,
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              padding: EdgeInsets.zero,
-              icon: Icon(Iconsax.message_2, size: 16, color: accentColor),
-              onPressed: () => context.push('/chat-list'),
-            ),
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyDoctorsState(BuildContext context) {
+    final t = context.tokens;
+    return SquircleCard(
+      radius: AppSpacing.squircleGrouped,
+      borderSide: BorderSide(color: t.divider),
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Iconsax.user,
+              size: 28,
+              color: t.textSecondary.withValues(alpha: 0.6),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'No consulting doctors',
+              style: TextStyle(
+                color: t.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Doctors you consult with will be listed here.',
+              style: TextStyle(
+                color: t.textSecondary.withValues(alpha: 0.8),
+                fontSize: 11,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

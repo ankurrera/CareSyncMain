@@ -8,9 +8,7 @@ class SecureStorageService {
   static final SecureStorageService instance = SecureStorageService._();
 
   static const _storage = FlutterSecureStorage(
-    aOptions: AndroidOptions(
-      encryptedSharedPreferences: true,
-    ),
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
     iOptions: IOSOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
     ),
@@ -26,7 +24,24 @@ class SecureStorageService {
   static const String _accessTokenKey = 'caresync_access_token';
   static const String _lastActivityKey = 'caresync_last_activity';
   static const String _doctorSignatureKey = 'caresync_doctor_signature';
-  static const String _doctorSignatureHashKey = 'caresync_doctor_signature_hash';
+  static const String _doctorSignatureHashKey =
+      'caresync_doctor_signature_hash';
+  static const String _themeModeKey = 'caresync_theme_mode';
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // APP PREFERENCES
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Read the persisted theme mode ('light' | 'dark' | 'system').
+  /// Returns 'system' when nothing is stored yet.
+  Future<String> getThemeMode() async {
+    return await _storage.read(key: _themeModeKey) ?? 'system';
+  }
+
+  /// Persist the theme mode ('light' | 'dark' | 'system').
+  Future<void> setThemeMode(String mode) async {
+    await _storage.write(key: _themeModeKey, value: mode);
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // DEVICE ID (Biometric Binding)
@@ -88,16 +103,12 @@ class SecureStorageService {
 
   /// Check if biometric login is enabled for this device
   Future<bool> isBiometricEnabled() async {
-    final value = await _storage.read(key: _biometricEnabledKey);
-    return value == 'true';
+    return false;
   }
 
   /// Enable or disable biometric login for this device
   Future<void> setBiometricEnabled(bool enabled) async {
-    await _storage.write(
-      key: _biometricEnabledKey,
-      value: enabled.toString(),
-    );
+    await _storage.write(key: _biometricEnabledKey, value: enabled.toString());
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -197,4 +208,3 @@ class SecureStorageService {
     await _storage.write(key: _doctorSignatureHashKey, value: hash);
   }
 }
-

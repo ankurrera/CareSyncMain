@@ -32,7 +32,7 @@ dependencies:
 
   # QR Code
   pretty_qr_code: ^3.3.0
-  mobile_scanner: ^6.0.2
+  mobile_scanner: ^7.2.0
 
   # Data Models
   freezed_annotation: ^2.4.4
@@ -45,20 +45,16 @@ dependencies:
   share_plus: ^10.1.2
   image_picker: ^1.1.2
   crypto: ^3.0.3
+  encrypt: ^5.0.3
+  connectivity_plus: ^6.0.3
 
   # Environment variables
   flutter_dotenv: ^5.2.1
   http: ^1.3.0
 
-  # Form handling
-  reactive_forms: ^17.0.1
-
   # PDF Generation (ADDED THIS)
   pdf: ^3.10.8
-  google_maps_flutter: ^2.14.2
   geolocator: ^14.0.2
-  flutter_map: ^8.2.2
-  latlong2: ^0.9.1
   permission_handler: ^12.0.1
   google_mlkit_text_recognition: ^0.15.1
   file_picker: ^10.3.10
@@ -66,13 +62,6 @@ dependencies:
   path_provider: ^2.1.5
   image: ^4.5.4
   camera: ^0.12.0+1
-
-  # Wearables Integration
-  health: any
-  workmanager: ^0.9.0+3
-  sqflite: ^2.3.0
-  path: ^1.9.0
-  oauth2: ^2.0.2
 
 dev_dependencies:
   flutter_test:
@@ -95,3 +84,13 @@ flutter:
     - assets/Splash_Screen.png
     - assets/logo_foreground.png
     - .env
+
+  fonts:
+    - family: DM Sans
+      fonts:
+        - asset: assets/fonts/DMSans-Variable.ttf
+    - family: DM Mono
+      fonts:
+        - asset: assets/fonts/DMMono-Regular.ttf
+        - asset: assets/fonts/DMMono-Medium.ttf
+          weight: 500

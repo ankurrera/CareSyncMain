@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/design/linear_fade_appbar.dart';
+import '../../../../core/design/minimal_sheet_dialog.dart';
+import '../../../../core/design/squircle_card.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_tokens.dart';
+import '../../../../routing/screen_titles.dart';
 
 /// Notification model
 class AppNotification {
@@ -25,9 +30,10 @@ class AppNotification {
 }
 
 /// Provider for notifications (placeholder - can be connected to Supabase later)
-final notificationsProvider = StateNotifierProvider<NotificationsNotifier, List<AppNotification>>((ref) {
-  return NotificationsNotifier();
-});
+final notificationsProvider =
+    StateNotifierProvider<NotificationsNotifier, List<AppNotification>>((ref) {
+      return NotificationsNotifier();
+    });
 
 class NotificationsNotifier extends StateNotifier<List<AppNotification>> {
   NotificationsNotifier() : super(_getSampleNotifications());
@@ -37,14 +43,16 @@ class NotificationsNotifier extends StateNotifier<List<AppNotification>> {
       AppNotification(
         id: '1',
         title: 'Welcome to CareSync',
-        message: 'Your account has been set up successfully. Complete your profile to get started.',
+        message:
+            'Your account has been set up successfully. Complete your profile to get started.',
         type: 'system',
         createdAt: DateTime.now().subtract(const Duration(minutes: 5)),
       ),
       AppNotification(
         id: '2',
         title: 'Complete Your Profile',
-        message: 'Add your emergency contact and medical conditions for better emergency response.',
+        message:
+            'Add your emergency contact and medical conditions for better emergency response.',
         type: 'reminder',
         createdAt: DateTime.now().subtract(const Duration(hours: 1)),
         isRead: true,
@@ -53,32 +61,34 @@ class NotificationsNotifier extends StateNotifier<List<AppNotification>> {
   }
 
   void markAsRead(String id) {
-    state = state.map((n) {
-      if (n.id == id) {
-        return AppNotification(
-          id: n.id,
-          title: n.title,
-          message: n.message,
-          type: n.type,
-          createdAt: n.createdAt,
-          isRead: true,
-        );
-      }
-      return n;
-    }).toList();
+    state =
+        state.map((n) {
+          if (n.id == id) {
+            return AppNotification(
+              id: n.id,
+              title: n.title,
+              message: n.message,
+              type: n.type,
+              createdAt: n.createdAt,
+              isRead: true,
+            );
+          }
+          return n;
+        }).toList();
   }
 
   void markAllAsRead() {
-    state = state.map((n) {
-      return AppNotification(
-        id: n.id,
-        title: n.title,
-        message: n.message,
-        type: n.type,
-        createdAt: n.createdAt,
-        isRead: true,
-      );
-    }).toList();
+    state =
+        state.map((n) {
+          return AppNotification(
+            id: n.id,
+            title: n.title,
+            message: n.message,
+            type: n.type,
+            createdAt: n.createdAt,
+            isRead: true,
+          );
+        }).toList();
   }
 
   void deleteNotification(String id) {
@@ -113,198 +123,184 @@ final unreadNotificationsCountProvider = Provider<int>((ref) {
   return notifications.where((n) => !n.isRead).length;
 });
 
+/// Returns the icon + accent/error color for a notification type.
+({IconData icon, bool isError}) _notificationStyle(String type) {
+  switch (type) {
+    case 'prescription':
+      return (icon: Iconsax.document_text, isError: false);
+    case 'emergency':
+      return (icon: Iconsax.danger, isError: true);
+    case 'reminder':
+      return (icon: Iconsax.clock, isError: false);
+    case 'system':
+    default:
+      return (icon: Iconsax.info_circle, isError: false);
+  }
+}
+
 class NotificationsScreen extends ConsumerWidget {
   const NotificationsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final t = context.tokens;
     final notifications = ref.watch(notificationsProvider);
     final notifier = ref.read(notificationsProvider.notifier);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Notifications'),
-        actions: [
-          if (notifications.isNotEmpty)
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                switch (value) {
-                  case 'read_all':
-                    notifier.markAllAsRead();
-                    break;
-                  case 'clear_all':
-                    notifier.clearAll();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('All notifications cleared'),
-                      ),
-                    );
-                    break;
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'read_all',
-                  child: Row(
-                    children: [
-                      Icon(Icons.done_all_rounded),
-                      SizedBox(width: 12),
-                      Text('Mark all as read'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'clear_all',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete_sweep_rounded),
-                      SizedBox(width: 12),
-                      Text('Clear all'),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-        ],
-      ),
-      body: notifications.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.notifications_off_outlined,
-                    size: 80,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No notifications',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+    return CSScaffold(
+      title: ScreenTitles.notifications,
+      actions: [
+        if (notifications.isNotEmpty)
+          PopupMenuButton<String>(
+            icon: Icon(Iconsax.more, color: t.textPrimary),
+            color: t.card,
+            onSelected: (value) {
+              switch (value) {
+                case 'read_all':
+                  notifier.markAllAsRead();
+                  break;
+                case 'clear_all':
+                  notifier.clearAll();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('All notifications cleared')),
+                  );
+                  break;
+              }
+            },
+            itemBuilder:
+                (context) => [
+                  const PopupMenuItem(
+                    value: 'read_all',
+                    child: Row(
+                      children: [
+                        Icon(Iconsax.tick_circle),
+                        SizedBox(width: 12),
+                        Text('Mark all as read'),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'You\'re all caught up!',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+                  const PopupMenuItem(
+                    value: 'clear_all',
+                    child: Row(
+                      children: [
+                        Icon(Iconsax.trash),
+                        SizedBox(width: 12),
+                        Text('Clear all'),
+                      ],
                     ),
                   ),
                 ],
-              ),
-            )
-          : ListView.separated(
-              padding: AppSpacing.screenPadding,
-              itemCount: notifications.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final notification = notifications[index];
-                return _NotificationCard(
-                  notification: notification,
-                  onTap: () {
-                    notifier.markAsRead(notification.id);
-                    // Handle notification tap based on type
-                    _handleNotificationTap(context, notification);
-                  },
-                  onDismiss: () {
-                    notifier.deleteNotification(notification.id);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Notification removed'),
-                        action: SnackBarAction(
-                          label: 'Undo',
-                          onPressed: () {
-                            // In a real app, you'd restore the notification
-                          },
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-    );
-  }
-
-  void _handleNotificationTap(BuildContext context, AppNotification notification) {
-    // Show notification details in a bottom sheet
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                _getNotificationIcon(notification.type),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    notification.title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
+          ),
+      ],
+      body:
+          notifications.isEmpty
+              ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Iconsax.notification,
+                      size: 80,
+                      color: t.textSecondary,
                     ),
-                  ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No notifications',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: t.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'You\'re all caught up!',
+                      style: TextStyle(color: t.textSecondary),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              notification.message,
-              style: const TextStyle(fontSize: 15, height: 1.5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              _formatDate(notification.createdAt),
-              style: TextStyle(
-                fontSize: 13,
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+              )
+              : ListView.separated(
+                padding: AppSpacing.screenPadding,
+                itemCount: notifications.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final notification = notifications[index];
+                  return _NotificationCard(
+                    notification: notification,
+                    onTap: () {
+                      notifier.markAsRead(notification.id);
+                      _handleNotificationTap(context, notification);
+                    },
+                    onDismiss: () {
+                      notifier.deleteNotification(notification.id);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Text('Notification removed'),
+                          action: SnackBarAction(
+                            label: 'Undo',
+                            onPressed: () {},
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
               ),
-            ),
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
     );
   }
 
-  Widget _getNotificationIcon(String type) {
-    IconData icon;
-    Color color;
-
-    switch (type) {
-      case 'prescription':
-        icon = Icons.description_rounded;
-        color = AppColors.pharmacist;
-        break;
-      case 'emergency':
-        icon = Icons.emergency_rounded;
-        color = AppColors.error;
-        break;
-      case 'reminder':
-        icon = Icons.alarm_rounded;
-        color = AppColors.warning;
-        break;
-      case 'system':
-      default:
-        icon = Icons.info_rounded;
-        color = AppColors.info;
-    }
-
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Icon(icon, color: color, size: 20),
+  void _handleNotificationTap(
+    BuildContext context,
+    AppNotification notification,
+  ) {
+    final style = _notificationStyle(notification.type);
+    showAppSheet<void>(
+      context,
+      builder: (ctx) {
+        final t = ctx.tokens;
+        final color = style.isError ? t.error : t.accent;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(style.icon, color: color, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(notification.title, style: t.sheetTitle),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                notification.message,
+                style: TextStyle(
+                  fontSize: 15,
+                  height: 1.5,
+                  color: t.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _formatDate(notification.createdAt),
+                style: TextStyle(fontSize: 13, color: t.textSecondary),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -339,6 +335,7 @@ class _NotificationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     return Dismissible(
       key: Key(notification.id),
       direction: DismissDirection.endToStart,
@@ -347,114 +344,80 @@ class _NotificationCard extends StatelessWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         decoration: BoxDecoration(
-          color: AppColors.error,
-          borderRadius: BorderRadius.circular(12),
+          color: t.error,
+          borderRadius: BorderRadius.circular(AppSpacing.squircleGrouped),
         ),
-        child: const Icon(
-          Icons.delete_outline_rounded,
-          color: Colors.white,
-        ),
+        child: Icon(Iconsax.trash, color: t.accentOn),
       ),
-      child: Card(
-        elevation: notification.isRead ? 0 : 1,
-        color: notification.isRead
-            ? Theme.of(context).colorScheme.surface
-            : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildIcon(),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+      child: SquircleCard(
+        radius: AppSpacing.squircleGrouped,
+        color: notification.isRead ? t.card : t.tint,
+        borderSide: BorderSide(
+          color:
+              notification.isRead ? t.divider : t.accent.withValues(alpha: 0.2),
+        ),
+        padding: const EdgeInsets.all(16),
+        onTap: onTap,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildIcon(context),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              notification.title,
-                              style: TextStyle(
-                                fontWeight: notification.isRead
+                      Expanded(
+                        child: Text(
+                          notification.title,
+                          style: TextStyle(
+                            fontWeight:
+                                notification.isRead
                                     ? FontWeight.w500
-                                    : FontWeight.w600,
-                                fontSize: 15,
-                              ),
-                            ),
+                                    : FontWeight.w700,
+                            fontSize: 15,
+                            color: t.textPrimary,
                           ),
-                          if (!notification.isRead)
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: const BoxDecoration(
-                                color: AppColors.primary,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        notification.message,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.7),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _formatTimeAgo(notification.createdAt),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.5),
+                      if (!notification.isRead)
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: t.accent,
+                            shape: BoxShape.circle,
+                          ),
                         ),
-                      ),
                     ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  Text(
+                    notification.message,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, color: t.textSecondary),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _formatTimeAgo(notification.createdAt),
+                    style: TextStyle(fontSize: 12, color: t.textSecondary),
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildIcon() {
-    IconData icon;
-    Color color;
-
-    switch (notification.type) {
-      case 'prescription':
-        icon = Icons.description_rounded;
-        color = AppColors.pharmacist;
-        break;
-      case 'emergency':
-        icon = Icons.emergency_rounded;
-        color = AppColors.error;
-        break;
-      case 'reminder':
-        icon = Icons.alarm_rounded;
-        color = AppColors.warning;
-        break;
-      case 'system':
-      default:
-        icon = Icons.info_rounded;
-        color = AppColors.info;
-    }
+  Widget _buildIcon(BuildContext context) {
+    final t = context.tokens;
+    final style = _notificationStyle(notification.type);
+    final color = style.isError ? t.error : t.accent;
 
     return Container(
       width: 44,
@@ -463,7 +426,7 @@ class _NotificationCard extends StatelessWidget {
         color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Icon(icon, color: color, size: 22),
+      child: Icon(style.icon, color: color, size: 22),
     );
   }
 
@@ -484,4 +447,3 @@ class _NotificationCard extends StatelessWidget {
     }
   }
 }
-

@@ -9,6 +9,23 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Helper function to escape HTML characters for XSS prevention
+function escapeHTML(str: any): string {
+  if (str === null || str === undefined) return "";
+  const s = typeof str === "string" ? str : String(str);
+  return s.replace(
+    /[&<>'"]/g,
+    (tag) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "'": "&#39;",
+        '"': "&quot;",
+      }[tag] || tag)
+  );
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -54,12 +71,14 @@ serve(async (req) => {
       );
     }
 
-    // Log access
+    // Log access in immutable audit logs
     await supabase.from("emergency_access_logs").insert({
       patient_id: data.patient_id,
-      access_type: "web",
+      authentication_method: "QR Code",
+      access_status: "Success",
+      view_scope: "Full Emergency Record",
       ip_address: req.headers.get("x-forwarded-for") || "unknown",
-      user_agent: req.headers.get("user-agent") || "unknown",
+      device_platform: "web",
     });
 
     return new Response(generateHTML(data), {
@@ -93,7 +112,7 @@ function generateHTML(data: any): string {
   <div class="container error-container">
     <div class="error-icon">⚠️</div>
     <h1>Error</h1>
-    <p>${data.message}</p>
+    <p>${escapeHTML(data.message)}</p>
     <a href="/" class="button">Go Home</a>
   </div>
 </body>
@@ -108,10 +127,10 @@ function generateHTML(data: any): string {
     ? conditions
         .map(
           (c: any) => `
-        <div class="condition-card ${c.type}">
-          <span class="condition-type">${c.type?.toUpperCase() || "OTHER"}</span>
-          ${c.severity ? `<span class="severity ${c.severity}">${c.severity}</span>` : ""}
-          <p class="condition-desc">${c.description}</p>
+        <div class="condition-card ${escapeHTML(c.type)}">
+          <span class="condition-type">${escapeHTML(c.type?.toUpperCase() || "OTHER")}</span>
+          ${c.severity ? `<span class="severity ${escapeHTML(c.severity)}">${escapeHTML(c.severity)}</span>` : ""}
+          <p class="condition-desc">${escapeHTML(c.description)}</p>
         </div>
       `
         )
@@ -123,8 +142,8 @@ function generateHTML(data: any): string {
         .map(
           (m: any) => `
         <div class="medication-card">
-          <div class="med-name">${m.medicine}</div>
-          <div class="med-details">${m.dosage} • ${m.frequency}</div>
+          <div class="med-name">${escapeHTML(m.medicine)}</div>
+          <div class="med-details">${escapeHTML(m.dosage)} • ${escapeHTML(m.frequency)}</div>
         </div>
       `
         )
@@ -152,7 +171,7 @@ function generateHTML(data: any): string {
       <div class="patient-icon">👤</div>
       <div class="patient-info">
         <span class="label">PATIENT</span>
-        <h1 class="patient-name">${patient.full_name || "Unknown"}</h1>
+        <h1 class="patient-name">${escapeHTML(patient.full_name || "Unknown")}</h1>
       </div>
       ${
         patient.blood_type
@@ -160,7 +179,7 @@ function generateHTML(data: any): string {
         <div class="blood-type">
           <span class="blood-icon">🩸</span>
           <span class="blood-label">BLOOD TYPE</span>
-          <span class="blood-value">${patient.blood_type}</span>
+          <span class="blood-value">${escapeHTML(patient.blood_type)}</span>
         </div>
       `
           : ""
@@ -187,10 +206,10 @@ function generateHTML(data: any): string {
       <section class="section">
         <h2>📞 Emergency Contact</h2>
         <div class="contact-card">
-          <div class="contact-name">${patient.emergency_contact.name}</div>
-          ${patient.emergency_contact.relationship ? `<div class="contact-relation">${patient.emergency_contact.relationship}</div>` : ""}
-          <a href="tel:${patient.emergency_contact.phone}" class="call-button">
-            📱 Call ${patient.emergency_contact.phone}
+          <div class="contact-name">${escapeHTML(patient.emergency_contact.name)}</div>
+          ${patient.emergency_contact.relationship ? `<div class="contact-relation">${escapeHTML(patient.emergency_contact.relationship)}</div>` : ""}
+          <a href="tel:${escapeHTML(patient.emergency_contact.phone)}" class="call-button">
+            📱 Call ${escapeHTML(patient.emergency_contact.phone)}
           </a>
         </div>
       </section>

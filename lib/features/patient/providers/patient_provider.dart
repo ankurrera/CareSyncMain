@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../auth/providers/auth_provider.dart';
-import '../../family/providers/family_provider.dart';
 import '../../../services/supabase_service.dart';
 import '../../../services/kyc_service.dart';
 import '../models/patient_data.dart';
@@ -14,10 +14,10 @@ final isKycVerifiedProvider = FutureProvider<bool>((ref) async {
   return kyc?.status == KYCStatus.verified;
 });
 
-/// Provider for current patient data - tied to active profile context
+/// Provider for current patient data - tied to the authenticated user
 final patientDataProvider = FutureProvider<PatientData?>((ref) async {
-  // Watch the active profile (family member or self)
-  final activeId = ref.watch(activeProfileIdProvider);
+  // Watch the currently authenticated user
+  final activeId = ref.watch(authStateProvider).valueOrNull?.id;
   if (activeId == null) return null;
 
   // FIX: This now triggers the updated getPatientData which creates missing records
@@ -27,18 +27,43 @@ final patientDataProvider = FutureProvider<PatientData?>((ref) async {
 });
 
 /// Provider for patient prescriptions
-final patientPrescriptionsProvider =
-FutureProvider<List<Prescription>>((ref) async {
+final patientPrescriptionsProvider = FutureProvider<List<Prescription>>((
+  ref,
+) async {
   final patientData = await ref.watch(patientDataProvider.future);
   if (patientData == null) return [];
 
-  final data =
-  await SupabaseService.instance.getPatientPrescriptions(patientData.id);
+  final channel = SupabaseService.instance.client
+      .channel('patient_prescriptions_${patientData.id}')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'prescriptions',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'patient_id',
+          value: patientData.id,
+        ),
+        callback: (payload) {
+          ref.invalidateSelf();
+        },
+      );
+
+  channel.subscribe();
+  ref.onDispose(() {
+    SupabaseService.instance.client.removeChannel(channel);
+  });
+
+  final data = await SupabaseService.instance.getPatientPrescriptions(
+    patientData.id,
+  );
   return data.map((json) => Prescription.fromJson(json)).toList();
 });
 
 /// Computed Provider for active prescriptions only
-final activePrescriptionsProvider = Provider<AsyncValue<List<Prescription>>>((ref) {
+final activePrescriptionsProvider = Provider<AsyncValue<List<Prescription>>>((
+  ref,
+) {
   final prescriptionsAsync = ref.watch(patientPrescriptionsProvider);
   return prescriptionsAsync.whenData(
     (list) => list.where((p) => p.isActive).toList(),
@@ -46,24 +71,33 @@ final activePrescriptionsProvider = Provider<AsyncValue<List<Prescription>>>((re
 });
 
 /// Computed Provider for today's active medication items (medication checklist)
-final todayMedicationsProvider = Provider<AsyncValue<List<PrescriptionItem>>>((ref) {
-  final activeAsync = ref.watch(activePrescriptionsProvider);
-  return activeAsync.whenData((prescriptions) {
+final todayMedicationsProvider = Provider<AsyncValue<List<PrescriptionItem>>>((
+  ref,
+) {
+  final prescriptionsAsync = ref.watch(patientPrescriptionsProvider);
+  return prescriptionsAsync.whenData((prescriptions) {
     final List<PrescriptionItem> items = [];
     for (final p in prescriptions) {
-      items.addAll(p.items);
+      for (final item in p.items) {
+        if (item.isDispensed) {
+          items.add(item);
+        }
+      }
     }
     return items;
   });
 });
 
 /// Provider for medical conditions - KYC verification required
-final medicalConditionsProvider =
-FutureProvider<List<MedicalCondition>>((ref) async {
+final medicalConditionsProvider = FutureProvider<List<MedicalCondition>>((
+  ref,
+) async {
   // Check KYC status first (of the logged in user who is viewing)
   final isKycVerified = await ref.watch(isKycVerifiedProvider.future);
   if (!isKycVerified) {
-    throw KYCRequiredException('KYC verification required to access medical records');
+    throw KYCRequiredException(
+      'KYC verification required to access medical records',
+    );
   }
 
   final patientData = await ref.watch(patientDataProvider.future);
@@ -149,7 +183,10 @@ class PatientNotifier extends StateNotifier<AsyncValue<PatientData?>> {
     }
   }
 
-  Future<void> toggleConditionVisibility(String conditionId, bool isPublic) async {
+  Future<void> toggleConditionVisibility(
+    String conditionId,
+    bool isPublic,
+  ) async {
     try {
       await _supabase.client
           .from('medical_conditions')
@@ -161,9 +198,11 @@ class PatientNotifier extends StateNotifier<AsyncValue<PatientData?>> {
   }
 }
 
-// FIX: autoDispose ensures this notifier rebuilds/resets when activeProfileIdProvider changes
-final patientNotifierProvider =
-StateNotifierProvider.autoDispose<PatientNotifier, AsyncValue<PatientData?>>((ref) {
-  final activeId = ref.watch(activeProfileIdProvider);
+// autoDispose ensures this notifier rebuilds/resets when the authenticated user changes
+final patientNotifierProvider = StateNotifierProvider.autoDispose<
+  PatientNotifier,
+  AsyncValue<PatientData?>
+>((ref) {
+  final activeId = ref.watch(authStateProvider).valueOrNull?.id;
   return PatientNotifier(activeId);
 });

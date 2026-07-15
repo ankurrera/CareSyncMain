@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:iconsax/iconsax.dart';
 
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/design/cs_buttons.dart';
+import '../../../../core/design/squircle_card.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../routing/route_names.dart';
 import '../../../../services/kyc_service.dart';
 import '../../providers/auth_provider.dart';
 
 class BiometricEnrollmentScreen extends ConsumerStatefulWidget {
   final bool isMandatory;
-  
-  const BiometricEnrollmentScreen({
-    super.key,
-    this.isMandatory = false,
-  });
+
+  const BiometricEnrollmentScreen({super.key, this.isMandatory = false});
 
   @override
   ConsumerState<BiometricEnrollmentScreen> createState() =>
@@ -37,6 +37,12 @@ class _BiometricEnrollmentScreenState
     }
   }
 
+  void _snack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: context.tokens.accent),
+    );
+  }
+
   Future<void> _checkAndEnrollBiometric() async {
     await _enrollBiometric();
   }
@@ -48,63 +54,34 @@ class _BiometricEnrollmentScreenState
     });
 
     try {
-      // print('[BIO] Starting enrollment');
-      
       // KYC check - use robust method
       if (!widget.isMandatory) {
         final session = ref.read(authStateProvider).valueOrNull;
         if (session == null) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Session expired. Please sign in again.'),
-                backgroundColor: AppColors.error,
-              ),
-            );
-          }
+          if (mounted) _snack('Session expired. Please sign in again.');
           return;
         }
-        
+
         final kycService = KYCService.instance;
         final kycVerified = await kycService.isKYCVerified(session.id);
-        
+
         if (!kycVerified) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('KYC verification required before enabling biometric login'),
-                backgroundColor: AppColors.warning,
-              ),
-            );
+            _snack('KYC verification required before enabling biometric login');
             context.push(RouteNames.kycVerification);
           }
           return;
         }
       }
 
-      // print('[BIO] Calling enrollBiometric()');
       await ref.read(authNotifierProvider.notifier).enrollBiometric();
 
-      
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Biometric login enabled successfully!'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        _snack('Biometric login enabled successfully!');
         _navigateToDashboard();
       }
     } catch (e) {
-      // print('[BIO] Enrollment failed: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_extractErrorMessage(e)),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      if (mounted) _snack(_extractErrorMessage(e));
     } finally {
       if (mounted) {
         setState(() {
@@ -122,7 +99,7 @@ class _BiometricEnrollmentScreenState
   /// Extract user-friendly error message from exception
   String _extractErrorMessage(Object error) {
     String errorMessage = error.toString();
-    
+
     // Remove common exception prefixes
     final prefixes = ['Exception: ', 'AuthException: ', 'BiometricException: '];
     for (final prefix in prefixes) {
@@ -130,7 +107,7 @@ class _BiometricEnrollmentScreenState
         return errorMessage.substring(prefix.length);
       }
     }
-    
+
     return errorMessage;
   }
 
@@ -151,81 +128,69 @@ class _BiometricEnrollmentScreenState
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     final biometricAvailable = ref.watch(biometricAvailableProvider);
     final biometricTypeName = ref.watch(biometricTypeNameProvider);
 
     return Scaffold(
+      backgroundColor: t.scaffold,
       body: SafeArea(
         child: Padding(
           padding: AppSpacing.screenPadding,
           child: Column(
             children: [
               const Spacer(),
-              // Icon animation container
+              // Icon container
               AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 width: _isEnrolling ? 160 : 140,
                 height: _isEnrolling ? 160 : 140,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppColors.primary.withValues(alpha: 0.15),
-                      AppColors.primaryLight.withValues(alpha: 0.1),
-                    ],
-                  ),
+                  color: t.tint,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: AppColors.primary.withValues(alpha: 0.3),
+                    color: t.accent.withValues(alpha: 0.3),
                     width: 2,
                   ),
                 ),
                 child: Center(
                   child: biometricTypeName.when(
-                    data: (typeName) => Icon(
-                      typeName == 'Face ID'
-                          ? Icons.face_rounded
-                          : Icons.fingerprint_rounded,
-                      size: 72,
-                      color: AppColors.primary,
-                    ),
+                    data:
+                        (typeName) => Icon(
+                          typeName == 'Face ID'
+                              ? Iconsax.scan
+                              : Iconsax.finger_scan,
+                          size: 72,
+                          color: t.accent,
+                        ),
                     loading: () => const CircularProgressIndicator(),
-                    error: (_, __) => const Icon(
-                      Icons.fingerprint_rounded,
-                      size: 72,
-                      color: AppColors.primary,
-                    ),
+                    error:
+                        (_, __) => Icon(
+                          Iconsax.finger_scan,
+                          size: 72,
+                          color: t.accent,
+                        ),
                   ),
                 ),
               ),
               const SizedBox(height: 40),
               // Title
               biometricTypeName.when(
-                data: (typeName) => Text(
-                  'Enable $typeName',
-                  style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                loading: () => const Text(
-                  'Enable Biometric Login',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                error: (_, __) => const Text(
-                  'Enable Biometric Login',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
-                  ),
-                ),
+                data:
+                    (typeName) => Text(
+                      'Enable $typeName',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
+                loading:
+                    () => Text(
+                      'Enable Biometric Login',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
+                error:
+                    (_, __) => Text(
+                      'Enable Biometric Login',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
               ),
               const SizedBox(height: 12),
               Text(
@@ -233,38 +198,32 @@ class _BiometricEnrollmentScreenState
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 15,
-                  color:
-                      Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  color: t.textSecondary,
                   height: 1.5,
                 ),
               ),
               const SizedBox(height: 16),
               // Benefits list
-              Container(
+              SquircleCard(
+                radius: AppSpacing.squircleGrouped,
+                borderSide: BorderSide(color: t.divider),
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
-                  ),
-                ),
                 child: Column(
                   children: [
                     _buildBenefitRow(
-                      Icons.bolt_rounded,
+                      Iconsax.flash_1,
                       'Quick Access',
                       'Sign in instantly without typing',
                     ),
                     const SizedBox(height: 16),
                     _buildBenefitRow(
-                      Icons.security_rounded,
+                      Iconsax.shield_tick,
                       'Secure',
                       'Your biometric data never leaves the device',
                     ),
                     const SizedBox(height: 16),
                     _buildBenefitRow(
-                      Icons.devices_rounded,
+                      Iconsax.mobile,
                       'Device-Specific',
                       'Each device has its own secure enrollment',
                     ),
@@ -278,24 +237,19 @@ class _BiometricEnrollmentScreenState
                   if (!available) {
                     return Column(
                       children: [
-                        Container(
+                        SquircleCard(
+                          radius: AppSpacing.squircleGrouped,
+                          color: t.tint,
                           padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: AppColors.warningLight,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
                           child: Row(
                             children: [
-                              const Icon(
-                                Icons.info_outline_rounded,
-                                color: AppColors.warning,
-                              ),
+                              Icon(Iconsax.info_circle, color: t.accent),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
                                   'Biometric authentication is not available on this device.',
                                   style: TextStyle(
-                                    color: Colors.orange.shade900,
+                                    color: t.textPrimary,
                                     fontSize: 14,
                                   ),
                                 ),
@@ -304,63 +258,44 @@ class _BiometricEnrollmentScreenState
                           ),
                         ),
                         const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _skipBiometric,
-                            child: const Text('Continue'),
-                          ),
+                        CSPrimaryButton(
+                          label: 'Continue',
+                          onPressed: _skipBiometric,
                         ),
                       ],
                     );
                   }
 
+                  final enableLabel = biometricTypeName.when(
+                    data: (typeName) => 'Enable $typeName',
+                    loading: () => 'Enable Biometric',
+                    error: (_, __) => 'Enable Biometric',
+                  );
+
                   return Column(
                     children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _enrollBiometric,
-                          child: _isLoading
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : biometricTypeName.when(
-                                  data: (typeName) => Text('Enable $typeName'),
-                                  loading: () =>
-                                      const Text('Enable Biometric'),
-                                  error: (_, __) =>
-                                      const Text('Enable Biometric'),
-                                ),
-                        ),
+                      CSPrimaryButton(
+                        label: enableLabel,
+                        loading: _isLoading,
+                        onPressed: _enrollBiometric,
                       ),
                       // Only show skip button if not mandatory
                       if (!widget.isMandatory) ...[
                         const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: TextButton(
-                            onPressed: _isLoading ? null : _skipBiometric,
-                            child: const Text('Skip for now'),
-                          ),
+                        CSSecondaryButton(
+                          label: 'Skip for now',
+                          onPressed: _isLoading ? null : _skipBiometric,
                         ),
                       ],
                     ],
                   );
                 },
                 loading: () => const CircularProgressIndicator(),
-                error: (_, __) => SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _skipBiometric,
-                    child: const Text('Continue'),
-                  ),
-                ),
+                error:
+                    (_, __) => CSPrimaryButton(
+                      label: 'Continue',
+                      onPressed: _skipBiometric,
+                    ),
               ),
               const SizedBox(height: 24),
             ],
@@ -371,20 +306,17 @@ class _BiometricEnrollmentScreenState
   }
 
   Widget _buildBenefitRow(IconData icon, String title, String subtitle) {
+    final t = context.tokens;
     return Row(
       children: [
         Container(
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
+            color: t.tint,
+            borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(
-            icon,
-            color: AppColors.primary,
-            size: 20,
-          ),
+          child: Icon(icon, color: t.accent, size: 20),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -393,18 +325,15 @@ class _BiometricEnrollmentScreenState
             children: [
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 15,
+                  color: t.textPrimary,
                 ),
               ),
               Text(
                 subtitle,
-                style: TextStyle(
-                  fontSize: 13,
-                  color:
-                      Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                ),
+                style: TextStyle(fontSize: 13, color: t.textSecondary),
               ),
             ],
           ),
@@ -413,4 +342,3 @@ class _BiometricEnrollmentScreenState
     );
   }
 }
-
