@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -276,6 +278,16 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
   }
 
   Future<void> signOut() async {
+    try {
+      final docDir = await getApplicationDocumentsDirectory();
+      final cacheDir = Directory('${docDir.path}/biometric_enrollment_cache');
+      if (cacheDir.existsSync()) {
+        cacheDir.deleteSync(recursive: true);
+      }
+    } catch (e) {
+      AppLogger.warning('Failed to clear biometric enrollment cache on signOut: $e');
+    }
+
     try {
       await _supabase.signOut();
     } catch (e, stack) {

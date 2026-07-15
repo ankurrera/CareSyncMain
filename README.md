@@ -319,4 +319,4 @@ Review the complete [Roadmap Guide](./docs/ROADMAP.md) to explore future milesto
 ## 📝 License & Acknowledgments
 
 * **License**: CareSync is distributed under the MIT License. See [LICENSE](LICENSE) for details.
-* **Credits**: Built using MediaPipe landmark engines and DeepFace ArcFace models.
+* **Credits**: Built using MediaPipe landmark engines and DeepFace ArcFace models. 

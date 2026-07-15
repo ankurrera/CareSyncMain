@@ -32,6 +32,21 @@ DROP POLICY IF EXISTS "Users can view prescription items for accessible prescrip
 -- Emergency Audit Logs
 DROP POLICY IF EXISTS "Authenticated users can insert emergency access logs" ON public.emergency_access_logs;
 
+-- Drop newly added policies if they already exist to ensure idempotency
+DROP POLICY IF EXISTS "patients_owner_select_update" ON public.patients;
+DROP POLICY IF EXISTS "patients_doctor_select" ON public.patients;
+DROP POLICY IF EXISTS "patients_pharmacist_select" ON public.patients;
+DROP POLICY IF EXISTS "vitals_owner_all" ON public.vitals;
+DROP POLICY IF EXISTS "vitals_doctor_select" ON public.vitals;
+DROP POLICY IF EXISTS "medical_conditions_owner_all" ON public.medical_conditions;
+DROP POLICY IF EXISTS "medical_conditions_doctor_select" ON public.medical_conditions;
+DROP POLICY IF EXISTS "medical_conditions_public_emergency_select" ON public.medical_conditions;
+DROP POLICY IF EXISTS "prescriptions_owner_select" ON public.prescriptions;
+DROP POLICY IF EXISTS "prescriptions_doctor_all" ON public.prescriptions;
+DROP POLICY IF EXISTS "prescriptions_pharmacist_select" ON public.prescriptions;
+DROP POLICY IF EXISTS "prescriptions_public_emergency_select" ON public.prescriptions;
+DROP POLICY IF EXISTS "prescription_items_select" ON public.prescription_items;
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 2. CREATE SECURE, COMPLIANT RLS POLICIES
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -320,7 +335,7 @@ BEGIN
             JOIN public.prescriptions rx ON pi.prescription_id = rx.id
             WHERE rx.patient_id = v_patient_id 
                 AND rx.is_public = TRUE 
-                AND rx.status = 'active'
+                AND rx.status IN ('active', 'processing', 'partially_dispensed')
         ),
         'vitals', (
             -- Fetch most recent vital reading per type (e.g. weight, blood_pressure)

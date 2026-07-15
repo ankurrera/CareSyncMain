@@ -153,6 +153,7 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
   // ignore: unused_field
   bool _poseValid = false;
   String _liveInstruction = 'Position your face in the circle';
+  bool _isEnrollmentCompleted = false;
 
   // Animation for the pulsing face guide border
   late AnimationController _pulseController;
@@ -183,6 +184,21 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
     _guidanceTimer?.cancel();
     _pulseController.dispose();
     _cameraController?.dispose();
+
+    if (!_isEnrollmentCompleted) {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId != null && _enrollmentSessionId != null) {
+        CustomBiometricService.instance.cleanupBiometricEnrollment(
+          userId: userId,
+          enrollmentSessionId: _enrollmentSessionId!,
+        );
+      }
+      _getCacheDirectory().then((cacheDir) {
+        if (cacheDir.existsSync()) {
+          cacheDir.deleteSync(recursive: true);
+        }
+      }).catchError((_) {});
+    }
     super.dispose();
   }
 
@@ -636,13 +652,47 @@ class _PremiumFaceScanScreenState extends State<PremiumFaceScanScreen>
     _startLocalGuidanceSimulation();
   }
 
-  void _finishEnrollment() {
+  Future<void> _finishEnrollment() async {
     HapticFeedback.vibrate();
-    // Return local paths and uploaded URLs
-    Navigator.pop(context, {
-      'localPaths': _capturedPoses,
-      'uploadedUrls': _uploadedUrls,
+
+    setState(() {
+      _isValidating = true;
+      _liveInstruction = 'Activating biometrics...';
     });
+
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId != null && _enrollmentSessionId != null) {
+      final success = await CustomBiometricService.instance.completeBiometricEnrollment(
+        userId: userId,
+        enrollmentSessionId: _enrollmentSessionId!,
+      );
+
+      if (!success) {
+        setState(() {
+          _isValidating = false;
+          _validationError = 'Failed to activate biometric enrollment. Please try again.';
+        });
+        return;
+      }
+    }
+
+    _isEnrollmentCompleted = true;
+
+    try {
+      final cacheDir = await _getCacheDirectory();
+      if (cacheDir.existsSync()) {
+        cacheDir.deleteSync(recursive: true);
+      }
+    } catch (e) {
+      AppLogger.warning('Failed to delete cache dir: $e');
+    }
+
+    if (mounted) {
+      Navigator.pop(context, {
+        'localPaths': _capturedPoses,
+        'uploadedUrls': _uploadedUrls,
+      });
+    }
   }
 
   void _safeDeleteFile(String path) {

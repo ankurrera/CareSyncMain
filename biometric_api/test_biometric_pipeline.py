@@ -365,3 +365,64 @@ def test_analyze_frame_failure_blurry(mock_quality):
     assert res_data["error_code"] == "IMAGE_BLUR"
     assert "blurry" in res_data["message"]
 
+# ============================================================================
+# BIOMETRIC LIFECYCLE TESTS (ENROLL COMPLETE & CLEANUP)
+# ============================================================================
+
+@patch("main.supabase")
+def test_enroll_complete_success(mock_supabase):
+    # Mock patient lookup
+    mock_supabase.from_.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {"id": "patient-uuid-123"}
+    
+    # Mock check for embeddings in session
+    mock_supabase.from_.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = [{"id": "emb-1"}]
+    
+    # Mock updates
+    mock_supabase.from_.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock()
+    mock_supabase.from_.return_value.update.return_value.eq.return_value.neq.return_value.execute.return_value = MagicMock()
+    mock_supabase.from_.return_value.update.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock()
+
+    response = client.post(
+        "/enroll/complete",
+        json={
+            "userId": "user-uuid-123",
+            "enrollment_session_id": "session-uuid-123"
+        },
+        headers={"Authorization": "Bearer mock-token-123"}
+    )
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+
+@patch("main.supabase")
+def test_enroll_cleanup_success(mock_supabase):
+    # Mock patient lookup (incomplete status)
+    mock_supabase.from_.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+        "id": "patient-uuid-123",
+        "biometric_status": "incomplete"
+    }
+
+    # Mock embeddings to clean up
+    mock_supabase.from_.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value.data = [
+        {"id": "emb-1", "pose_label": "neutral"}
+    ]
+
+    # Mock deletes and database remaining checks
+    mock_supabase.from_.return_value.delete.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock()
+    mock_supabase.from_.return_value.select.return_value.eq.return_value.execute.return_value.data = [] # No remaining embeddings
+    mock_supabase.from_.return_value.delete.return_value.eq.return_value.execute.return_value = MagicMock() # Deleted orphaned patient
+
+    # Mock storage files listing and delete
+    mock_supabase.storage.from_.return_value.list.return_value = [{"name": "selfie_neutral-1234.jpg"}]
+    mock_supabase.storage.from_.return_value.remove.return_value = MagicMock()
+
+    response = client.post(
+        "/enroll/cleanup",
+        json={
+            "userId": "user-uuid-123",
+            "enrollment_session_id": "session-uuid-123"
+        },
+        headers={"Authorization": "Bearer mock-token-123"}
+    )
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+

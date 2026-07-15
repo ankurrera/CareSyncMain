@@ -580,6 +580,92 @@ class CustomBiometricService {
     }
   }
 
+  /// Atomically complete the face enrollment session
+  Future<bool> completeBiometricEnrollment({
+    required String userId,
+    required String enrollmentSessionId,
+  }) async {
+    try {
+      AppLogger.info(
+        '[BIOMETRIC-API] Completing biometric enrollment for session: $enrollmentSessionId',
+        category: LogCategory.biometric,
+      );
+      final url = Uri.parse('${EnvConfig.biometricApiUrl}/enroll/complete');
+      final response = await _postWithRetry(
+        url,
+        headers: _headers,
+        body: jsonEncode({
+          'userId': userId,
+          'enrollment_session_id': enrollmentSessionId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        AppLogger.info(
+          '[BIOMETRIC-API] Biometric enrollment session successfully completed and activated.',
+          category: LogCategory.biometric,
+        );
+        return true;
+      } else {
+        AppLogger.warning(
+          '[BIOMETRIC-API] Failed to complete enrollment. status=${response.statusCode} body=${response.body}',
+          category: LogCategory.biometric,
+        );
+        return false;
+      }
+    } catch (e) {
+      AppLogger.error(
+        '[BIOMETRIC-API] Exception completing biometric enrollment',
+        category: LogCategory.biometric,
+        error: e,
+      );
+      return false;
+    }
+  }
+
+  /// Clean up transient resources for a cancelled or failed face enrollment session
+  Future<bool> cleanupBiometricEnrollment({
+    required String userId,
+    required String enrollmentSessionId,
+  }) async {
+    try {
+      AppLogger.info(
+        '[BIOMETRIC-API] Cleaning up biometric enrollment for session: $enrollmentSessionId',
+        category: LogCategory.biometric,
+      );
+      final url = Uri.parse('${EnvConfig.biometricApiUrl}/enroll/cleanup');
+      final response = await _postWithRetry(
+        url,
+        headers: _headers,
+        body: jsonEncode({
+          'userId': userId,
+          'enrollment_session_id': enrollmentSessionId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        AppLogger.info(
+          '[BIOMETRIC-API] Biometric enrollment session successfully cleaned up.',
+          category: LogCategory.biometric,
+        );
+        return true;
+      } else {
+        AppLogger.warning(
+          '[BIOMETRIC-API] Failed to clean up enrollment. status=${response.statusCode} body=${response.body}',
+          category: LogCategory.biometric,
+        );
+        return false;
+      }
+    } catch (e) {
+      AppLogger.error(
+        '[BIOMETRIC-API] Exception cleaning up biometric enrollment',
+        category: LogCategory.biometric,
+        error: e,
+      );
+      return false;
+    }
+  }
+
   /// Analyze a preview frame image for real-time guided scan feedback
   Future<Map<String, dynamic>> analyzeFrame(
     File frameImage, {

@@ -145,6 +145,35 @@ class _EmergencyDataScreenState extends ConsumerState<EmergencyDataScreen>
     final vitals = (data['vitals'] as Map<String, dynamic>?) ?? {};
     final physician = data['physician'] as Map<String, dynamic>?;
 
+    final List<Widget> sections = [];
+
+    if (criticalAlerts.isNotEmpty) {
+      sections.add(_buildCriticalAlertsSection(criticalAlerts));
+    }
+    sections.add(_buildAllergiesSection(allergies));
+    sections.add(_buildVitalsSection(vitals));
+    sections.add(_buildMedicationsSection(medications));
+    sections.add(_buildChronicConditionsSection(chronicConditions));
+
+    final physicalWeight = patient?['weight'];
+    final physicalHeight = patient?['height'];
+    if (physicalWeight != null || physicalHeight != null) {
+      sections.add(_buildPhysicalSection(patient));
+    }
+
+    final contact = patient?['emergency_contact'] as Map<String, dynamic>?;
+    if (contact != null &&
+        (contact['name'] != null || contact['phone'] != null)) {
+      sections.add(_buildContactsSection(patient));
+    }
+
+    final physicianName = physician?['full_name']?.toString();
+    if (physician != null && physicianName != null && physicianName.isNotEmpty) {
+      sections.add(_buildPhysicianSection(physician));
+    }
+
+    sections.add(_buildQRBackupSection());
+
     return FadeTransition(
       opacity: _fadeAnimation,
       child: Column(
@@ -159,31 +188,12 @@ class _EmergencyDataScreenState extends ConsumerState<EmergencyDataScreen>
             avatarUrl: avatarUrl,
           ),
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+            child: ListView.separated(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
               physics: const BouncingScrollPhysics(),
-              children: [
-                if (criticalAlerts.isNotEmpty) ...[
-                  _buildCriticalAlertsSection(criticalAlerts),
-                  const SizedBox(height: 16),
-                ],
-                _buildAllergiesSection(allergies),
-                const SizedBox(height: 16),
-                _buildVitalsSection(vitals),
-                const SizedBox(height: 16),
-                _buildMedicationsSection(medications),
-                const SizedBox(height: 16),
-                _buildChronicConditionsSection(chronicConditions),
-                const SizedBox(height: 16),
-                _buildPhysicalSection(patient),
-                const SizedBox(height: 16),
-                _buildContactsSection(patient),
-                const SizedBox(height: 16),
-                _buildPhysicianSection(physician),
-                const SizedBox(height: 16),
-                _buildQRBackupSection(),
-                const SizedBox(height: 8),
-              ],
+              itemCount: sections.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 16),
+              itemBuilder: (context, index) => sections[index],
             ),
           ),
           _buildQuickActionBar(),
@@ -796,6 +806,7 @@ class _EmergencyDataScreenState extends ConsumerState<EmergencyDataScreen>
           _buildEmptyCard('No vitals recorded yet.', Iconsax.health)
         else
           GridView.count(
+            padding: EdgeInsets.zero,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             crossAxisCount: 2,

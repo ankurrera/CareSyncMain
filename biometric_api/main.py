@@ -1412,7 +1412,7 @@ async def enroll(
             except Exception as archive_err:
                 logger.warning(f"Failed to archive prior biometric sessions: {archive_err}")
 
-        # 6. Save vector
+        # 6. Save vector (is_active set to False; activated atomically at /enroll/complete)
         insert_data = {
             "patient_id": patient_id,
             "embedding": embedding_vector,
@@ -1425,7 +1425,7 @@ async def enroll(
             "device_info": payload.device_info or "Unknown Device",
             "camera": payload.camera or "front",
             "enrollment_session_id": payload.enrollment_session_id,
-            "is_active": True
+            "is_active": False
         }
         if "pose" in quality_metrics:
             insert_data["yaw"] = quality_metrics["pose"].get("yaw", 0.0)
@@ -1442,7 +1442,8 @@ async def enroll(
                 "embedding": embedding_vector,
                 "pose_label": payload.poseLabel,
                 "quality_score": quality_metrics["quality_score"],
-                "model_version": "ArcFace"
+                "model_version": "ArcFace",
+                "is_active": False
             }
             if "pose" in quality_metrics:
                 insert_data_fallback["yaw"] = quality_metrics["pose"].get("yaw", 0.0)
@@ -2246,6 +2247,139 @@ async def diagnostics_mediapipe():
         "cpu_available": True,
         "initialization_time_ms": init_time
     }
+
+class CompleteEnrollRequest(BaseModel):
+    userId: str
+    enrollment_session_id: str
+
+class CleanupEnrollRequest(BaseModel):
+    userId: str
+    enrollment_session_id: str
+
+@app.post("/enroll/complete")
+async def enroll_complete(
+    payload: CompleteEnrollRequest,
+    authenticated: bool = Depends(verify_token)
+):
+    try:
+        # 1. Fetch patient record
+        pat_check = supabase.from_("patients").select("id").eq("user_id", payload.userId).maybe_single().execute()
+        if not pat_check.data:
+            raise HTTPException(status_code=404, detail={
+                "error_code": "NOT_FOUND",
+                "message": "Patient record not found."
+            })
+        patient_id = pat_check.data["id"]
+
+        # 2. Check if there are any embeddings for this session ID
+        embeddings_check = supabase.from_("patient_embeddings")\
+            .select("id")\
+            .eq("patient_id", patient_id)\
+            .eq("enrollment_session_id", payload.enrollment_session_id)\
+            .execute()
+        
+        if not embeddings_check.data:
+            raise HTTPException(status_code=400, detail={
+                "error_code": "INVALID_SESSION",
+                "message": "No embeddings found for this session."
+            })
+
+        # 3. Update biometric_status to completed in patients table
+        supabase.from_("patients").update({
+            "biometric_status": "completed",
+            "updated_at": "now()"
+        }).eq("id", patient_id).execute()
+
+        # 4. Deactivate old embeddings from other sessions for this patient
+        supabase.from_("patient_embeddings")\
+            .update({"is_active": False})\
+            .eq("patient_id", patient_id)\
+            .neq("enrollment_session_id", payload.enrollment_session_id)\
+            .execute()
+
+        # 5. Activate current session's embeddings
+        supabase.from_("patient_embeddings")\
+            .update({"is_active": True})\
+            .eq("patient_id", patient_id)\
+            .eq("enrollment_session_id", payload.enrollment_session_id)\
+            .execute()
+
+        return {
+            "success": True,
+            "message": "Biometric enrollment completed and activated."
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"[ENROLL COMPLETE ERROR] userId={payload.userId}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail={
+            "error_code": "SERVER_ERROR",
+            "message": str(e)
+        })
+
+@app.post("/enroll/cleanup")
+async def enroll_cleanup(
+    payload: CleanupEnrollRequest,
+    authenticated: bool = Depends(verify_token)
+):
+    try:
+        # 1. Fetch patient record
+        pat_check = supabase.from_("patients").select("id, biometric_status").eq("user_id", payload.userId).maybe_single().execute()
+        if not pat_check.data:
+            return {"success": True, "message": "No patient record to clean up."}
+        patient_id = pat_check.data["id"]
+        status = pat_check.data["biometric_status"]
+
+        # 2. Fetch all embeddings for this session to delete files from storage
+        embeddings = supabase.from_("patient_embeddings")\
+            .select("id, pose_label")\
+            .eq("patient_id", patient_id)\
+            .eq("enrollment_session_id", payload.enrollment_session_id)\
+            .execute()
+
+        if embeddings.data:
+            # 3. Delete embeddings from database
+            supabase.from_("patient_embeddings")\
+                .delete()\
+                .eq("patient_id", patient_id)\
+                .eq("enrollment_session_id", payload.enrollment_session_id)\
+                .execute()
+
+            # 4. Delete files from Supabase Storage
+            try:
+                storage_files = supabase.storage.from_("kyc-documents").list(payload.userId)
+                if storage_files:
+                    to_delete = []
+                    pose_labels = [emb["pose_label"] for emb in embeddings.data]
+                    for f in storage_files:
+                        name = f.get("name")
+                        if name and any(f"selfie_{pose}" in name for pose in pose_labels):
+                            to_delete.append(f"{payload.userId}/{name}")
+                    if to_delete:
+                        supabase.storage.from_("kyc-documents").remove(to_delete)
+            except Exception as st_err:
+                logger.warning(f"Failed to delete selfie files from storage during cleanup: {st_err}")
+
+        # 5. If the patient has no other embeddings and is incomplete, delete the patient row
+        remaining = supabase.from_("patient_embeddings")\
+            .select("id")\
+            .eq("patient_id", patient_id)\
+            .execute()
+        
+        if not remaining.data and status == "incomplete":
+            supabase.from_("patients").delete().eq("id", patient_id).execute()
+            logger.info(f"Cleaned up orphaned incomplete patients record for user {payload.userId}")
+
+        return {
+            "success": True,
+            "message": "Biometric enrollment session cleaned up."
+        }
+    except Exception as e:
+        logger.error(f"[ENROLL CLEANUP ERROR] userId={payload.userId}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail={
+            "error_code": "SERVER_ERROR",
+            "message": str(e)
+        })
 
 def l2_normalize(vector: List[float]) -> List[float]:
     arr = np.array(vector)
