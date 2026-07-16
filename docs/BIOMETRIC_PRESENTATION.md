@@ -36,7 +36,7 @@ This document outlines the presentation slide deck for the **CareSync** project,
 1. **The Incapacitation Barrier**: Unconscious, confused, or non-communicative patients cannot provide names, IDs, or security codes.
 2. **Strict Privacy Regulations**: Patient records cannot be left decrypted or stored in plaintext, and identity matching must prevent unauthorized exposure of demographic details.
 3. **Spoofing & Security Vulnerabilities**: Traditional facial verification is susceptible to 2D spoof attacks (photos printed on paper or displayed on phone screens).
-4. **Scale & Search Latency**: Sequential database searches ($O(N)$ scanning) scale poorly, causing lookup delays that waste critical seconds during medical crises.
+4. **Scale & Search Latency**: Sequential database searches (O(N) scanning) scale poorly, causing lookup delays that waste critical seconds during medical crises.
 
 ---
 
@@ -148,82 +148,51 @@ sequenceDiagram
 
 ---
 
-## Slide 7: Progress: Image Quality Gate & Pose Estimation Algorithms
+## Slide 7: Progress: Deep Learning Pipeline & Quality Control
 
-### **Algorithmic Quality Controls**
-To prevent trash-in-trash-out failures, frames undergo immediate spatial evaluations:
-1. **Brightness Gate**: Rejects dark/overexposed frames by calculating average grayscale pixel intensity:
-   $$45 \le \mu_{\text{gray}} \le 220$$
-2. **Blur Gate (Laplacian Variance)**: Filters out motion blur by checking the variance of the image convolved with a Laplacian kernel:
-   $$\sigma^2 = \text{Var}(\nabla^2 I) \ge 65.0$$
-3. **Head Pose Estimation (MediaPipe 3D Landmarks)**:
-   * **Roll (Tilt)**: Calculated using the relative angle between the outer corner eye landmarks:
-     $$\theta_{\text{roll}} = \arctan2(y_{\text{right eye}} - y_{\text{left eye}}, x_{\text{right eye}} - x_{\text{left eye}})$$
-   * **Yaw (Turn)**: Estimated from horizontal distances from nose tip to eye corners:
-     $$\theta_{\text{yaw}} = \frac{d(\text{nose}, \text{left eye}) - d(\text{nose}, \text{right eye})}{d(\text{nose}, \text{left eye}) + d(\text{nose}, \text{right eye})} \times 90^\circ$$
-   * **Pitch (Tilt up/down)**: Estimated by vertical distances between forehead, nose, and chin:
-     $$\theta_{\text{pitch}} = \left(\frac{y_{\text{nose}} - y_{\text{eyes center}}}{y_{\text{mouth center}} - y_{\text{eyes center}}} - 0.55\right) \times 90^\circ$$
+### **1. Real-Time Image Quality Verification**
+To prevent low-quality images from affecting matching performance, incoming video frames and photos are evaluated instantly:
+* **Brightness Verification**: Calculates average pixel intensity to reject frames that are too dark (underexposed) or too bright (overexposed), ensuring optimal illumination for identification.
+* **Blur Verification (Laplacian Variance)**: Measures image sharpness using a Laplacian variance filter. Blurry frames caused by hand jitter or motion are rejected.
 
----
+### **2. 3D Facial Landmark Tracking & Pose Estimation**
+* **Model**: **MediaPipe FaceMesh** (3D facial landmark detection).
+* **Purpose**: Tracks facial landmarks to determine the orientation of the head (Yaw, Pitch, and Roll).
+* **Guided Enrollment**: Guides patients during registration to turn their head so that multiple poses (Neutral, Left, and Right) can be securely captured.
+* **Emergency Alignment**: Confirms that the camera angle is adequate when first responders scan an incapacitated patient.
 
-## Slide 8: Progress: Liveness Verification & Embedding Generation
+### **3. Anti-Spoofing & Liveness Check**
+* **Model**: **MiniFASNet** (Silent Face Anti-Spoofing).
+* **Purpose**: Evaluates surface textures, depth cues, and light reflections to confirm that the presented face is from a live person.
+* **Security**: Rejects spoofing attacks such as physical photo prints or digital screens by requiring high confidence before extracting facial vectors.
 
-### **1. Anti-Spoofing Gate (Silent-Face-Anti-Spoofing)**
-* Incorporates a lightweight MiniFASNet neural network that checks texture patterns, depth anomalies, and reflection anomalies.
-* Prevents spoofing via photos or digital displays. Requires a liveness probability threshold of **$\ge 0.90$** to proceed.
-
-### **2. ArcFace Vector Generation**
-* Approved face crops are aligned via eye-coordinate similarity transforms and cropped to a uniform $112 \times 112$ pixels.
-* **ArcFace** converts the face crop into a **512-dimension floating-point vector**.
-* **$L_2$ Normalization** is applied, ensuring that Euclidean vector length equals 1.0, representing coordinates on a hypersphere:
-  $$\hat{v} = \frac{v}{\|v\|_2}$$
+### **4. Facial Alignment & Embedding Generation**
+* **Models**: **RetinaFace** (Face Detection) & **ArcFace** (Feature Extraction).
+* **Purpose**: RetinaFace detects boundaries and aligns key facial features (eyes, nose, mouth). ArcFace then converts the aligned facial crop into a compact 512-dimension vector embedding, representing unique facial structures in a spatial map.
 
 ---
 
-## Slide 9: Progress: pgvector HNSW & Consensus Matching
+## Slide 8: Progress: Database Matching Engine & Performance Benchmarks
 
-### **1. Sub-100ms pgvector HNSW Query**
-* Embeddings are stored in Supabase PostgreSQL using the `pgvector` extension.
-* Cosine distance index queries are mapped via a **Hierarchical Navigable Small World (HNSW)** index to bypass sequential $O(N)$ scans:
-  ```sql
-  CREATE INDEX ON patient_embeddings USING hnsw (embedding vector_cosine_ops);
-  ```
+### **1. Rapid Identity Retrieval (Supabase pgvector)**
+* **Database Layer**: Supabase PostgreSQL with the **pgvector** extension.
+* **Purpose**: Securely stores the 512-dimension face vector embeddings linked to anonymized patient record keys.
+* **HNSW Indexing**: Uses a Hierarchical Navigable Small World (HNSW) index to perform similarity searches based on cosine distance. This routes queries along a graph to return matches in under 100ms, avoiding slow sequential database scans.
 
-### **2. Multi-Pose Consensus Scoring**
-* The database returns the top 5 closest candidates.
-* FastAPI evaluates the candidate across all registered poses (Neutral, Left, Right):
-  * Cosine similarity is computed as the dot product: $S(u, v) = u \cdot v$
-  * Average consensus score must exceed **$0.34$** to protect against single-pose outliers.
-* **Ambiguity Guard**: Rejects the identification if the similarity gap between the top candidate and the runner-up is **$< 0.03$**, preventing false-positive identification.
+### **2. Multi-Pose Consensus & Ambiguity Guard**
+* **Consensus Matching**: Compares the query embedding against the patient's registered Neutral, Left, and Right poses. Averaging the similarity score across these angles increases matching reliability and prevents errors from partial or off-angle views.
+* **Ambiguity Guard**: Rejects the identification if the difference in similarity between the top candidate and the next runner-up is too narrow, preventing false-positive matches when candidates look similar.
 
----
+### **3. Performance & Latency Profiling**
+The end-to-end identity resolution request is completed in **273.8 ms**, optimized for emergency scenarios:
+* **Ingestion, Decode & Rescaling**: 3.7 ms
+* **Quality & Pose Checks (MediaPipe)**: 40.9 ms
+* **Liveness Verification (MiniFASNet)**: 42.1 ms
+* **Embedding Generation (ArcFace)**: 115.0 ms
+* **HNSW Database Query Round-Trip**: 70.6 ms
+* **Consensus Evaluation & Logs**: 1.5 ms
 
-## Slide 10: Progress: Performance Benchmarks & Results
-
-### **Latency Profiling (Warm Pipeline Execution)**
-The end-to-end local microservice request is processed in **$273.8$ ms**, meeting the critical timing requirements of emergency responders:
-
-```text
-Ingestion (Multipart Request Received)
-  ↓ (1.2 ms)
-Image Decode & Rescaling
-  ↓ (2.5 ms)
-Quality Filters (Brightness & Laplacian Blur)
-  ↓ (12.4 ms)
-MediaPipe Landmark & Pose Check
-  ↓ (28.5 ms)
-MiniFASNet Liveness Evaluation
-  ↓ (42.1 ms)
-ArcFace Embedding Representation Generation
-  ↓ (115.0 ms)
-pgvector HNSW Cosine Index Search (DB Round-Trip)
-  ↓ (70.6 ms)
-Consensus Scoring & Audit Log (Background tasks)
-  ↓ (1.5 ms)
-Response Sent (Identity Resolved & Card Decrypted)
-```
-
-### **Database Scale Latency vs. Record Size**
+### **Database Scale Search Latency**
 | Scale Size (Embeddings) | Average Latency | P95 Latency | Min Latency | Max Latency |
 | :--- | :--- | :--- | :--- | :--- |
 | **100 Records** | 103.78 ms | 223.99 ms | 64.22 ms | 246.27 ms |
@@ -231,17 +200,17 @@ Response Sent (Identity Resolved & Card Decrypted)
 
 ---
 
-## Slide 11: Future Scope
+## Slide 9: Future Scope
 
 ### **Ecosystem Roadmap & Advancements**
-1. **GPU Acceleration**: Deploying the FastAPI container on CUDA-enabled cloud infrastructure (e.g. AWS ECS or Google Cloud Run) to reduce ArcFace inference time from ~115ms on CPU to **$< 10$ms**.
+1. **GPU Acceleration**: Deploying the FastAPI container on CUDA-enabled cloud infrastructure (e.g. AWS ECS or Google Cloud Run) to reduce ArcFace inference time from ~115ms on CPU to **less than 10ms**.
 2. **Distributed Caching**: Upgrading the local in-memory token rate-limiter to a distributed **Redis rate-limiting cluster** for load-balanced containers.
 3. **On-Device Edge Inference**: Compiling liveness checks and embedding extraction to **TensorFlow Lite (TFLite)** to allow local biometric evaluations directly on mobile devices without sending images to the cloud API.
 4. **FHIR Standard Compliance**: Aligning patient profile outputs with standard FHIR healthcare JSON payloads for seamless integration into national health records systems.
 
 ---
 
-## Slide 12: Conclusion
+## Slide 10: Conclusion
 
 ### **Key Highlights of the CareSync Biometric System**
 * **Production-Ready Latency**: Sub-300ms total identity resolution time allows first responders to act instantly under high-pressure scenarios.
@@ -251,7 +220,7 @@ Response Sent (Identity Resolved & Card Decrypted)
 
 ---
 
-## Slide 13: Bibliography & References
+## Slide 11: Bibliography & References
 
 1. **ArcFace Model**: Deng, J., Guo, J., Xue, N., & Zafeiriou, S. (2019). *ArcFace: Additive Angular Margin Loss for Deep Face Recognition*. Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR).
 2. **RetinaFace Model**: Deng, J., Guo, J., Zhou, Y., Yu, J., Kotsia, I., & Zafeiriou, S. (2020). *RetinaFace: Single-shot Multi-box Face Localisation in the Wild*. IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR).
