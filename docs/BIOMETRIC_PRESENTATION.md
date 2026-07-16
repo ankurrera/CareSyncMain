@@ -172,45 +172,17 @@ To prevent low-quality images from affecting matching performance, incoming vide
 
 ---
 
-## Slide 8: Progress: Database Matching Engine & Performance Benchmarks
-
-### **1. Rapid Identity Retrieval (Supabase pgvector)**
-* **Database Layer**: Supabase PostgreSQL with the **pgvector** extension.
-* **Purpose**: Securely stores the 512-dimension face vector embeddings linked to anonymized patient record keys.
-* **HNSW Indexing**: Uses a Hierarchical Navigable Small World (HNSW) index to perform similarity searches based on cosine distance. This routes queries along a graph to return matches in under 100ms, avoiding slow sequential database scans.
-
-### **2. Multi-Pose Consensus & Ambiguity Guard**
-* **Consensus Matching**: Compares the query embedding against the patient's registered Neutral, Left, and Right poses. Averaging the similarity score across these angles increases matching reliability and prevents errors from partial or off-angle views.
-* **Ambiguity Guard**: Rejects the identification if the difference in similarity between the top candidate and the next runner-up is too narrow, preventing false-positive matches when candidates look similar.
-
-### **3. Performance & Latency Profiling**
-The end-to-end identity resolution request is completed in **273.8 ms**, optimized for emergency scenarios:
-* **Ingestion, Decode & Rescaling**: 3.7 ms
-* **Quality & Pose Checks (MediaPipe)**: 40.9 ms
-* **Liveness Verification (MiniFASNet)**: 42.1 ms
-* **Embedding Generation (ArcFace)**: 115.0 ms
-* **HNSW Database Query Round-Trip**: 70.6 ms
-* **Consensus Evaluation & Logs**: 1.5 ms
-
-### **Database Scale Search Latency**
-| Scale Size (Embeddings) | Average Latency | P95 Latency | Min Latency | Max Latency |
-| :--- | :--- | :--- | :--- | :--- |
-| **100 Records** | 103.78 ms | 223.99 ms | 64.22 ms | 246.27 ms |
-| **500 Records** | 70.68 ms | 83.60 ms | 65.78 ms | 88.36 ms |
-
----
-
-## Slide 9: Future Scope
+## Slide 8: Future Scope
 
 ### **Ecosystem Roadmap & Advancements**
-1. **GPU Acceleration**: Deploying the FastAPI container on CUDA-enabled cloud infrastructure (e.g. AWS ECS or Google Cloud Run) to reduce ArcFace inference time from ~115ms on CPU to **less than 10ms**.
-2. **Distributed Caching**: Upgrading the local in-memory token rate-limiter to a distributed **Redis rate-limiting cluster** for load-balanced containers.
-3. **On-Device Edge Inference**: Compiling liveness checks and embedding extraction to **TensorFlow Lite (TFLite)** to allow local biometric evaluations directly on mobile devices without sending images to the cloud API.
-4. **FHIR Standard Compliance**: Aligning patient profile outputs with standard FHIR healthcare JSON payloads for seamless integration into national health records systems.
+1. **GPU Acceleration**: Enabling GPU-accelerated instances on Google Cloud Run to speed up facial recognition (reducing ArcFace model processing time from 115ms to under 10ms).
+2. **Distributed Caching**: Using Redis caching to speed up repeated lookups and manage api request limits across multiple active servers.
+3. **On-Device Edge Inference**: Moving the facial recognition models directly to the user's phone (via TensorFlow Lite) to enable offline patient scanning and identification.
+4. **FHIR Standard Compliance**: Formatting patient data output to follow international healthcare standards (FHIR) to connect with hospital records software.
 
 ---
 
-## Slide 10: Conclusion
+## Slide 9: Conclusion
 
 ### **Key Highlights of the CareSync Biometric System**
 * **Production-Ready Latency**: Sub-300ms total identity resolution time allows first responders to act instantly under high-pressure scenarios.
@@ -220,7 +192,7 @@ The end-to-end identity resolution request is completed in **273.8 ms**, optimiz
 
 ---
 
-## Slide 11: Bibliography & References
+## Slide 10: Bibliography & References
 
 1. **ArcFace Model**: Deng, J., Guo, J., Xue, N., & Zafeiriou, S. (2019). *ArcFace: Additive Angular Margin Loss for Deep Face Recognition*. Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR).
 2. **RetinaFace Model**: Deng, J., Guo, J., Zhou, Y., Yu, J., Kotsia, I., & Zafeiriou, S. (2020). *RetinaFace: Single-shot Multi-box Face Localisation in the Wild*. IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR).
