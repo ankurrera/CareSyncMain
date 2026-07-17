@@ -233,7 +233,7 @@ if __name__ == "__main__":
     print("Fetching reference face scan from kyc-documents bucket...")
     try:
         image_bytes = supabase.storage.from_("kyc-documents").download(
-            "9be3e6e4-355b-47e0-947f-654ebfbc587d/selfie_smile-1783285304372.jpg"
+            "00000000-0000-0000-0000-000000000000/selfie_smile-1783285304372.jpg"
         )
     except Exception as e:
         print(f"Failed to fetch reference scan: {e}. Generating dummy image for benchmark...")
