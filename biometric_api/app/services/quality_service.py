@@ -281,7 +281,7 @@ def evaluate_image_quality(img_input: Any, run_liveness: bool = False, extract_f
         sharpness_good = bool(laplacian_var >= 65.0)
         
         # 4. Occlusion Check
-        occlusion_free = not occlusions.get("any_occluded", False)
+        occlusion_free = not (occlusions.get("wearing_sunglasses", False) or occlusions.get("wearing_mask", False))
         occlusion_score = 1.0 if occlusion_free else 0.0
         
         # 5. Face Size Calculations

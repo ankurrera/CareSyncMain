@@ -3,7 +3,11 @@ FROM python:3.9-slim
 # Set environment variables for non-interactive installs and Python unbuffering
 ENV PYTHONUNBUFFERED=1 \
     DEEPFACE_HOME=/app \
-    PORT=8080
+    PORT=8080 \
+    NNPACK_DISABLE=1 \
+    CUDA_VISIBLE_DEVICES=-1 \
+    TF_CPP_MIN_LOG_LEVEL=3 \
+    TORCH_CPP_MIN_LOG_LEVEL=3
 
 # Install system dependencies for OpenCV and graphic/X11 bindings
 RUN apt-get update && apt-get install -y --no-install-recommends \

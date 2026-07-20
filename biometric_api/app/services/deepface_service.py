@@ -56,10 +56,9 @@ def detect_and_align_face(img: np.ndarray, is_id_doc: bool = False, run_liveness
                         anti_spoofing=True
                     )
                 except Exception as liveness_err:
-                    logger.warning(f"Failed to prepare padded liveness crop: {liveness_err}. Falling back to aligned face crop liveness.")
-                    face_crop_bgr = cv2.cvtColor((face["face"] * 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
+                    logger.warning(f"Failed to prepare padded liveness crop: {liveness_err}. Falling back to full image liveness.")
                     liveness_res = DeepFace.extract_faces(
-                        img_path=face_crop_bgr,
+                        img_path=img,
                         detector_backend="skip",
                         align=False,
                         enforce_detection=False,
