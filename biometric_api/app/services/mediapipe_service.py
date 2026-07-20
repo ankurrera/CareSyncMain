@@ -162,7 +162,8 @@ def align_and_crop_with_mediapipe(img: np.ndarray, mp_result: Dict[str, Any]) ->
             cropped = img
         cropped = cv2.resize(cropped, (112, 112))
         
-    cropped_normalized = cropped.astype(np.float32) / 255.0
+    cropped_rgb = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
+    cropped_normalized = cropped_rgb.astype(np.float32) / 255.0
     
     xs = [left_eye_x, right_eye_x, nose_x, mouth_left_x, mouth_right_x]
     ys = [left_eye_y, right_eye_y, nose_y, mouth_left_y, mouth_right_y]

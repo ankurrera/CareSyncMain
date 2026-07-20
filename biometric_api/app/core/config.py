@@ -4,6 +4,9 @@ from dotenv import load_dotenv
 
 # Environment flags setup prior to framework imports
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
+os.environ["NNPACK_DISABLE"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ["TORCH_CPP_MIN_LOG_LEVEL"] = "3"
 if "DEEPFACE_HOME" not in os.environ:
     os.environ["DEEPFACE_HOME"] = os.getcwd()
