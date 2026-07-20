@@ -426,3 +426,41 @@ def test_enroll_cleanup_success(mock_supabase):
     assert response.status_code == 200
     assert response.json()["success"] is True
 
+@patch("main.evaluate_image_quality")
+def test_identify_failure_face_too_small(mock_quality):
+    # Mocking quality assessment indicating face size too small (9.1%)
+    mock_quality.return_value = {
+        "success": True,
+        "quality_score": 0.94,
+        "sharpness": 430.5,
+        "brightness": 135.7,
+        "face_confidence": 0.99,
+        "cropped_face": np.zeros((112, 112, 3)),
+        "pose": {"roll": 4.7, "yaw": -22.2, "pitch": 19.5},
+        "occlusions": {"wearing_sunglasses": False, "wearing_mask": False},
+        "eyes_visible": True,
+        "size_good": False,
+        "face_percentage": 9.1,
+        "face_percentage_in_frame": 9.1,
+        "pose_confidence": 78.9,
+        "guidance": "Move closer",
+        "capture_eligible": False
+    }
+
+    img = np.ones((500, 500, 3), dtype=np.uint8) * 128
+    _, img_encoded = cv2.imencode(".jpg", img)
+    jpeg_bytes = img_encoded.tobytes()
+
+    response = client.post(
+        "/identify",
+        files={"file": ("scan.jpg", jpeg_bytes, "image/jpeg")},
+        headers={"Authorization": "Bearer mock-token-123"}
+    )
+
+    assert response.status_code == 400
+    res_data = response.json()
+    assert res_data["success"] is False
+    assert res_data["error_code"] == "FACE_TOO_SMALL"
+    assert "below 18%" in res_data["message"]
+
+

@@ -74,18 +74,23 @@ def log_biometric_access(
                         actor_name = profile_query.data.get("full_name", "Unknown Actor")
                         actor_role = profile_query.data.get("role", "unknown")
 
-        supabase.from_("biometric_access_logs").insert({
+        log_payload = {
             "actor_id": actor_id,
             "actor_name": actor_name,
             "actor_role": actor_role,
             "action_type": action_type,
             "target_patient_id": target_patient_id,
+            "target_identity_id": target_patient_id,
             "confidence_score": confidence_score,
             "model_version": "ArcFace",
             "status": status,
             "device_id": device_id,
             "gps_coordinates": gps_coordinates,
             "reason": reason
-        }).execute()
+        }
+        try:
+            supabase.from_("biometric_access_logs").insert(log_payload).execute()
+        except Exception:
+            supabase.from_("biometric_audit_logs").insert(log_payload).execute()
     except Exception as e:
         logger.error(f"Failed to write audit log: {e}")

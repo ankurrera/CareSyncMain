@@ -106,7 +106,7 @@ async def identify(
             )
 
         if not quality_metrics.get("size_good", True):
-            face_percentage = quality_metrics.get("face_percentage", 100.0)
+            face_percentage = quality_metrics.get("face_percentage") or quality_metrics.get("face_percentage_in_frame", 100.0)
             if face_percentage < 18.0:
                 raise HTTPException(
                     status_code=400,

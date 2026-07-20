@@ -506,6 +506,8 @@ def evaluate_image_quality(img_input: Any, run_liveness: bool = False, extract_f
         "pose": pose,
         "occlusions": occlusions,
         "eyes_visible": bool(eyes_visible),
+        "size_good": bool(size_good),
+        "face_percentage": round(float(face_percentage), 2),
         "face_percentage_in_frame": round(float(face_percentage), 2),
         "pose_confidence": round(float(pose_confidence), 2),
         "guidance": guidance,

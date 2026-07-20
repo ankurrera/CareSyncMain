@@ -115,7 +115,7 @@ async def enroll(
         # Verify Pose constraints for enrollment
         pose_label_lower = payload.poseLabel.lower()
         if pose_label_lower == "neutral":
-            if abs(pose["yaw"]) > 12 or abs(pose["pitch"]) > 10:
+            if abs(pose["yaw"]) > 22 or abs(pose["pitch"]) > 18:
                 raise HTTPException(
                     status_code=400,
                     detail={
@@ -191,8 +191,9 @@ async def enroll(
 
         if dup_query.data:
             existing_pat = dup_query.data[0]
+            existing_id = existing_pat.get("patient_id") or existing_pat.get("identity_id")
             patient_check = main.supabase.from_("patients").select("id").eq("user_id", payload.userId).maybe_single().execute()
-            if patient_check.data and patient_check.data["id"] != existing_pat["patient_id"]:
+            if patient_check.data and patient_check.data["id"] != existing_id:
                 raise HTTPException(
                     status_code=409,
                     detail={
