@@ -1,0 +1,48 @@
+name: Supabase Keep-Alive Ping
+
+on:
+  schedule:
+    # Runs every 12 hours (at 00:00 and 12:00 UTC) to prevent Supabase free tier inactivity pause
+    - cron: '0 */12 * * *'
+  workflow_dispatch: # Allows manual triggering from GitHub Actions tab
+
+jobs:
+  ping-supabase:
+    name: Ping Supabase Edge Function & Auth Services
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Keep-Alive Ping
+        run: |
+          SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+          
+          # Fallback to CareSync project defaults if GitHub secrets are not explicitly set
+          if [ -z "$SUPABASE_URL" ]; then
+            SUPABASE_URL="https://qwawmnbuuomcvsuxztmq.supabase.co"
+          fi
+          
+          if [ -z "$SUPABASE_ANON_KEY" ]; then
+            SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3YXdtbmJ1dW9tY3ZzdXh6dG1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5OTczMzQsImV4cCI6MjA4NTU3MzMzNH0.P67zO4dYZ4ooIDyCzMCF-QNKVw5joCbd3fZJsMSopac"
+          fi
+          
+          echo "1️⃣ Pinging CareSync /ping Edge Function..."
+          FUNC_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/functions/v1/ping")
+          
+          echo "Edge Function Status Code: $FUNC_STATUS"
+          
+          echo "2️⃣ Pinging CareSync Auth Service..."
+          AUTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/auth/v1/health")
+          
+          echo "Auth Health Status Code: $AUTH_STATUS"
+          
+          if [ "$FUNC_STATUS" -ge 200 ] && [ "$FUNC_STATUS" -lt 400 ] || [ "$AUTH_STATUS" -ge 200 ] && [ "$AUTH_STATUS" -lt 400 ]; then
+            echo "✅ Successfully pinged CareSync Supabase project! Inactivity timer reset."
+          else
+            echo "⚠️ Warning: Func Status=$FUNC_STATUS, Auth Status=$AUTH_STATUS. (If status is 000, please Restore/Unpause project in Supabase Dashboard)."
+            exit 1
+          fi
